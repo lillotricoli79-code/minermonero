@@ -1,3 +1,26 @@
-Initial controller package assembled.
-Verified: Python syntax compilation (py_compile).
-Not verified: Windows GUI runtime, XMRig API compatibility against a live miner, Windows release download, mining session, pool shares, thermal sensors, packaging as a standalone EXE.
+Package status: source integration and safety fixes in progress.
+
+Included:
+- XMRig Control Center Tkinter controller and configuration profiles.
+- Optional AI Qween advisor button connected to the local XMRig summary API.
+- AI Qween safety regression tests.
+- Staged XMRig downloader that validates the downloaded executable and preserves
+  the previous executable in a timestamped backup before replacement.
+
+Automated checks:
+- GitHub Actions validation workflow added for Python syntax and AI Qween tests.
+- Validation workflow has not yet been run against the latest integration commits.
+
+Not verified yet:
+- Windows GUI runtime and Tkinter behavior.
+- PowerShell downloader execution on Windows.
+- XMRig API compatibility against a live miner and the exact bundled release.
+- Pool connectivity, accepted/rejected shares, hashrate, uptime, and mining session.
+- CPU/GPU temperature, fan telemetry, GPU backend availability, and hardware controls.
+- Standalone EXE packaging and full Windows installer.
+
+Safety boundaries:
+- AI Qween is advisory-only; it does not change a running miner.
+- Missing sensor values remain unavailable; no synthetic temperatures or power values.
+- GPU and fan controls are not claimed as implemented.
+- Original source ZIP files remain preserved in the repository.
