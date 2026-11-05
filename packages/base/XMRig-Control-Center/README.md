@@ -28,7 +28,31 @@ Desktop control panel for the **official XMRig executable**. It does not impleme
 4. Enter your pool and wallet, save configuration, then start mining.
 5. The AI Qween button reads the local XMRig summary and provides manual recommendations only. It does not apply thread changes or control the miner automatically.
 
-Alternatively, use **Seleziona XMRig** to choose an existing `xmrig.exe`.\n\n## Shell controls (PowerShell)\nRun from this folder:\n\n```powershell\n.\\xmrig-shell.ps1 -Action Configure -Pool pool.example:3333 -Wallet YOUR_WALLET -Worker rig01 -Threads 7 -CpuPriority 2 -CpuAffinity 0x7F -RandomXMode auto -Tls\n.\\xmrig-shell.ps1 -Action Start\n.\\xmrig-shell.ps1 -Action Status\n.\\xmrig-shell.ps1 -Action Stop\n```\n\n`-CpuAffinity` is a hexadecimal CPU bit mask; omit it for automatic affinity. GPU toggles only request OpenCL/CUDA from the selected XMRig build; they do not install drivers or guarantee device support.\n\n## Shell controls (PowerShell)\nRun from this folder:\n\n```powershell\n.\\xmrig-shell.ps1 -Action Configure -Pool pool.example:3333 -Wallet YOUR_WALLET -Worker rig01 -Threads 7 -CpuPriority 2 -CpuAffinity 0x7F -RandomXMode auto -Tls\n.\\xmrig-shell.ps1 -Action Start\n.\\xmrig-shell.ps1 -Action Status\n.\\xmrig-shell.ps1 -Action Stop\n```\n\n`-CpuAffinity` is a hexadecimal CPU bit mask; omit it for automatic affinity. GPU toggles only request OpenCL/CUDA from the selected XMRig build; they do not install drivers or guarantee device support.
+Alternatively, use **Seleziona XMRig** to choose an existing `xmrig.exe`.
+
+## Shell controls (PowerShell)
+Run from this folder:
+
+```powershell
+.\\xmrig-shell.ps1 -Action Configure -Pool pool.example:3333 -Wallet YOUR_WALLET -Worker rig01 -Threads 7 -CpuPriority 2 -CpuAffinity 0x7F -RandomXMode auto -Tls
+.\\xmrig-shell.ps1 -Action Start
+.\\xmrig-shell.ps1 -Action Status
+.\\xmrig-shell.ps1 -Action Stop
+```
+
+`-CpuAffinity` is a hexadecimal CPU bit mask; omit it for automatic affinity. GPU toggles only request OpenCL/CUDA from the selected XMRig build; they do not install drivers or guarantee device support.
+
+## Shell controls (PowerShell)
+Run from this folder:
+
+```powershell
+.\\xmrig-shell.ps1 -Action Configure -Pool pool.example:3333 -Wallet YOUR_WALLET -Worker rig01 -Threads 7 -CpuPriority 2 -CpuAffinity 0x7F -RandomXMode auto -Tls
+.\\xmrig-shell.ps1 -Action Start
+.\\xmrig-shell.ps1 -Action Status
+.\\xmrig-shell.ps1 -Action Stop
+```
+
+`-CpuAffinity` is a hexadecimal CPU bit mask; omit it for automatic affinity. GPU toggles only request OpenCL/CUDA from the selected XMRig build; they do not install drivers or guarantee device support.
 
 ## Safety and scope
 The control API binds to `127.0.0.1` by default and uses a token. Keep it local; do not expose the API port to the public internet. The application does not fabricate shares, hashes, earnings, or pool acceptance. Share counts and hashrate are read from the actual XMRig API.
