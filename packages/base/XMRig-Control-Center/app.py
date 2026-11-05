@@ -125,7 +125,7 @@ class Controller:
             h = s.get("hashrate", {}).get("total", [])
             results = s.get("results", {})
             return {"state":"ATTIVO", "h10":num(h,0), "h60":num(h,1), "h15m":num(h,2),
-                    "accepted":results.get("shares_good", 0), "rejected":results.get("shares_total", 0)-results.get("shares_good",0),
+                    "accepted":results.get("shares_good", 0), "rejected":results.get("shares_failed", max(0, results.get("shares_total", 0)-results.get("shares_good",0))),
                     "uptime":s.get("connection",{}).get("uptime",0), "raw":s}
         except Exception as e: return {"state":"AVVIO / API IN ATTESA", "error":str(e)}
 
@@ -219,6 +219,11 @@ class App(tk.Tk):
         c["opencl"]=self.opencl.get()
         c["cuda"]=self.cuda.get()
         if c["cpu_priority"] < 0 or c["cpu_priority"] > 5: raise ValueError("Priorità CPU deve essere tra 0 e 5")
+        if c["randomx_mode"].lower() not in ("auto", "fast", "light"): raise ValueError("RandomX deve essere auto, fast o light")
+        affinity = str(c.get("cpu_affinity", "")).strip()
+        if affinity:
+            try: int(affinity, 0)
+            except ValueError: raise ValueError("CPU affinity deve essere una maschera intera, es. 0xFF")
         c["huge_pages"] = True
         return c
     def _save(self):
