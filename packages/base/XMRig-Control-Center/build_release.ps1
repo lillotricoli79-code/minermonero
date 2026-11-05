@@ -1,7 +1,7 @@
 [CmdletBinding()]
-param([string]$OutputDirectory=(Join-Path (Split-Path -Parent $PSScriptRoot) 'dist'))
+param([string]$OutputDirectory=(Join-Path (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'dist'))
 $ErrorActionPreference='Stop'
-$RepoRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$RepoRoot=Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $Base=Join-Path $RepoRoot 'packages\base\XMRig-Control-Center'
 $AI=Join-Path $RepoRoot 'packages\aiqween\XMRig-Control-Center-AIQween-module'
 if(-not(Test-Path (Join-Path $Base 'app.py'))){throw 'Sorgenti base non trovati.'}
