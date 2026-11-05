@@ -8,6 +8,7 @@ Desktop control panel for the **official XMRig executable**. It does not impleme
 - Start/stop process control and live hashrate/share/uptime display
 - Persistent configuration profiles
 - Guided CPU-thread starting point (not an automatic benchmark claim)
+- Optional OpenCL and CUDA backend toggles; actual use depends on the XMRig build, GPU, drivers and runtime
 - Log viewer
 - Optional AI Qween advisor button when the sibling AI Qween package is present
 
