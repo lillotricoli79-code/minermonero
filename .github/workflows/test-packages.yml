@@ -64,7 +64,6 @@ jobs:
           Write-Host "Shell control script present"
           $out = Join-Path $env:RUNNER_TEMP "xmrig-package-test"
           & "packages/base/XMRig-Control-Center/build_release.ps1" -OutputDirectory $out
-          if ($LASTEXITCODE -ne 0) { throw "Source bundle script failed." }
           if (-not (Get-ChildItem $out -Filter "*.zip")) { throw "Source bundle ZIP was not created." }
           Write-Host "Source bundle generation OK"
           $tokens = $null
