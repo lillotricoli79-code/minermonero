@@ -214,6 +214,16 @@ class App(tk.Tk):
         n=os.cpu_count() or 1
         messagebox.showinfo("Autotuning guidato",f"CPU logiche rilevate: {n}\n\nProva iniziale consigliata: {max(1,n-1)} thread.\nConfronta i risultati a 10 e 60 secondi, controllando temperature e stabilità.\nIl numero viene inserito nel campo Thread: salva il profilo dopo il test.")
         self.vars["threads"].set(str(max(1,n-1)))
+    def _ai_analyze(self):
+        try:
+            decision = self.ctrl.analyze_qween()
+            threads = decision.suggested_threads if decision.suggested_threads is not None else "nessuna modifica"
+            messagebox.showinfo(
+                "AI Qween — analisi prudente",
+                f"Modalità: {decision.mode}\\nStato sicurezza: {decision.safety_state}\\nThread suggeriti: {threads}\\n\\n{decision.reason}\\n\\nAI Qween fornisce un consiglio manuale: non modifica né riavvia XMRig."
+            )
+        except Exception as e:
+            messagebox.showwarning("AI Qween", str(e))
     def _log(self,s): self.log.insert("end",f"[{time.strftime('%H:%M:%S')}] {s}\n");self.log.see("end")
     def _tick(self):
         st=self.ctrl.status();self.state.config(text=st["state"])
