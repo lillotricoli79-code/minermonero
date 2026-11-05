@@ -220,7 +220,7 @@ class App(tk.Tk):
             threads = decision.suggested_threads if decision.suggested_threads is not None else "nessuna modifica"
             messagebox.showinfo(
                 "AI Qween — analisi prudente",
-                f"Modalità: {decision.mode}\\nStato sicurezza: {decision.safety_state}\\nThread suggeriti: {threads}\\n\\n{decision.reason}\\n\\nAI Qween fornisce un consiglio manuale: non modifica né riavvia XMRig."
+                f"Modalità: {decision.mode}\nStato sicurezza: {decision.safety_state}\nThread suggeriti: {threads}\n\n{decision.reason}\n\nAI Qween fornisce un consiglio manuale: non modifica né riavvia XMRig."
             )
         except Exception as e:
             messagebox.showwarning("AI Qween", str(e))
