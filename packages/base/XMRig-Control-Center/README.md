@@ -9,6 +9,7 @@ Desktop control panel for the **official XMRig executable**. It does not impleme
 - Persistent configuration profiles
 - Guided CPU-thread starting point (not an automatic benchmark claim)
 - Log viewer
+- Optional AI Qween advisor button when the sibling AI Qween package is present
 
 ## Requirements
 - Windows 10/11 x64
@@ -17,8 +18,10 @@ Desktop control panel for the **official XMRig executable**. It does not impleme
 
 ## Setup
 1. Run `download_xmrig.ps1` in PowerShell. It fetches the latest Windows x64 release from the official XMRig GitHub releases API.
-2. Run `python app.py`.
-3. Enter your pool and wallet, save configuration, then start mining.
+2. Keep the repository `packages/base` and `packages/aiqween` folders together if you want the optional AI Qween advisor.
+3. Run `python app.py`.
+4. Enter your pool and wallet, save configuration, then start mining.
+5. The AI Qween button reads the local XMRig summary and provides manual recommendations only. It does not apply thread changes or control the miner automatically.
 
 Alternatively, use **Seleziona XMRig** to choose an existing `xmrig.exe`.
 
