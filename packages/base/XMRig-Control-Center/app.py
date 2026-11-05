@@ -42,7 +42,11 @@ class Controller:
         if self.qween is None:
             raise RuntimeError("Modulo AI Qween non trovato. Mantieni la cartella packages/aiqween accanto a packages/base.")
         summary = self.api("/1/summary")
-        sample = self.qween.from_xmrig_summary(summary)
+        sensors = read_hardware_sensors()
+        cpu_temp = next((x["value"] for x in sensors if x["type"] == "Temperature" and "cpu" in (x["hardware"]+" "+x["name"]).lower()), None)
+        gpu_temp = next((x["value"] for x in sensors if x["type"] == "Temperature" and "gpu" in (x["hardware"]+" "+x["name"]).lower()), None)
+        cpu_load = next((x["value"] for x in sensors if x["type"] == "Load" and "cpu" in (x["hardware"]+" "+x["name"]).lower()), None)
+        sample = self.qween.from_xmrig_summary(summary, cpu_temperature_c=cpu_temp, gpu_temperature_c=gpu_temp, cpu_load_percent=cpu_load)
         self.qween.ingest(sample)
         cfg = load_config()
         import os
@@ -129,6 +133,25 @@ class Controller:
                     "uptime":s.get("connection",{}).get("uptime",0), "raw":s}
         except Exception as e: return {"state":"AVVIO / API IN ATTESA", "error":str(e)}
 
+def read_hardware_sensors():
+    """Read optional real sensors from LibreHardwareMonitor WMI; no synthetic fallbacks."""
+    script = ROOT / "hardware_sensors.ps1"
+    if os.name != "nt" or not script.is_file():
+        return []
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script), "-AsJson"],
+            capture_output=True, text=True, timeout=4, check=False
+        )
+        if result.returncode != 0:
+            return []
+        payload = json.loads(result.stdout)
+        if not payload.get("available"):
+            return []
+        return [x for x in payload.get("sensors", []) if isinstance(x, dict) and isinstance(x.get("Value"), (int, float))]
+    except (OSError, subprocess.SubprocessError, ValueError, json.JSONDecodeError):
+        return []
+
 def num(a, i):
     try: return float(a[i])
     except Exception: return 0.0
@@ -153,7 +176,7 @@ def fmt_hash(v):
 class App(tk.Tk):
     def __init__(self):
         super().__init__(); self.title(APP); self.geometry("1050x720"); self.minsize(850,600)
-        self.configure(bg="#111827"); self.ctrl=Controller(); self.vars={}
+        self.configure(bg="#111827"); self.ctrl=Controller(); self.vars={}; self.sensor_cache=[]; self.last_sensor_poll=0.0
         self._style(); self._header(); self._layout(); self._load_fields(); self.after(500,self._tick)
         self.protocol("WM_DELETE_WINDOW", self._close)
     def _style(self):
@@ -190,7 +213,7 @@ class App(tk.Tk):
         self.state=ttk.Label(stats,text="FERMO",font=("Segoe UI",16,"bold"),foreground="#fbbf24"); self.state.pack(anchor="w")
         grid=ttk.Frame(stats); grid.pack(fill="x",pady=12)
         self.metrics={}
-        for i,(k,label) in enumerate([("h10","Hashrate 10s"),("h60","Hashrate 60s"),("h15m","Hashrate 15m"),("accepted","Share accettate"),("rejected","Share rifiutate"),("uptime","Uptime (s)")]):
+        for i,(k,label) in enumerate([("h10","Hashrate 10s"),("h60","Hashrate 60s"),("h15m","Hashrate 15m"),("accepted","Share accettate"),("rejected","Share rifiutate"),("uptime","Uptime (s)"),("cpu_temp","CPU °C"),("gpu_temp","GPU °C"),("fan_rpm","Ventola RPM")]):
             card=ttk.Frame(grid,padding=10); card.grid(row=i//3,column=i%3,sticky="nsew",padx=4,pady=4); grid.columnconfigure(i%3,weight=1)
             ttk.Label(card,text=label,foreground="#9ca3af").pack(anchor="w")
             val=ttk.Label(card,text="—",font=("Segoe UI",15,"bold")); val.pack(anchor="w"); self.metrics[k]=val
@@ -269,6 +292,15 @@ class App(tk.Tk):
     def _log(self,s): self.log.insert("end",f"[{time.strftime('%H:%M:%S')}] {s}\n");self.log.see("end")
     def _tick(self):
         st=self.ctrl.status();self.state.config(text=st["state"])
+        if time.monotonic() - self.last_sensor_poll >= 8:
+            self.sensor_cache = read_hardware_sensors()
+            self.last_sensor_poll = time.monotonic()
+        cpu_temp = next((x.get("Value") for x in self.sensor_cache if x.get("Type") == "Temperature" and "cpu" in (str(x.get("Hardware",""))+" "+str(x.get("Name",""))).lower()), None)
+        gpu_temp = next((x.get("Value") for x in self.sensor_cache if x.get("Type") == "Temperature" and "gpu" in (str(x.get("Hardware",""))+" "+str(x.get("Name",""))).lower()), None)
+        fan_rpm = next((x.get("Value") for x in self.sensor_cache if x.get("Type") == "Fan"), None)
+        self.metrics["cpu_temp"].config(text=f"{cpu_temp:.1f} °C" if cpu_temp is not None else "N/D")
+        self.metrics["gpu_temp"].config(text=f"{gpu_temp:.1f} °C" if gpu_temp is not None else "N/D")
+        self.metrics["fan_rpm"].config(text=f"{fan_rpm:.0f} RPM" if fan_rpm is not None else "N/D")
         for k in ("h10","h60","h15m"):
             self.metrics[k].config(text=fmt_hash(st.get(k,0)))
         for k in ("accepted","rejected","uptime"):self.metrics[k].config(text=str(st.get(k,"—")))
