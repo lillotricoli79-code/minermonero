@@ -7,7 +7,9 @@ Desktop control panel for the **official XMRig executable**. It does not impleme
 - Local restricted HTTP API configuration
 - Start/stop process control and live hashrate/share/uptime display
 - Persistent configuration profiles
+- CPU threads, CPU priority, CPU affinity mask, RandomX mode and huge-page setting
 - Guided CPU-thread starting point (not an automatic benchmark claim)
+- PowerShell shell control for Configure / Start / Stop / Status
 - Optional OpenCL and CUDA backend toggles; actual use depends on the XMRig build, GPU, drivers and runtime
 - Log viewer
 - Optional AI Qween advisor button when the sibling AI Qween package is present
@@ -24,12 +26,12 @@ Desktop control panel for the **official XMRig executable**. It does not impleme
 4. Enter your pool and wallet, save configuration, then start mining.
 5. The AI Qween button reads the local XMRig summary and provides manual recommendations only. It does not apply thread changes or control the miner automatically.
 
-Alternatively, use **Seleziona XMRig** to choose an existing `xmrig.exe`.
+Alternatively, use **Seleziona XMRig** to choose an existing `xmrig.exe`.\n\n## Shell controls (PowerShell)\nRun from this folder:\n\n```powershell\n.\\xmrig-shell.ps1 -Action Configure -Pool pool.example:3333 -Wallet YOUR_WALLET -Worker rig01 -Threads 7 -CpuPriority 2 -CpuAffinity 0x7F -RandomXMode auto -Tls\n.\\xmrig-shell.ps1 -Action Start\n.\\xmrig-shell.ps1 -Action Status\n.\\xmrig-shell.ps1 -Action Stop\n```\n\n`-CpuAffinity` is a hexadecimal CPU bit mask; omit it for automatic affinity. GPU toggles only request OpenCL/CUDA from the selected XMRig build; they do not install drivers or guarantee device support.
 
 ## Safety and scope
 The control API binds to `127.0.0.1` by default and uses a token. Keep it local; do not expose the API port to the public internet. The application does not fabricate shares, hashes, earnings, or pool acceptance. Share counts and hashrate are read from the actual XMRig API.
 
-This initial integration package is an independently written controller layer. NyxRX, Gupax, XMRigCC and other repositories were examined as feature references; their source code is not copied into this package. XMRig remains a separate upstream component with its own license and notices: https://github.com/xmrig/xmrig
+This integration package is an independently written controller layer. NyxRX, Gupax, XMRigCC and other repositories were examined as feature references; their source code is not copied into this package. XMRig remains a separate upstream component with its own license and notices: https://github.com/xmrig/xmrig
 
 ## Current limitations
 - Temperature and power sensors are not yet wired into the GUI.
