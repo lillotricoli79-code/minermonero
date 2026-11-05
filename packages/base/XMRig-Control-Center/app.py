@@ -3,7 +3,7 @@
 No mining/hash implementation is included or replaced here.
 """
 from __future__ import annotations
-import json, os, queue, subprocess, threading, time, urllib.request, urllib.error, sys
+import json, os, queue, subprocess, threading, time, urllib.request, urllib.error, sys, secrets
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -16,7 +16,8 @@ CONFIG = DATA / "config.json"
 DEFAULTS = {
     "pool": "pool.supportxmr.com:3333", "wallet": "", "worker": "rig01",
     "password": "x", "threads": 0, "tls": False, "api_host": "127.0.0.1",
-    "api_port": 18088, "api_token": "local-control-token", "xmrig_path": ""
+    "api_port": 18088, "api_token": secrets.token_urlsafe(32),
+    "opencl": False, "cuda": False, "xmrig_path": ""
 }
 
 # Optional sibling package: available when both repository packages are kept
@@ -51,7 +52,14 @@ class Controller:
         return self.proc is not None and self.proc.poll() is None
     def api(self, path="/1/summary", timeout=2):
         cfg = load_config()
-        url = f"http://{cfg['api_host']}:{int(cfg['api_port'])}{path}"
+        if cfg["api_host"] not in ("127.0.0.1", "localhost", "::1"):
+            raise ValueError("Per sicurezza l'API XMRig deve restare su loopback.")
+        port = int(cfg["api_port"])
+        if not 1 <= port <= 65535:
+            raise ValueError("Porta API fuori intervallo.")
+        if not str(cfg["api_token"]).strip():
+            raise ValueError("Token API vuoto: impostane uno prima di avviare XMRig.")
+        url = f"http://{cfg['api_host']}:{port}{path}"
         req = urllib.request.Request(url, headers={"Authorization": "Bearer " + cfg["api_token"]})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8"))
@@ -61,11 +69,18 @@ class Controller:
         if not exe.is_file():
             raise FileNotFoundError("xmrig.exe non trovato. Usa 'Seleziona XMRig' oppure lo script download_xmrig.ps1.")
         if not cfg["wallet"].strip(): raise ValueError("Inserisci il wallet prima di avviare il miner.")
+        if cfg["api_host"] not in ("127.0.0.1", "localhost", "::1"):
+            raise ValueError("L'API XMRig deve restare su 127.0.0.1/localhost/::1.")
+        if not 1 <= int(cfg["api_port"]) <= 65535:
+            raise ValueError("Porta API fuori intervallo.")
+        if not str(cfg["api_token"]).strip():
+            raise ValueError("Token API vuoto.")
         config_path = DATA / "xmrig.generated.json"
         config = {
             "autosave": True, "background": False, "colors": True,
             "http": {"enabled": True, "host": cfg["api_host"], "port": int(cfg["api_port"]), "access-token": cfg["api_token"], "restricted": True},
-            "opencl": False, "cuda": False,
+            "opencl": {"enabled": bool(cfg.get("opencl", False))},
+            "cuda": {"enabled": bool(cfg.get("cuda", False))},
             "pools": [{"url": cfg["pool"], "user": cfg["wallet"], "pass": cfg["password"], "rig-id": cfg["worker"], "keepalive": True, "tls": bool(cfg["tls"]), "enabled": True}]
         }
         if int(cfg["threads"]) > 0:
@@ -149,7 +164,9 @@ class App(tk.Tk):
             ttk.Label(conn,text=label).pack(anchor="w",pady=(5,1)); v=tk.StringVar(); self.vars[key]=v
             e=ttk.Entry(conn,textvariable=v,width=36,show="•" if key in ("wallet","api_token") else "")
             e.pack(fill="x")
-        self.tls=tk.BooleanVar(); ttk.Checkbutton(conn,text="TLS pool",variable=self.tls).pack(anchor="w",pady=7)
+        self.tls=tk.BooleanVar(); ttk.Checkbutton(conn,text="TLS pool",variable=self.tls).pack(anchor="w",pady=4)
+        self.opencl=tk.BooleanVar(); ttk.Checkbutton(conn,text="GPU OpenCL (se supportata)",variable=self.opencl).pack(anchor="w",pady=2)
+        self.cuda=tk.BooleanVar(); ttk.Checkbutton(conn,text="GPU CUDA (se supportata)",variable=self.cuda).pack(anchor="w",pady=2)
         ttk.Button(conn,text="Seleziona XMRig…",command=self._select_exe).pack(fill="x",pady=(4,2))
         ttk.Button(conn,text="Salva configurazione",command=self._save).pack(fill="x",pady=2)
         prof=ttk.LabelFrame(left,text="Profili",style="Card.TLabelframe",padding=12); prof.pack(fill="x")
@@ -177,13 +194,18 @@ class App(tk.Tk):
         c=load_config()
         for k,v in self.vars.items(): v.set(str(c.get(k,DEFAULTS.get(k,""))))
         self.tls.set(bool(c.get("tls",False)))
+        self.opencl.set(bool(c.get("opencl",False)))
+        self.cuda.set(bool(c.get("cuda",False)))
     def _values(self):
         c=load_config()
         for k,v in self.vars.items(): c[k]=v.get().strip()
         for k in ("threads","api_port"):
             try:c[k]=int(c[k])
             except ValueError: raise ValueError(f"{k} deve essere numerico")
-        c["tls"]=self.tls.get(); return c
+        c["tls"]=self.tls.get()
+        c["opencl"]=self.opencl.get()
+        c["cuda"]=self.cuda.get()
+        return c
     def _save(self):
         try: save_config(self._values()); self._log("Configurazione salvata.")
         except Exception as e: messagebox.showerror("Configurazione",str(e))
