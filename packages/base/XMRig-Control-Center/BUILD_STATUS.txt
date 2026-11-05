@@ -1,0 +1,3 @@
+Initial controller package assembled.
+Verified: Python syntax compilation (py_compile).
+Not verified: Windows GUI runtime, XMRig API compatibility against a live miner, Windows release download, mining session, pool shares, thermal sensors, packaging as a standalone EXE.
