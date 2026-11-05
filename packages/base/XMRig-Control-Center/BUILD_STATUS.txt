@@ -22,5 +22,6 @@ Not verified yet:
 Safety boundaries:
 - AI Qween is advisory-only; it does not change a running miner.
 - Missing sensor values remain unavailable; no synthetic temperatures or power values.
-- GPU and fan controls are not claimed as implemented.
+- OpenCL/CUDA enable switches are present; actual GPU mining is not hardware-verified.
+- CPU/GPU temperature sensors and fan controls are not implemented.
 - Original source ZIP files remain preserved in the repository.
