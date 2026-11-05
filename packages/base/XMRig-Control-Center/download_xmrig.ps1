@@ -31,7 +31,7 @@ try {
     $Extract = Join-Path $Stage 'extracted'
     Expand-Archive -LiteralPath $Zip -DestinationPath $Extract -Force
     $Exe = Get-ChildItem -LiteralPath $Extract -Filter xmrig.exe -File -Recurse | Select-Object -First 1
-    if (-not $Exe) { throw 'xmrig.exe non trovato nell’archivio scaricato.' }
+    if (-not $Exe) { throw 'xmrig.exe non trovato nel pacchetto scaricato.' }
 
     $ExeRelative = $Exe.FullName.Substring($Extract.Length).TrimStart([char[]]@('\','/'))
     if (Test-Path -LiteralPath $EngineArchive) {
