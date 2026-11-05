@@ -1,0 +1,44 @@
+name: Prepare source trees
+on:
+  push:
+    branches:
+      - aiqween-integration
+    paths:
+      - .github/workflows/prepare-sources.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: aiqween-integration
+          fetch-depth: 0
+      - name: Extract original packages without changing archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p packages
+          unzip -oq XMRig-Control-Center-source.zip -d packages/base
+          unzip -oq XMRig-Control-Center-AIQween-source.zip -d packages/aiqween
+          find packages -type d -name __pycache__ -prune -exec rm -rf {} +
+          find packages -type f -name '*.pyc' -delete
+          test -f packages/base/XMRig-Control-Center/app.py
+          test -f packages/aiqween/XMRig-Control-Center-AIQween-module/ai_qween/engine.py
+          echo "Extracted source files:"
+          find packages -type f -print | sort
+      - name: Commit extracted source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+          else
+            git commit -m "Extract both original XMRig Control Center source packages"
+            git push origin HEAD:aiqween-integration
+          fi
