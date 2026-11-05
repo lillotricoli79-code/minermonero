@@ -12,16 +12,19 @@ $stage=Join-Path ([IO.Path]::GetTempPath()) ('xmrig-control-center-'+[guid]::New
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 try {
   $bundle=Join-Path $stage 'XMRig-Control-Center'
-  New-Item -ItemType Directory -Path $bundle -Force | Out-Null
-  Copy-Item -LiteralPath $Base -Destination (Join-Path $bundle 'base') -Recurse
-  Copy-Item -LiteralPath $AI -Destination (Join-Path $bundle 'aiqween') -Recurse
+  $baseTarget=Join-Path $bundle 'packages\base\XMRig-Control-Center'
+  $aiTarget=Join-Path $bundle 'packages\aiqween\XMRig-Control-Center-AIQween-module'
+  New-Item -ItemType Directory -Path $baseTarget -Force | Out-Null
+  New-Item -ItemType Directory -Path $aiTarget -Force | Out-Null
+  Copy-Item -LiteralPath (Join-Path $Base '*') -Destination $baseTarget -Recurse
+  Copy-Item -LiteralPath (Join-Path $AI '*') -Destination $aiTarget -Recurse
   Get-ChildItem -LiteralPath $bundle -Directory -Recurse -Force |
     Where-Object {$_.Name -in @('__pycache__','.pytest_cache','build','dist')} |
     Sort-Object FullName -Descending | Remove-Item -Recurse -Force
   Get-ChildItem -LiteralPath $bundle -File -Recurse -Force |
     Where-Object {$_.Extension -in @('.pyc','.pyo')} | Remove-Item -Force
   $manifest=Join-Path $bundle 'PACKAGE-MANIFEST.txt'
-  $lines=@('XMRig Control Center + AI Qween source bundle',"Created UTC: $([DateTime]::UtcNow.ToString('o'))",'','Original XMRig ZIPs are not included; download the official XMRig Windows x64 release using base\download_xmrig.ps1.','')
+  $lines=@('XMRig Control Center + AI Qween source bundle',"Created UTC: $([DateTime]::UtcNow.ToString('o'))",'','Original XMRig ZIPs are not included; download the official XMRig Windows x64 release using packages\base\XMRig-Control-Center\download_xmrig.ps1.','')
   $lines += Get-ChildItem -LiteralPath $bundle -File -Recurse | ForEach-Object {
     $relative=$_.FullName.Substring($bundle.Length).TrimStart('\')
     $hash=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
