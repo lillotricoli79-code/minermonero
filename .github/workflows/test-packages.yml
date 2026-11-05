@@ -1,0 +1,33 @@
+name: Validate XMRig Control Center packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - aiqween-integration
+    paths:
+      - "packages/**"
+      - ".github/workflows/test-packages.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  python-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: aiqween-integration
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Compile base controller syntax
+        run: python -m py_compile packages/base/XMRig-Control-Center/app.py
+      - name: Compile AI Qween module
+        run: python -m compileall -q packages/aiqween/XMRig-Control-Center-AIQween-module/ai_qween
+      - name: Run AI Qween regression tests
+        working-directory: packages/aiqween/XMRig-Control-Center-AIQween-module
+        run: python -m unittest discover -s tests -v
