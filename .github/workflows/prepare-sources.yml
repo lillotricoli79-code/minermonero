@@ -1,11 +1,11 @@
 name: Prepare source trees
 on:
+  workflow_dispatch:
   push:
     branches:
       - aiqween-integration
     paths:
       - .github/workflows/prepare-sources.yml
-  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -16,19 +16,29 @@ jobs:
         with:
           ref: aiqween-integration
           fetch-depth: 0
-      - name: Extract original packages without changing archives
+      - name: Extract both original archives
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p packages
+          mkdir -p packages/base packages/aiqween
           unzip -oq XMRig-Control-Center-source.zip -d packages/base
           unzip -oq XMRig-Control-Center-AIQween-source.zip -d packages/aiqween
           find packages -type d -name __pycache__ -prune -exec rm -rf {} +
           find packages -type f -name '*.pyc' -delete
-          test -f packages/base/XMRig-Control-Center/app.py
-          test -f packages/aiqween/XMRig-Control-Center-AIQween-module/ai_qween/engine.py
-          echo "Extracted source files:"
-          find packages -type f -print | sort
+          python - <<'PY'
+          from pathlib import Path
+          root = Path("packages")
+          files = sorted(p for p in root.rglob("*") if p.is_file())
+          if not files:
+              raise SystemExit("No source files extracted")
+          (root / "SOURCE_MANIFEST.txt").write_text(
+              "\n".join(f"{p.as_posix()} ({p.stat().st_size} bytes)" for p in files) + "\n",
+              encoding="utf-8"
+          )
+          print(f"Extracted {len(files)} files")
+          for p in files:
+              print(p)
+          PY
       - name: Commit extracted source trees
         shell: bash
         run: |
@@ -39,6 +49,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No source changes to commit."
           else
-            git commit -m "Extract both original XMRig Control Center source packages"
+            git commit -m "Extract original XMRig Control Center source packages"
             git push origin HEAD:aiqween-integration
           fi
