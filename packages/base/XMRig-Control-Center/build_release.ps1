@@ -23,6 +23,10 @@ try {
     Sort-Object FullName -Descending | Remove-Item -Recurse -Force
   Get-ChildItem -LiteralPath $bundle -File -Recurse -Force |
     Where-Object {$_.Extension -in @('.pyc','.pyo')} | Remove-Item -Force
+  $launcher=@('@echo off','setlocal','cd /d "%~dp0"','set "APP=packages\base\XMRig-Control-Center\app.py"','where py >nul 2>nul','if not errorlevel 1 (','  py -3 "%APP%"','  exit /b %errorlevel%',' )','where python >nul 2>nul','if not errorlevel 1 (','  python "%APP%"','  exit /b %errorlevel%',' )','echo Python 3.10 o superiore non trovato. Installare Python e riprovare.','pause','exit /b 1')
+  Set-Content -LiteralPath (Join-Path $bundle 'START_CONTROL_CENTER.bat') -Value $launcher -Encoding ASCII
+  $downloader=@('@echo off','setlocal','cd /d "%~dp0packages\base\XMRig-Control-Center"','powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0packages\base\XMRig-Control-Center\download_xmrig.ps1"','if errorlevel 1 pause','exit /b %errorlevel%')
+  Set-Content -LiteralPath (Join-Path $bundle 'DOWNLOAD_XMRIG.bat') -Value $downloader -Encoding ASCII
   $manifest=Join-Path $bundle 'PACKAGE-MANIFEST.txt'
   $lines=@('XMRig Control Center + AI Qween source bundle',"Created UTC: $([DateTime]::UtcNow.ToString('o'))",'','Original XMRig ZIPs are not included; download the official XMRig Windows x64 release using packages\base\XMRig-Control-Center\download_xmrig.ps1.','')
   $lines += Get-ChildItem -LiteralPath $bundle -File -Recurse | ForEach-Object {
