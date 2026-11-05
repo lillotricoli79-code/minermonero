@@ -1,27 +1,32 @@
-Package status: source integration and safety fixes in progress.
+Package status: integration work in progress; not a final mining release.
 
-Included:
-- XMRig Control Center Tkinter controller and configuration profiles.
-- Optional AI Qween advisor button connected to the local XMRig summary API.
-- AI Qween safety regression tests.
-- Staged XMRig downloader that validates the downloaded executable and preserves
-  the previous executable in a timestamped backup before replacement.
+Implemented in this branch:
+- Base Tkinter controller with pool/wallet/worker/password/TLS, profiles, start/stop,
+  local restricted XMRig API, live hashrate/share/uptime fields and log window.
+- Advanced CPU settings in GUI: thread hint, priority, affinity mask and RandomX mode.
+- PowerShell shell controller: Configure / Start / Stop / Status.
+- Staged official XMRig downloader with validation and backup of the previous executable.
+- Optional hardware sensor reader using LibreHardwareMonitor WMI; unavailable sensors
+  are reported as unavailable, never replaced with fabricated readings.
+- Source bundle builder (PowerShell + BAT) for base + AI Qween and SHA256 manifest.
+- AI Qween advisor module with regression tests; advisory only, not automatic control.
+- GitHub Actions validation for Python syntax, AI tests, PowerShell parsing and
+  Windows source-bundle generation.
 
-Automated checks:
-- GitHub Actions validation workflow added for Python syntax and AI Qween tests.
-- Validation workflow has not yet been run against the latest integration commits.
+Still not verified / not implemented:
+- The Tkinter dashboard does not yet display hardware temperatures, fan RPM or GPU
+  telemetry; hardware_sensors.ps1 is a separate diagnostic tool.
+- GPU OpenCL/CUDA mining depends on the downloaded XMRig build, installed drivers
+  and hardware; no GPU device has been tested here.
+- Pool connectivity and real mining shares/hashrate have not been verified against
+  a live pool and wallet.
+- AI Qween is not yet fed continuous sensor samples and does not apply tuning.
+- A real Stratum proxy is not included.
+- Windows 10 runtime behavior and standalone EXE build still require on-device testing.
 
-Not verified yet:
-- Windows GUI runtime and Tkinter behavior.
-- PowerShell downloader execution on Windows.
-- XMRig API compatibility against a live miner and the exact bundled release.
-- Pool connectivity, accepted/rejected shares, hashrate, uptime, and mining session.
-- CPU/GPU temperature, fan telemetry, GPU backend availability, and hardware controls.
-- Standalone EXE packaging and full Windows installer.
-
-Safety boundaries:
-- AI Qween is advisory-only; it does not change a running miner.
-- Missing sensor values remain unavailable; no synthetic temperatures or power values.
-- OpenCL/CUDA enable switches are present; actual GPU mining is not hardware-verified.
-- CPU/GPU temperature sensors and fan controls are not implemented.
-- Original source ZIP files remain preserved in the repository.
+Safety:
+- Original source ZIP archives are preserved.
+- The official XMRig engine is downloaded separately; this repository does not contain
+  a prebuilt miner binary.
+- No synthetic temperature, fan, power, share, hashrate or earnings values are used.
+- Do not expose the XMRig HTTP API outside loopback.
