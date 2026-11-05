@@ -72,15 +72,6 @@ jobs:
           if (-not (Get-ChildItem $expanded -Filter "app.py" -Recurse)) { throw "Base controller missing from bundle." }
           if (-not (Get-ChildItem $expanded -Filter "engine.py" -Recurse)) { throw "AI Qween engine missing from bundle." }
           Write-Host "Bundle content verification OK"
-      - name: Upload combined source package
-        uses: actions/upload-artifact@v4
-        with:
-          name: XMRig-Control-Center-AIQween-Windows-Source
-          path: |
-            ${{ runner.temp }}/xmrig-package-test/*.zip
-            ${{ runner.temp }}/xmrig-package-test/*.sha256
-          if-no-files-found: error
-          retention-days: 30
           $tokens = $null
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
@@ -93,3 +84,12 @@ jobs:
             exit 1
           }
           Write-Host "PowerShell syntax OK"
+      - name: Upload combined source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: XMRig-Control-Center-AIQween-Windows-Source
+          path: |
+            ${{ runner.temp }}/xmrig-package-test/*.zip
+            ${{ runner.temp }}/xmrig-package-test/*.sha256
+          if-no-files-found: error
+          retention-days: 30
