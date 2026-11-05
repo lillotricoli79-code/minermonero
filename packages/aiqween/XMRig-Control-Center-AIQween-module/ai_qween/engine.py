@@ -71,8 +71,19 @@ class AIQween:
 
     def __init__(self, config: Optional[QweenConfig] = None):
         self.config = config or QweenConfig()
+        if self.config.sample_window < 1:
+            raise ValueError("sample_window deve essere almeno 1")
+        if self.config.minimum_samples < 1:
+            raise ValueError("minimum_samples deve essere almeno 1")
+        if self.config.min_threads < 1 or self.config.max_threads < self.config.min_threads:
+            raise ValueError("Intervallo thread non valido")
+        if self.config.resume_temperature_c >= self.config.max_cpu_temperature_c:
+            raise ValueError("resume_temperature_c deve essere inferiore a max_cpu_temperature_c")
+        if not 0 <= self.config.max_cpu_load_percent <= 100:
+            raise ValueError("max_cpu_load_percent deve essere tra 0 e 100")
         self.samples: deque[TelemetrySample] = deque(maxlen=self.config.sample_window)
         self._thermal_latched = False
+        self._last_hot_temperature: Optional[float] = None
         self._last_decision: Optional[QweenDecision] = None
 
     @staticmethod
@@ -144,14 +155,25 @@ class AIQween:
         if temp is not None:
             if temp >= cfg.max_cpu_temperature_c:
                 self._thermal_latched = True
+                self._last_hot_temperature = temp
             elif temp <= cfg.resume_temperature_c:
                 self._thermal_latched = False
+                self._last_hot_temperature = None
 
         if self._thermal_latched:
             target = max(cfg.min_threads, current_threads - 1)
-            return self._decision("PROTECT", target, 0.95,
-                                  f"Temperatura CPU reale {temp:.1f} °C: ridurre di un thread e verificare il raffreddamento.",
-                                  "HOT", now)
+            if temp is None:
+                reason = (
+                    "Protezione termica ancora attiva: il sensore CPU non è "
+                    "disponibile dopo il superamento della soglia. Verificare "
+                    "manualmente il raffreddamento prima di riprendere."
+                )
+            else:
+                reason = (
+                    f"Temperatura CPU reale {temp:.1f} °C: ridurre di un "
+                    "thread e verificare il raffreddamento."
+                )
+            return self._decision("PROTECT", target, 0.95, reason, "HOT", now)
 
         if load is not None and load >= cfg.max_cpu_load_percent:
             target = max(cfg.min_threads, current_threads - 1)
