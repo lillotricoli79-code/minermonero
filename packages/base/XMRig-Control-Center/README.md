@@ -43,7 +43,7 @@ Run from this folder:
 `-CpuAffinity` is a hexadecimal CPU bit mask; omit it for automatic affinity. GPU toggles only request OpenCL/CUDA from the selected XMRig build; they do not install drivers or guarantee device support.
 
 ## Hardware sensors (optional)
-`hardware_sensors.ps1` reads actual Temperature, Fan, Load, Power and Clock sensors from the optional LibreHardwareMonitor WMI provider. Start LibreHardwareMonitor and enable its WMI interface first. If the provider is absent, the script reports sensors unavailable; it never substitutes estimated values. This sensor reader is a standalone diagnostic and is not yet wired into the Tkinter dashboard.
+`hardware_sensors.ps1` reads actual Temperature, Fan, Load, Power and Clock sensors from the optional LibreHardwareMonitor WMI provider. Start LibreHardwareMonitor and enable its WMI interface first. If the provider is absent, the script reports sensors unavailable; it never substitutes estimated values. The Tkinter dashboard polls the provider periodically and displays CPU temperature, GPU temperature and fan RPM when identifiable; unavailable readings appear as `N/D`. AI Qween reads a real sensor snapshot when the user requests an analysis.
 
 ## Shell controls (PowerShell)
 Run from this folder:
