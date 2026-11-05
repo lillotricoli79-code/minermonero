@@ -17,7 +17,7 @@ DEFAULTS = {
     "pool": "pool.supportxmr.com:3333", "wallet": "", "worker": "rig01",
     "password": "x", "threads": 0, "tls": False, "api_host": "127.0.0.1",
     "api_port": 18088, "api_token": secrets.token_urlsafe(32),
-    "opencl": False, "cuda": False, "xmrig_path": ""
+    "opencl": False, "cuda": False, "xmrig_path": "", "cpu_priority": 2, "cpu_affinity": "", "randomx_mode": "auto", "huge_pages": True
 }
 
 # Optional sibling package: available when both repository packages are kept
@@ -83,11 +83,24 @@ class Controller:
             "cuda": {"enabled": bool(cfg.get("cuda", False))},
             "pools": [{"url": cfg["pool"], "user": cfg["wallet"], "pass": cfg["password"], "rig-id": cfg["worker"], "keepalive": True, "tls": bool(cfg["tls"]), "enabled": True}]
         }
+        cpu_cfg = {"enabled": True, "huge-pages": bool(cfg.get("huge_pages", True)),
+                   "priority": max(0, min(5, int(cfg.get("cpu_priority", 2))))}
         if int(cfg["threads"]) > 0:
             import os
             logical = max(1, os.cpu_count() or 1)
             hint = max(1, min(100, round(100 * int(cfg["threads"]) / logical)))
-            config["cpu"] = {"enabled": True, "huge-pages": True, "priority": 2, "max-threads-hint": hint}
+            cpu_cfg["max-threads-hint"] = hint
+        affinity = str(cfg.get("cpu_affinity", "")).strip()
+        if affinity:
+            try:
+                cpu_cfg["affinity"] = int(affinity, 0)
+            except ValueError:
+                raise ValueError("CPU affinity deve essere una maschera intera (es. 0xFF).")
+        config["cpu"] = cpu_cfg
+        randomx_mode = str(cfg.get("randomx_mode", "auto")).lower()
+        if randomx_mode not in ("auto", "fast", "light"):
+            raise ValueError("RandomX mode deve essere auto, fast oppure light.")
+        config["randomx"] = {"mode": randomx_mode}
         config_path.write_text(json.dumps(config, indent=2), encoding="utf-8")
         with self.lock:
             if self.running(): return
@@ -159,7 +172,7 @@ class App(tk.Tk):
         left=ttk.Frame(body); left.pack(side="left",fill="y",padx=(0,12))
         right=ttk.Frame(body); right.pack(side="left",fill="both",expand=True)
         conn=ttk.LabelFrame(left,text="Configurazione pool",style="Card.TLabelframe",padding=12); conn.pack(fill="x",pady=(0,10))
-        fields=[("pool","Pool (host:porta)"),("wallet","Wallet"),("worker","Worker"),("password","Password"),("threads","Thread CPU (0 = automatico)"),("api_port","Porta API locale"),("api_token","Token API")]
+        fields=[("pool","Pool (host:porta)"),("wallet","Wallet"),("worker","Worker"),("password","Password"),("threads","Thread CPU (0 = automatico)"),("api_port","Porta API locale"),("api_token","Token API"),("cpu_priority","Priorità CPU (0-5)"),("cpu_affinity","CPU affinity (es. 0xFF, vuoto=auto)"),("randomx_mode","RandomX (auto/fast/light)") ]
         for key,label in fields:
             ttk.Label(conn,text=label).pack(anchor="w",pady=(5,1)); v=tk.StringVar(); self.vars[key]=v
             e=ttk.Entry(conn,textvariable=v,width=36,show="•" if key in ("wallet","api_token") else "")
@@ -199,12 +212,14 @@ class App(tk.Tk):
     def _values(self):
         c=load_config()
         for k,v in self.vars.items(): c[k]=v.get().strip()
-        for k in ("threads","api_port"):
+        for k in ("threads","api_port","cpu_priority"):
             try:c[k]=int(c[k])
             except ValueError: raise ValueError(f"{k} deve essere numerico")
         c["tls"]=self.tls.get()
         c["opencl"]=self.opencl.get()
         c["cuda"]=self.cuda.get()
+        if c["cpu_priority"] < 0 or c["cpu_priority"] > 5: raise ValueError("Priorità CPU deve essere tra 0 e 5")
+        c["huge_pages"] = True
         return c
     def _save(self):
         try: save_config(self._values()); self._log("Configurazione salvata.")
