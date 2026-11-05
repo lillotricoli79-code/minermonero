@@ -16,8 +16,8 @@ try {
   $aiTarget=Join-Path $bundle 'packages\aiqween\XMRig-Control-Center-AIQween-module'
   New-Item -ItemType Directory -Path $baseTarget -Force | Out-Null
   New-Item -ItemType Directory -Path $aiTarget -Force | Out-Null
-  Copy-Item -LiteralPath (Join-Path $Base '*') -Destination $baseTarget -Recurse
-  Copy-Item -LiteralPath (Join-Path $AI '*') -Destination $aiTarget -Recurse
+  Copy-Item -Path (Join-Path $Base '*') -Destination $baseTarget -Recurse
+  Copy-Item -Path (Join-Path $AI '*') -Destination $aiTarget -Recurse
   Get-ChildItem -LiteralPath $bundle -Directory -Recurse -Force |
     Where-Object {$_.Name -in @('__pycache__','.pytest_cache','build','dist')} |
     Sort-Object FullName -Descending | Remove-Item -Recurse -Force
