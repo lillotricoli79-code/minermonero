@@ -3,7 +3,7 @@
 No mining/hash implementation is included or replaced here.
 """
 from __future__ import annotations
-import json, os, queue, subprocess, threading, time, urllib.request, urllib.error
+import json, os, queue, subprocess, threading, time, urllib.request, urllib.error, sys
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -19,12 +19,34 @@ DEFAULTS = {
     "api_port": 18088, "api_token": "local-control-token", "xmrig_path": ""
 }
 
+# Optional sibling package: available when both repository packages are kept
+# together. The base controller still runs if AI Qween is not installed.
+AIQWEEN_DIR = ROOT.parents[1] / "aiqween" / "XMRig-Control-Center-AIQween-module"
+if AIQWEEN_DIR.is_dir() and str(AIQWEEN_DIR) not in sys.path:
+    sys.path.insert(0, str(AIQWEEN_DIR))
+try:
+    from ai_qween import AIQween, QweenConfig
+    AIQWEEN_AVAILABLE = True
+except ImportError:
+    AIQWEEN_AVAILABLE = False
+
 class Controller:
     def __init__(self):
         self.proc = None
         self.lock = threading.RLock()
         self.events = queue.Queue()
         self.last_summary = {}
+        self.qween = AIQween(QweenConfig()) if AIQWEEN_AVAILABLE else None
+    def analyze_qween(self):
+        if self.qween is None:
+            raise RuntimeError("Modulo AI Qween non trovato. Mantieni la cartella packages/aiqween accanto a packages/base.")
+        summary = self.api("/1/summary")
+        sample = self.qween.from_xmrig_summary(summary)
+        self.qween.ingest(sample)
+        cfg = load_config()
+        import os
+        threads = int(cfg.get("threads", 0)) or max(1, os.cpu_count() or 1)
+        return self.qween.decide(current_threads=threads, logical_cpus=max(1, os.cpu_count() or 1))
     def running(self):
         return self.proc is not None and self.proc.poll() is None
     def api(self, path="/1/summary", timeout=2):
@@ -145,7 +167,8 @@ class App(tk.Tk):
         controls=ttk.Frame(right); controls.pack(fill="x",pady=10)
         ttk.Button(controls,text="▶  AVVIA MINING",command=self._start).pack(side="left",padx=(0,8))
         ttk.Button(controls,text="■  STOP",command=self._stop).pack(side="left",padx=8)
-        ttk.Button(controls,text="⟳  Benchmark / autotuning guidato",command=self._tune).pack(side="left",padx=8)
+        ttk.Button(controls,text="⟳  Thread guidati",command=self._tune).pack(side="left",padx=8)
+        ttk.Button(controls,text="AI Qween — analizza",command=self._ai_analyze).pack(side="left",padx=8)
         logs=ttk.LabelFrame(right,text="Log miner",style="Card.TLabelframe",padding=8); logs.pack(fill="both",expand=True)
         self.log=tk.Text(logs,bg="#030712",fg="#d1d5db",insertbackground="white",font=("Consolas",9),wrap="word",height=18)
         self.log.pack(fill="both",expand=True)
