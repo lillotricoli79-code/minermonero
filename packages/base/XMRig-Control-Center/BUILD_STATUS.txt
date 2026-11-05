@@ -6,8 +6,8 @@ Implemented in this branch:
 - Advanced CPU settings in GUI: thread hint, priority, affinity mask and RandomX mode.
 - PowerShell shell controller: Configure / Start / Stop / Status.
 - Staged official XMRig downloader with validation and backup of the previous executable.
-- Optional hardware sensor reader using LibreHardwareMonitor WMI; unavailable sensors
-  are reported as unavailable, never replaced with fabricated readings.
+- Optional LibreHardwareMonitor WMI hardware sensor reader integrated into the GUI;
+  CPU/GPU temperature and fan RPM display real values or N/D, never fabricated readings.
 - Source bundle builder (PowerShell + BAT) for base + AI Qween and SHA256 manifest.
 - AI Qween advisor module with regression tests; advisory only, not automatic control.
 - GitHub Actions validation for Python syntax, AI tests, PowerShell parsing and
@@ -20,7 +20,8 @@ Still not verified / not implemented:
   and hardware; no GPU device has been tested here.
 - Pool connectivity and real mining shares/hashrate have not been verified against
   a live pool and wallet.
-- AI Qween is not yet fed continuous sensor samples and does not apply tuning.
+- AI Qween receives a real XMRig + available hardware-sensor snapshot when the user
+  requests an analysis; it does not continuously tune or apply changes.
 - A real Stratum proxy is not included.
 - Windows 10 runtime behavior and standalone EXE build still require on-device testing.
 
