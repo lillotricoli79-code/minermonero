@@ -374,6 +374,9 @@ int run_miner(const std::filesystem::path& config_path,
     } catch (const std::exception& error) {
         std::cerr << "UNIQUE RX mining error: " << error.what() << '\n';
         return 1;
+    } catch (...) {
+        std::cerr << "UNIQUE RX mining error: unknown exception\n";
+        return 1;
     }
 }
 } // namespace unique_rx
