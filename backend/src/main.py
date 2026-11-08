@@ -223,14 +223,14 @@ def is_intel_cpu() -> bool:
 def native_msr_available(executable_path: str | None) -> bool:
     """Check that the native MSR provider and the signed Intel module are present."""
     if os.name == "nt":
-        program_files = Path(os.environ.get("ProgramFiles", r"C:\\Program Files"))
+        program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
         libraries = [program_files / "PawnIO" / "PawnIOLib.dll"]
         try:
             import winreg
 
             with winreg.OpenKey(
                 winreg.HKEY_LOCAL_MACHINE,
-                r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO",
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
             ) as key:
                 install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
                 if install_location:
