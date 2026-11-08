@@ -300,6 +300,11 @@ function App() {
           </div>
         </header>
         <div className="page-content">
+          {status.error && (
+            <div className="notice" role="status">
+              <span>{status.error}</span>
+            </div>
+          )}
           {notice && (
             <div className="notice" role="status">
               <span>{notice}</span>
