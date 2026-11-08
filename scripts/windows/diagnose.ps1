@@ -12,12 +12,16 @@ if (Test-Path -LiteralPath $config) {
         else { Write-Warning "Configura un pool abilitato e il wallet." }
     } catch { Write-Warning "config.json non valido: $($_.Exception.Message)" }
 } else { Write-Warning "config.json assente: copia config.example.json e configura wallet/pool." }
-$python = Get-Command python -ErrorAction SilentlyContinue
-if ($python) {
-    & $python.Source --version
-    & $python.Source -c "import fastapi, uvicorn"
-    if ($LASTEXITCODE -eq 0) { Write-Host "[OK] FastAPI e Uvicorn disponibili" }
-    else { Write-Warning "Installa: python -m pip install -r requirements.txt" }
+$pythonExe = Join-Path $repoRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $pythonExe)) {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) { $pythonExe = $python.Source }
+}
+if (Test-Path -LiteralPath $pythonExe) {
+    & $pythonExe --version
+    & $pythonExe -c "import fastapi, uvicorn, pydantic"
+    if ($LASTEXITCODE -eq 0) { Write-Host "[OK] FastAPI, Uvicorn e Pydantic disponibili" }
+    else { Write-Warning "Dipendenze mancanti: scripts\windows\start.ps1 le installa nell'ambiente .venv." }
 } else { Write-Warning "Python non trovato." }
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
 if ($cmake) { & $cmake.Source --version | Select-Object -First 1 } else { Write-Warning "CMake non trovato." }
