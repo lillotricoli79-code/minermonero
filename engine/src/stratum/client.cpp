@@ -211,10 +211,8 @@ int run_miner(const std::filesystem::path& config_path,
                 StratumTransport transport;
                 transport.connect_to(pool);
                 log_event("CONNECTED", {{"host", pool.host}, {"port", pool.port}});
-                transport.send_json({{"id", 1}, {"jsonrpc", "2.0"}, {"method", "login"},
-                    {"params", {{"login", pool.wallet}, {"pass", pool.password},
-                                 {"agent", "XMRig/6.26.0 gcc/15.1.0 (built for Windows x86-64, 64 bit)"},
-                                 {"rigid", pool.worker}}}});
+                transport.send_json(make_login_request(1, pool,
+                    "UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)"));
                 const auto login_deadline = Clock::now() + std::chrono::seconds(30);
 
                 const auto record_share_response = [&](const nlohmann::json& message) {
@@ -281,11 +279,10 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         const auto submit_id = next_id++;
                         const auto nonce_bytes = encode_nonce_le(share.nonce);
-                        const nlohmann::json submit_request = {
-                            {"id", submit_id}, {"jsonrpc", "2.0"}, {"method", "submit"},
-                            {"params", {{"id", session_id}, {"job_id", share.job_id},
-                                {"nonce", hex_encode(nonce_bytes.data(), nonce_bytes.size())},
-                                {"result", hex_encode(share.hash.data(), share.hash.size())}}}};
+                        const nlohmann::json submit_request = make_submit_request(
+                            submit_id, session_id, share.job_id,
+                            hex_encode(nonce_bytes.data(), nonce_bytes.size()),
+                            hex_encode(share.hash.data(), share.hash.size()));
                         log_event("SUBMIT_SENT", submit_request);
                         try {
                             transport.send_json(submit_request);
@@ -309,26 +306,15 @@ int run_miner(const std::filesystem::path& config_path,
                 while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
                     for (const auto& line : transport.read_lines(2)) {
                         const auto message = nlohmann::json::parse(line);
-                        if (message.value("method", std::string()) == "job") {
+                        if (is_job_notification(message)) {
                             auto job = parse_job(message.at("params"));
                             log_event("NEW_JOB", {{"job_id", job.id},
                                 {"height", job.height ? nlohmann::json(*job.height)
                                                       : nlohmann::json(nullptr)}});
                             install_job(std::move(job));
                         } else if (message.value("id", 0ULL) == 1) {
-                            if (message.contains("error") && !message["error"].is_null()) {
-                                throw std::runtime_error("pool rejected login: " + message["error"].dump());
-                            }
+                            session_id = validate_login_response(message);
                             const auto& result = message.at("result");
-                            if (!result.is_object() || !result.contains("id") ||
-                                !result.contains("job")) {
-                                throw std::runtime_error(
-                                    "pool login response is missing session id or job");
-                            }
-                            session_id = result.at("id").get<std::string>();
-                            if (session_id.empty()) {
-                                throw std::runtime_error("pool login returned an empty session id");
-                            }
                             log_event("LOGIN_ACCEPTED", {{"session_id", session_id},
                                 {"job_id", result.at("job").value("job_id", std::string())}});
                             if (pool.keepalive) {
@@ -348,8 +334,7 @@ int run_miner(const std::filesystem::path& config_path,
                         throw std::runtime_error("pool login timed out");
                     }
                     if (pool.keepalive && !session_id.empty() && now >= next_keepalive) {
-                        transport.send_json({{"id", next_id++}, {"jsonrpc", "2.0"},
-                            {"method", "keepalived"}, {"params", {{"id", session_id}}}});
+                        transport.send_json(make_keepalive_request(next_id++, session_id));
                         next_keepalive = now + std::chrono::seconds(60);
                     }
                     for (auto it = pending.begin(); it != pending.end();) {
