@@ -148,7 +148,6 @@ int main() {
 
     const auto closed_port = reserve_closed_port();
     if (closed_port == 0) {
-        pool.join();
         unique_rx::platform::close_socket(listener);
         return 1;
     }
