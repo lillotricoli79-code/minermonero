@@ -13,7 +13,7 @@ $expectedModuleSha256 = "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb4841
 
 try {
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
-    Write-Host "Downloading signed PawnIO Modules release 0.2.11..."
+    Write-Host "Downloading official PawnIO Modules release 0.2.11 with pinned SHA-256..."
     Invoke-WebRequest -Uri $uri -OutFile $archive -UseBasicParsing
 
     $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
