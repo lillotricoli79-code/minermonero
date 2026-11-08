@@ -285,8 +285,10 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto message = nlohmann::json::parse(line);
                         if (message.value("method", std::string()) == "job") {
                             auto job = parse_job(message.at("params"));
-                            std::cout << "New job " << job.id << " height "
-                                      << message["params"].value("height", 0ULL) << '\n';
+                            std::cout << "New job " << job.id << " height ";
+                            if (job.height) std::cout << *job.height;
+                            else std::cout << "n/d";
+                            std::cout << '\n';
                             install_job(std::move(job));
                         } else if (message.value("id", 0ULL) == 1) {
                             if (message.contains("error") && !message["error"].is_null()) {
