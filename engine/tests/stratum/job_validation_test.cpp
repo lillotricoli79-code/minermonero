@@ -79,6 +79,11 @@ int main() {
     ok &= check(encode_nonce_le(0x12345678U) ==
                     std::array<std::uint8_t, 4>{0x78, 0x56, 0x34, 0x12},
                 "little-endian nonce encoding failed");
+    ok &= check(nonce_at_offset(0xfffffffeU, 0) == 0xfffffffeU &&
+                    nonce_at_offset(0xfffffffeU, 1) == 0xffffffffU &&
+                    nonce_at_offset(0xfffffffeU, 2) == 0U &&
+                    nonce_at_offset(0xfffffffeU, 3) == 1U,
+                "nonce allocation failed to wrap across the full 32-bit pool nonce space");
 
     auto target_update = job;
     target_update.target /= 2;

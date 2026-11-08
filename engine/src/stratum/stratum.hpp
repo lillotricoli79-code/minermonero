@@ -30,6 +30,15 @@ inline std::array<std::uint8_t, 4> encode_nonce_le(std::uint32_t nonce) noexcept
     };
 }
 
+// A Stratum job's 32-bit nonce space is a ring. The offset is bounded by
+// the worker partition (0..2^32-1); adding it to a non-zero pool nonce base
+// must wrap modulo 2^32 rather than prematurely exhausting the job.
+inline constexpr std::uint64_t kNonceSpace = (std::uint64_t{1} << 32);
+inline std::uint32_t nonce_at_offset(std::uint32_t base,
+                                     std::uint64_t offset) noexcept {
+    return base + static_cast<std::uint32_t>(offset);
+}
+
 struct Job {
     std::string id;
     std::vector<std::uint8_t> blob;

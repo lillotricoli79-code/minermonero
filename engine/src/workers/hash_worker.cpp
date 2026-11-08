@@ -185,14 +185,17 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             }
             active_work = work;
 
-            const auto nonce64 = static_cast<std::uint64_t>(work->job.nonce) +
-                worker_id + cursor * worker_count;
-            if (nonce64 > std::numeric_limits<std::uint32_t>::max()) {
+            // Partition the complete 32-bit nonce ring by worker. The
+            // partition offset, not base+offset, determines exhaustion:
+            // pool jobs can start at any nonce and addition must wrap.
+            const auto nonce_offset = static_cast<std::uint64_t>(worker_id) +
+                cursor * static_cast<std::uint64_t>(worker_count);
+            if (nonce_offset >= kNonceSpace) {
                 flush_pending();
                 exhausted_generation = work->generation;
                 continue;
             }
-            const auto nonce = static_cast<std::uint32_t>(nonce64);
+            const auto nonce = nonce_at_offset(work->job.nonce, nonce_offset);
             write_nonce(blob, nonce);
 
             if (!pipeline_active) {
