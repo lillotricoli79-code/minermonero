@@ -223,7 +223,7 @@ def is_intel_cpu() -> bool:
 def native_msr_available(executable_path: str | None) -> bool:
     """Check that the native Intel MSR provider and its signed module are present."""
     if os.name == "nt":
-        program_files = Path(os.environ.get("ProgramFiles", r"C:\\Program Files"))
+        program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
         libraries = [
             program_files / "PawnIO" / "PawnIOLib.dll",
             Path("C:/Program Files/PawnIO/PawnIOLib.dll"),
