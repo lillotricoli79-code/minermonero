@@ -149,6 +149,21 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     vm_flags,
                     work->full_memory ? nullptr : work->cache.get(),
                     work->full_memory ? work->dataset.get() : nullptr));
+                if (!vm && (vm_flags & RANDOMX_FLAG_LARGE_PAGES)) {
+                    // Large pages are optional for the worker scratchpad too.
+                    // Retry with ordinary pages instead of failing the miner.
+                    vm_flags = static_cast<randomx_flags>(
+                        static_cast<int>(vm_flags) &
+                        ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
+                    vm.reset(randomx_create_vm(
+                        vm_flags,
+                        work->full_memory ? nullptr : work->cache.get(),
+                        work->full_memory ? work->dataset.get() : nullptr));
+                    if (vm) {
+                        std::cerr << "RandomX worker scratchpad huge pages unavailable; "
+                                     "using standard pages.\n";
+                    }
+                }
                 if (!vm) throw std::runtime_error("worker VM creation failed");
             } else if (memory_changed) {
                 if (work->full_memory) {

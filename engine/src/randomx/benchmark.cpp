@@ -81,15 +81,32 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
         : flags;
     std::vector<Vm> vms;
     vms.reserve(lanes);
-    for (unsigned int lane = 0; lane < lanes; ++lane) {
-        Vm vm(randomx_create_vm(
-            vm_flags, full_memory ? nullptr : cache.get(),
-            full_memory ? dataset.get() : nullptr));
-        if (!vm) {
-            std::cerr << "Creazione VM non riuscita per lane " << lane << ".\n";
+    const auto create_lanes = [&] {
+        vms.clear();
+        for (unsigned int lane = 0; lane < lanes; ++lane) {
+            Vm vm(randomx_create_vm(
+                vm_flags, full_memory ? nullptr : cache.get(),
+                full_memory ? dataset.get() : nullptr));
+            if (!vm) return false;
+            vms.push_back(std::move(vm));
+        }
+        return true;
+    };
+    if (!create_lanes()) {
+        if ((vm_flags & RANDOMX_FLAG_LARGE_PAGES) != 0) {
+            vm_flags = static_cast<randomx_flags>(
+                static_cast<int>(vm_flags) &
+                ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
+            if (!create_lanes()) {
+                std::cerr << "Creazione VM RandomX non riuscita anche con pagine standard.\n";
+                return false;
+            }
+            std::cerr << "Huge pages non disponibili per gli scratchpad benchmark; "
+                         "uso pagine standard.\n";
+        } else {
+            std::cerr << "Creazione VM RandomX non riuscita.\n";
             return false;
         }
-        vms.push_back(std::move(vm));
     }
 
     std::vector<std::uint64_t> lane_hashes(lanes, 0);
