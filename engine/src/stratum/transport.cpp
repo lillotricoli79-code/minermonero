@@ -69,6 +69,16 @@ public:
 
     void send_json(const nlohmann::json& value) {
         const auto wire = value.dump() + "\n";
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        const auto wait_for_write = [&](short event) {
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) throw std::runtime_error("pool write timed out");
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - now).count();
+            if (!wait_for(event, static_cast<int>(remaining))) {
+                throw std::runtime_error("pool write timed out");
+            }
+        };
         std::size_t sent = 0;
         while (sent < wire.size()) {
             int count = 0;
@@ -78,7 +88,7 @@ public:
                 if (count <= 0) {
                     const int error = SSL_get_error(ssl_, count);
                     if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
-                        wait_for(error == SSL_ERROR_WANT_READ ? platform::kReadEvent : platform::kWriteEvent, 1000);
+                        wait_for_write(error == SSL_ERROR_WANT_READ ? platform::kReadEvent : platform::kWriteEvent);
                         continue;
                     }
                     throw std::runtime_error("TLS write to pool failed");
@@ -88,7 +98,7 @@ public:
                 if (count < 0) {
                     const int error = platform::socket_error();
                     if (platform::socket_would_block(error) || platform::socket_interrupted(error)) {
-                        wait_for(platform::kWriteEvent, 1000);
+                        wait_for_write(platform::kWriteEvent);
                         continue;
                     }
                 }
