@@ -1,6 +1,8 @@
 #include "core/mining.hpp"
 #include "platform/affinity.hpp"
 
+#include <algorithm>
+
 #include <chrono>
 #include <cstring>
 #include <iostream>
