@@ -49,11 +49,6 @@ void rxm_set_prefetch_mode(int mode);
 int rxm_get_prefetch_mode(void);
 void* allocJitMemory(size_t, size_t* mappedBytes);
 void* allocGigaPagesMemory(size_t);
-int setPagesRW(void*, size_t);
-int setPagesRX(void*, size_t);
-int setPagesRWX(void*, size_t);
-void* allocLargePagesMemory(size_t);
-void freePagedMemory(void*, size_t);
 
 #ifdef __cplusplus
 }

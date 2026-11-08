@@ -87,9 +87,9 @@ namespace randomx {
 
 	template<size_t alignment>
 	void* AlignedAllocator<alignment>::allocMemory(size_t count) {
-		/* RxMiner MIT adaptation: RandomX cache and dataset use page-backed mappings.
-		 * The allocator returns at least system-page alignment; on Linux, large
-		 * allocations are 2 MiB aligned for transparent huge-page promotion. */
+		/* RxMiner MIT adaptation: cache, dataset and 2 MiB worker scratchpads use
+         * page-backed mappings; scratchpads can be reused after VM teardown.
+         * Page alignment is sufficient for every RandomX alignment requirement. */
 		void *mem = scratchpad_pool.take(count, false);
         if (!mem) mem = allocMemoryPages(count);
 		if (mem == nullptr)
