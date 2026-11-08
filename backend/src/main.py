@@ -358,6 +358,7 @@ class MinerController:
                 "hashrate": {"10s": None, "60s": None, "15m": None},
                 "shares": {"accepted": None, "rejected": None, "total": None},
                 "uptime_seconds": None,
+                "cpu": None,
                 "pool": None,
                 "connected": None,
             }

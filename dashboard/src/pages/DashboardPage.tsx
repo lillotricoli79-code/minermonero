@@ -580,6 +580,11 @@ function App() {
                     />
                     <DataRow
                       icon={<Cpu size={15} />}
+                      label="Famiglia / modello"
+                      value={status.cpu ? `${status.cpu.family} / ${status.cpu.model} · step ${status.cpu.stepping}` : "—"}
+                    />
+                    <DataRow
+                      icon={<Cpu size={15} />}
                       label="Core fisici / logici"
                       value={status.cpu ? `${status.cpu.physical_cores} / ${status.cpu.logical_threads}` : "—"}
                     />
@@ -591,7 +596,7 @@ function App() {
                     <DataRow
                       icon={<Cpu size={15} />}
                       label="NUMA / cache L3"
-                      value={status.cpu ? `${status.cpu.numa_nodes} nodi · ${Math.round(status.cpu.l3_cache_bytes / 1048576)} MB` : "—"}
+                      value={status.cpu ? `${status.cpu.numa_nodes} nodi · ${status.cpu.l3_cache_bytes > 0 ? `${Math.round(status.cpu.l3_cache_bytes / 1048576)} MB L3` : "L3 n/d"}` : "—"}
                     />
                     <DataRow
                       icon={<Zap size={15} />}
