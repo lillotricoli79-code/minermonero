@@ -83,6 +83,19 @@ int run_miner(const std::filesystem::path& config_path,
             std::cout << "Intel RandomX MSR preset applied and will be restored on exit.\n";
         }
 
+        // This guard is declared after MsrManager so worker threads are stopped
+        // and joined before the MSR manager restores the original CPU registers.
+        struct JoinWorkersBeforeMsrRestore {
+            MiningState& state;
+            std::vector<std::jthread>& workers;
+            ~JoinWorkersBeforeMsrRestore() {
+                state.stop.store(true, std::memory_order_release);
+                for (auto& worker : workers) {
+                    if (worker.joinable()) worker.join();
+                }
+            }
+        } join_workers_before_msr_restore{state, workers};
+
         platform::NetworkRuntime network;
         std::array<std::uint8_t, 32> active_seed{};
         bool have_seed = false;
