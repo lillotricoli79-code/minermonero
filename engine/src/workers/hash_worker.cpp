@@ -34,6 +34,11 @@ inline constexpr std::size_t kMaximumQueuedShares = 4096;
 
 void hash_worker(MiningState& state, std::uint32_t worker_id,
                  std::uint32_t worker_count, std::uint64_t maximum_hashes) {
+    if (worker_count == 0 || worker_id >= worker_count) {
+        state.report_worker_error("invalid CPU worker index or worker count");
+        return;
+    }
+
     Vm vm;
     std::shared_ptr<const MiningWork> active_work;
     std::vector<std::uint8_t> blob;
