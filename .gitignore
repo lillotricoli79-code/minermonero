@@ -10,3 +10,5 @@ CMakeFiles/
 /logs/
 /dashboard/node_modules/
 /dashboard/dist/
+
+/engine/msr/*.bin
