@@ -490,7 +490,7 @@ class LocalApiTests(unittest.TestCase):
             "backend.src.main.os.sched_getaffinity", return_value={1, 3}, create=True
         ), patch("backend.src.main.Path.is_file", return_value=True), patch(
             "backend.src.main.os.access", return_value=True
-        ), patch("backend.src.main.os.name", "posix"):
+        ), patch("backend.src.main.sys.platform", "linux"):
             self.assertTrue(native_msr_available(None))
 
     def test_native_msr_availability_returns_false_for_empty_process_affinity(self):
