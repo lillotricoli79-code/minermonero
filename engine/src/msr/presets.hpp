@@ -27,14 +27,12 @@ inline std::optional<MsrPreset> msr_preset_for_cpu(
         return MsrWrite{reg, value, mask};
     };
 
-    // XMRig documents the 0x1a4 Intel prefetcher preset for Nehalem,
-    // Westmere, Sandy/Ivy Bridge, Haswell, Broadwell and newer CPUs.
-    // CPUID model is deliberately not tied to one machine: Intel family 6
-    // covers these mainstream Core/Xeon generations. Unknown families are
-    // left untouched. Keep the write limited to the four preset bits.
+    // Adapted from NyxRX MSR preset selection (MIT; see LICENSES/NYXRX-MIT.txt).
+    // This 0x1a4 prefetcher write is enabled only for the verified Skylake-S
+    // family/model used by this build target. Unknown Intel models stay untouched.
     if (vendor == "GenuineIntel") {
-        if (family != 0x06) return std::nullopt;
-        return MsrPreset{"intel", {write(0x1a4, 0x0f, 0x0f)}};
+        if (family != 0x06 || model != 0x5e) return std::nullopt;
+        return MsrPreset{"intel_skylake_s", {write(0x1a4, 0x0f, 0x0f)}};
     }
     if (vendor != "AuthenticAMD") return std::nullopt;
 
