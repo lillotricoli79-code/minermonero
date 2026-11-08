@@ -184,13 +184,11 @@ def msr_override_enabled(randomx: dict[str, Any]) -> bool:
     without the requested CPU register preset.
     """
     value = randomx.get("wrmsr")
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return True
-    if isinstance(value, int):
-        return value >= 0
-    return isinstance(value, list) and bool(value)
+    if value is False:
+        return False
+    if isinstance(value, int) and not isinstance(value, bool) and value < 0:
+        return False
+    return True
 
 
 class MinerController:
