@@ -28,8 +28,12 @@ inline std::optional<MsrPreset> msr_preset_for_cpu(
         return MsrWrite{reg, value, mask};
     };
 
+    // The current Intel preset is verified here only for the user's
+    // Skylake-S Core i7-6700K (family 6, model 0x5e). Do not apply
+    // the same MSR write to arbitrary Intel generations.
     if (vendor == "GenuineIntel") {
-        return MsrPreset{"intel", {write(0x1a4, 0x0f, all_bits)}};
+        if (family != 0x06 || model != 0x5e) return std::nullopt;
+        return MsrPreset{"intel_skylake_s", {write(0x1a4, 0x0f, all_bits)}};
     }
     if (vendor != "AuthenticAMD") return std::nullopt;
 
