@@ -137,13 +137,15 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(is_local_api_connection("95.235.94.91", "127.0.0.1"))
         self.assertTrue(is_local_api_connection("127.0.0.1", "127.0.0.1"))
 
-    def test_msr_override_routes_to_xmrig_for_boolean_and_custom_presets(self):
+    def test_msr_auto_fast_and_custom_require_xmrig_until_native_msr_exists(self):
+        self.assertTrue(msr_override_enabled({}))
+        self.assertTrue(msr_override_enabled({"wrmsr": None}))
         self.assertTrue(msr_override_enabled({"wrmsr": True}))
         self.assertTrue(msr_override_enabled({"wrmsr": ["0x1a4:0xf"]}))
+        self.assertTrue(msr_override_enabled({"wrmsr": 0}))
         self.assertTrue(msr_override_enabled({"wrmsr": 6}))
         self.assertFalse(msr_override_enabled({"wrmsr": False}))
         self.assertFalse(msr_override_enabled({"wrmsr": -1}))
-        self.assertFalse(msr_override_enabled({}))
 
     def test_native_msr_fast_keeps_xmrig_as_explicit_backend(self):
         config = apply_config_update(
