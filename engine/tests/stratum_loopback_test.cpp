@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -210,12 +211,16 @@ int main() {
         std::ofstream file(config_path);
         file << config.dump(2);
     }
+    std::ostringstream miner_output;
+    auto* previous_output = std::cout.rdbuf(miner_output.rdbuf());
     const int result = unique_rx::run_miner(config_path, 1);
+    std::cout.rdbuf(previous_output);
     pool.join();
     unique_rx::platform::close_socket(listener);
     std::filesystem::remove(config_path);
-    if (result != 0 || !server_ok.load(std::memory_order_acquire)) {
-        std::cerr << "local Stratum login/job/share test failed\n";
+    if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
+        miner_output.str().find("Share accepted") == std::string::npos) {
+        std::cerr << "local Stratum login/job/share acceptance test failed\n";
         return 1;
     }
     std::cout << "Local Stratum login, RandomX job and share submit passed.\n";
