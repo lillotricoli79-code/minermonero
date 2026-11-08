@@ -45,6 +45,8 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
     // synchronization inside RandomX's per-item initialization loop.
     constexpr unsigned long kDatasetChunkItems = 1UL << 16;
     std::atomic<unsigned long> next_item{0};
+    std::atomic<unsigned long> completed_items{0};
+    std::atomic<unsigned int> next_progress{5};
     std::vector<std::jthread> workers;
     workers.reserve(worker_count);
     for (std::uint32_t worker = 0; worker < worker_count; ++worker) {
@@ -60,6 +62,19 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
                 const auto count = std::min(
                     kDatasetChunkItems, item_count - start_item);
                 randomx_init_dataset(dataset.get(), cache.get(), start_item, count);
+                const auto completed = completed_items.fetch_add(
+                    count, std::memory_order_relaxed) + count;
+                const auto percent = static_cast<unsigned int>(
+                    (completed * 100ULL) / item_count);
+                auto threshold = next_progress.load(std::memory_order_relaxed);
+                while (percent >= threshold && threshold <= 100) {
+                    if (next_progress.compare_exchange_weak(
+                            threshold, threshold + 5, std::memory_order_relaxed)) {
+                        logging::info("memory", "RandomX dataset initialization " +
+                            std::to_string(std::min(percent, 100U)) + "%");
+                        break;
+                    }
+                }
             }
         });
     }
