@@ -7,12 +7,15 @@ $archive = Join-Path $env:TEMP "pawnio-modules-0.2.11.zip"
 $extractDir = Join-Path $env:TEMP "pawnio-modules-0.2.11"
 
 $uri = "https://github.com/namazso/PawnIO.Modules/releases/download/0.2.11/release_0_2_11.zip"
-$expectedSha256 = "43608cb89bc84247fef1368a139013f7d043e17db6d6c8dfc9b46bf0905a81f4"
+$expectedArchiveSha256 = "43608cb89bc84247fef1368a139013f7d043e17db6d6c8dfc9b46bf0905a81f4"
+$expectedModuleSha256 = "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f"
 
 Write-Host "Downloading the signed PawnIO Intel MSR module..."
 Invoke-WebRequest -Uri $uri -OutFile $archive
-$actualSha256 = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualSha256 -ne $expectedSha256) {
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $actualSha256 = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne $expectedArchiveSha256) {
     Remove-Item $archive -Force -ErrorAction SilentlyContinue
     throw "PawnIO module archive SHA-256 mismatch. The file was not installed."
 }
@@ -28,6 +31,10 @@ $module = Get-ChildItem -Path $extractDir -Filter "IntelMSR.bin" -File -Recurse 
 if (-not $module) {
     throw "IntelMSR.bin was not found in the verified PawnIO module archive."
 }
+$actualModuleSha256 = (Get-FileHash -Path $module.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualModuleSha256 -ne $expectedModuleSha256) {
+    throw "IntelMSR.bin SHA-256 mismatch. The module was not installed."
+}
 
 New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
 Copy-Item -Path $module.FullName -Destination (Join-Path $destinationDir "IntelMSR.bin") -Force
@@ -42,3 +49,8 @@ else {
 }
 
 Write-Host "Rebuild the native miner so CMake copies IntelMSR.bin beside unique-rx.exe."
+}
+finally {
+    Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+}
