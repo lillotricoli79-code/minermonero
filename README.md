@@ -57,12 +57,12 @@ python3 -m venv .venv
 ```
 
 ```sh
-npm install
-npm run dev
+npm ci --prefix dashboard
+npm run dev --prefix dashboard
 ```
 
 Aprire l'indirizzo stampato da Vite. Per la modalità integrata, eseguire
-`npm run build` e avviare solo Uvicorn sulla porta `8000`.
+`npm run build --prefix dashboard` e avviare solo Uvicorn sulla porta `8000`.
 
 ```sh
 cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release
