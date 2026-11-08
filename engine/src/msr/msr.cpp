@@ -611,6 +611,13 @@ void MsrManager::apply_randomx_preset() {
     }
 #endif
     impl_->apply(*preset);
+    logging::info("msr", "applied verified preset " + std::string(preset->name) +
+        " to " + cpu->vendor + " family " + std::to_string(cpu->family) +
+        " model 0x" + [&] {
+            std::ostringstream value;
+            value << std::hex << cpu->model;
+            return value.str();
+        }());
 }
 
 void MsrManager::restore() noexcept {
