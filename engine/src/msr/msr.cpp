@@ -1,4 +1,5 @@
 #include "msr.hpp"
+#include "presets.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -7,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <sstream>
@@ -47,35 +49,45 @@
 namespace unique_rx {
 namespace {
 
-inline constexpr std::uint32_t kIntelMiscFeatureControl = 0x1A4;
-inline constexpr std::uint64_t kRandomXIntelMsrValue = 0xF;
+struct CpuIdentity {
+    std::string vendor;
+    std::uint32_t family = 0;
+    std::uint32_t model = 0;
+};
 
-bool is_intel_cpu() {
+std::optional<CpuIdentity> detect_cpu_identity() {
     char vendor[13]{};
-#ifdef _WIN32
-#ifdef _MSC_VER
-    int registers[4]{};
-    __cpuid(registers, 0);
-    std::memcpy(vendor, &registers[1], sizeof(int));
-    std::memcpy(vendor + 4, &registers[3], sizeof(int));
-    std::memcpy(vendor + 8, &registers[2], sizeof(int));
-#else
-    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    if (!__get_cpuid(0, &eax, &ebx, &ecx, &edx)) return false;
-    std::memcpy(vendor, &ebx, sizeof(ebx));
-    std::memcpy(vendor + 4, &edx, sizeof(edx));
-    std::memcpy(vendor + 8, &ecx, sizeof(ecx));
-#endif
+    std::uint32_t eax = 0;
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+    int vendor_registers[4]{};
+    __cpuid(vendor_registers, 0);
+    std::memcpy(vendor, &vendor_registers[1], 4);
+    std::memcpy(vendor + 4, &vendor_registers[3], 4);
+    std::memcpy(vendor + 8, &vendor_registers[2], 4);
+    int feature_registers[4]{};
+    __cpuidex(feature_registers, 1, 0);
+    eax = static_cast<std::uint32_t>(feature_registers[0]);
 #elif defined(__i386__) || defined(__x86_64__)
-    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    if (!__get_cpuid(0, &eax, &ebx, &ecx, &edx)) return false;
-    std::memcpy(vendor, &ebx, sizeof(ebx));
-    std::memcpy(vendor + 4, &edx, sizeof(edx));
-    std::memcpy(vendor + 8, &ecx, sizeof(ecx));
+    unsigned int ebx = 0, ecx = 0, edx = 0;
+    if (!__get_cpuid(0, &eax, &ebx, &ecx, &edx)) return std::nullopt;
+    std::memcpy(vendor, &ebx, 4);
+    std::memcpy(vendor + 4, &edx, 4);
+    std::memcpy(vendor + 8, &ecx, 4);
+    if (!__get_cpuid(1, &eax, &ebx, &ecx, &edx)) return std::nullopt;
 #else
-    return false;
+    return std::nullopt;
 #endif
-    return std::string(vendor) == "GenuineIntel";
+    const std::uint32_t base_family = (eax >> 8) & 0x0f;
+    const std::uint32_t base_model = (eax >> 4) & 0x0f;
+    const std::uint32_t extended_family = (eax >> 20) & 0xff;
+    const std::uint32_t extended_model = (eax >> 16) & 0x0f;
+    const std::uint32_t family =
+        base_family == 0x0f ? base_family + extended_family : base_family;
+    const std::uint32_t model =
+        (base_family == 0x06 || base_family == 0x0f)
+            ? (extended_model << 4) | base_model
+            : base_model;
+    return CpuIdentity{std::string(vendor), family, model};
 }
 
 #ifdef _WIN32
@@ -196,10 +208,15 @@ std::vector<unsigned int> online_cpu_ids() {
     return cpus;
 }
 
-struct LinuxOriginal {
-    int fd = -1;
+struct LinuxRegisterOriginal {
+    std::uint64_t register_id = 0;
     std::uint64_t value = 0;
     bool modified = false;
+};
+
+struct LinuxOriginal {
+    int fd = -1;
+    std::vector<LinuxRegisterOriginal> registers;
 };
 
 #endif
@@ -223,6 +240,7 @@ struct MsrManager::Impl {
     struct WindowsOriginal {
         WORD group = 0;
         BYTE processor = 0;
+        std::uint32_t register_id = 0;
         std::uint64_t value = 0;
         bool modified = false;
     };
@@ -277,27 +295,28 @@ struct MsrManager::Impl {
         }
     }
 
-    std::uint64_t read_current_msr() {
-        const ULONG64 input[1]{kIntelMiscFeatureControl};
+    std::uint64_t read_current_msr(std::uint32_t register_id) {
+        const ULONG64 input[1]{register_id};
         ULONG64 output[1]{};
         SIZE_T returned = 0;
         if (FAILED(execute(handle, "ioctl_read_msr", input, 1, output, 1, &returned)) ||
             returned != 1) {
-            throw std::runtime_error("PawnIO failed to read Intel MSR 0x1A4");
+            throw std::runtime_error("PawnIO failed to read the requested MSR");
         }
         return output[0];
     }
 
-    void write_current_msr(std::uint64_t value) {
-        const ULONG64 input[2]{kIntelMiscFeatureControl, value};
+    void write_current_msr(std::uint32_t register_id, std::uint64_t value) {
+        const ULONG64 input[2]{register_id, value};
         SIZE_T returned = 0;
         if (FAILED(execute(handle, "ioctl_write_msr", input, 2, nullptr, 0, &returned))) {
-            throw std::runtime_error("PawnIO failed to write Intel MSR 0x1A4");
+            throw std::runtime_error("PawnIO failed to write the requested MSR");
         }
     }
 
-    void apply() {
+    void apply(const MsrPreset& preset) {
         if (active) return;
+        if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
         originals.clear();
         initialize_pawnio();
         const WORD groups = GetActiveProcessorGroupCount();
@@ -310,18 +329,25 @@ struct MsrManager::Impl {
                     throw std::runtime_error("processor group exceeds supported affinity mask");
                 }
                 ThreadAffinity affinity(group, static_cast<BYTE>(processor));
-                originals.push_back({group, static_cast<BYTE>(processor),
-                                     read_current_msr(), false});
+                for (const auto& write : preset.writes) {
+                    const auto register_id = static_cast<std::uint32_t>(write.register_id);
+                    originals.push_back({group, static_cast<BYTE>(processor),
+                                         register_id, read_current_msr(register_id), false});
+                }
             }
         }
 
         try {
-            for (auto& original : originals) {
+            for (std::size_t index = 0; index < originals.size(); ++index) {
+                auto& original = originals[index];
+                const auto& write = preset.writes[index % preset.writes.size()];
                 ThreadAffinity affinity(original.group, original.processor);
+                const auto value = (write.value & write.mask) |
+                                   (original.value & ~write.mask);
                 original.modified = true;
-                write_current_msr(kRandomXIntelMsrValue);
-                if (read_current_msr() != kRandomXIntelMsrValue) {
-                    throw std::runtime_error("Intel MSR 0x1A4 read-back verification failed");
+                write_current_msr(original.register_id, value);
+                if (read_current_msr(original.register_id) != value) {
+                    throw std::runtime_error("MSR read-back verification failed");
                 }
             }
             active = true;
@@ -337,9 +363,9 @@ struct MsrManager::Impl {
             if (!original.modified) continue;
             try {
                 ThreadAffinity affinity(original.group, original.processor);
-                write_current_msr(original.value);
-                if (read_current_msr() != original.value) {
-                    throw std::runtime_error("Intel MSR 0x1A4 restore read-back verification failed");
+                write_current_msr(original.register_id, original.value);
+                if (read_current_msr(original.register_id) != original.value) {
+                    throw std::runtime_error("MSR restore read-back verification failed");
                 }
                 original.modified = false;
             } catch (const std::exception& error) {
@@ -367,54 +393,62 @@ struct MsrManager::Impl {
 #else
     std::vector<LinuxOriginal> originals;
 
-    void apply() {
+    void apply(const MsrPreset& preset) {
         if (active) return;
+        if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
         originals.clear();
         const auto cpus = online_cpu_ids();
         originals.reserve(cpus.size());
-        for (const unsigned int cpu : cpus) {
-            const auto path = std::filesystem::path("/dev/cpu") /
-                std::to_string(cpu) / "msr";
-            const int fd = ::open(path.c_str(), O_RDWR | O_CLOEXEC);
-            if (fd < 0) {
-                throw std::system_error(errno, std::generic_category(),
-                                        "cannot open " + path.string());
-            }
-            std::uint64_t original = 0;
-            const auto bytes_read = ::pread(
-                fd, &original, sizeof(original), kIntelMiscFeatureControl);
-            if (bytes_read != static_cast<ssize_t>(sizeof(original))) {
-                const int error = bytes_read < 0 ? errno : EIO;
-                ::close(fd);
-                throw std::system_error(error, std::generic_category(),
-                                        "cannot read MSR 0x1A4 from " + path.string());
-            }
-            try {
-                originals.push_back({fd, original, false});
-            } catch (...) {
-                ::close(fd);
-                throw;
-            }
-        }
 
         try {
-            for (auto& original : originals) {
-                // Mark before the write so a short/failed write is also rolled back.
-                original.modified = true;
-                const auto written = ::pwrite(
-                    original.fd, &kRandomXIntelMsrValue,
-                    sizeof(kRandomXIntelMsrValue), kIntelMiscFeatureControl);
-                if (written != static_cast<ssize_t>(sizeof(kRandomXIntelMsrValue))) {
-                    const int error = written < 0 ? errno : EIO;
-                    throw std::system_error(error, std::generic_category(),
-                                            "cannot write Intel MSR 0x1A4");
+            for (const unsigned int cpu : cpus) {
+                const auto path = std::filesystem::path("/dev/cpu") /
+                    std::to_string(cpu) / "msr";
+                const int fd = ::open(path.c_str(), O_RDWR | O_CLOEXEC);
+                if (fd < 0) {
+                    throw std::system_error(errno, std::generic_category(),
+                                            "cannot open " + path.string());
                 }
-                std::uint64_t current_value = 0;
-                if (::pread(original.fd, &current_value, sizeof(current_value),
-                            kIntelMiscFeatureControl) !=
-                        static_cast<ssize_t>(sizeof(current_value)) ||
-                    current_value != kRandomXIntelMsrValue) {
-                    throw std::runtime_error("Intel MSR 0x1A4 read-back verification failed");
+                originals.push_back({fd, {}});
+                auto& cpu_originals = originals.back();
+                cpu_originals.registers.reserve(preset.writes.size());
+                for (const auto& write : preset.writes) {
+                    std::uint64_t original = 0;
+                    const auto offset = static_cast<off_t>(write.register_id);
+                    const auto bytes_read = ::pread(fd, &original, sizeof(original), offset);
+                    if (bytes_read != static_cast<ssize_t>(sizeof(original))) {
+                        const int error = bytes_read < 0 ? errno : EIO;
+                        throw std::system_error(error, std::generic_category(),
+                            "cannot read MSR " + std::to_string(write.register_id) +
+                            " from " + path.string());
+                    }
+                    cpu_originals.registers.push_back(
+                        {write.register_id, original, false});
+                }
+            }
+
+            for (auto& cpu_originals : originals) {
+                for (std::size_t index = 0; index < preset.writes.size(); ++index) {
+                    const auto& write = preset.writes[index];
+                    auto& snapshot = cpu_originals.registers[index];
+                    const auto value = (write.value & write.mask) |
+                                       (snapshot.value & ~write.mask);
+                    snapshot.modified = true;
+                    const auto offset = static_cast<off_t>(write.register_id);
+                    const auto written = ::pwrite(
+                        cpu_originals.fd, &value, sizeof(value), offset);
+                    if (written != static_cast<ssize_t>(sizeof(value))) {
+                        const int error = written < 0 ? errno : EIO;
+                        throw std::system_error(error, std::generic_category(),
+                            "cannot write MSR " + std::to_string(write.register_id));
+                    }
+                    std::uint64_t current_value = 0;
+                    const auto bytes_read = ::pread(
+                        cpu_originals.fd, &current_value, sizeof(current_value), offset);
+                    if (bytes_read != static_cast<ssize_t>(sizeof(current_value)) ||
+                        current_value != value) {
+                        throw std::runtime_error("MSR read-back verification failed");
+                    }
                 }
             }
             active = true;
@@ -426,32 +460,39 @@ struct MsrManager::Impl {
 
     void restore() noexcept {
         bool restoration_pending = false;
-        for (auto& original : originals) {
-            if (original.modified) {
+        for (auto& cpu_originals : originals) {
+            bool cpu_pending = false;
+            for (auto it = cpu_originals.registers.rbegin();
+                 it != cpu_originals.registers.rend(); ++it) {
+                if (!it->modified) continue;
+                const auto offset = static_cast<off_t>(it->register_id);
                 const auto written = ::pwrite(
-                    original.fd, &original.value, sizeof(original.value),
-                    kIntelMiscFeatureControl);
-                if (written != static_cast<ssize_t>(sizeof(original.value))) {
-                    restoration_pending = true;
-                    std::cerr << "MSR restore warning: failed to restore MSR 0x1A4\n";
+                    cpu_originals.fd, &it->value, sizeof(it->value), offset);
+                if (written != static_cast<ssize_t>(sizeof(it->value))) {
+                    cpu_pending = true;
+                    std::cerr << "MSR restore warning: failed to restore register "
+                              << it->register_id << '\n';
+                    continue;
+                }
+                std::uint64_t restored_value = 0;
+                const auto bytes_read = ::pread(
+                    cpu_originals.fd, &restored_value, sizeof(restored_value), offset);
+                if (bytes_read == static_cast<ssize_t>(sizeof(restored_value)) &&
+                    restored_value == it->value) {
+                    it->modified = false;
                 } else {
-                    std::uint64_t restored_value = 0;
-                    const auto bytes_read = ::pread(
-                        original.fd, &restored_value, sizeof(restored_value),
-                        kIntelMiscFeatureControl);
-                    if (bytes_read == static_cast<ssize_t>(sizeof(restored_value)) &&
-                        restored_value == original.value) {
-                        original.modified = false;
-                    } else {
-                        restoration_pending = true;
-                        std::cerr << "MSR restore warning: read-back verification failed for MSR 0x1A4\n";
-                    }
+                    cpu_pending = true;
+                    std::cerr << "MSR restore warning: read-back verification failed for register "
+                              << it->register_id << '\n';
                 }
             }
-            restoration_pending = restoration_pending || original.modified;
-            if (original.fd >= 0 && !original.modified) {
-                ::close(original.fd);
-                original.fd = -1;
+            for (const auto& reg : cpu_originals.registers) {
+                cpu_pending = cpu_pending || reg.modified;
+            }
+            restoration_pending = restoration_pending || cpu_pending;
+            if (cpu_originals.fd >= 0 && !cpu_pending) {
+                ::close(cpu_originals.fd);
+                cpu_originals.fd = -1;
             }
         }
         active = restoration_pending;
@@ -482,11 +523,22 @@ MsrManager::MsrManager(MsrManager&&) noexcept = default;
 MsrManager& MsrManager::operator=(MsrManager&&) noexcept = default;
 
 void MsrManager::apply_randomx_preset() {
-    if (!is_intel_cpu()) {
-        throw std::runtime_error(
-            "Native RandomX MSR preset currently supports Intel CPUs only");
+    const auto cpu = detect_cpu_identity();
+    if (!cpu) {
+        throw std::runtime_error("cannot identify CPU vendor/family/model for MSR tuning");
     }
-    impl_->apply();
+    const auto preset = msr_preset_for_cpu(cpu->vendor, cpu->family, cpu->model);
+    if (!preset) {
+        throw std::runtime_error(
+            "no verified RandomX MSR preset exists for this CPU family/model");
+    }
+#ifdef _WIN32
+    if (cpu->vendor != "GenuineIntel") {
+        throw std::runtime_error(
+            "Windows MSR backend currently supports Intel PawnIO only");
+    }
+#endif
+    impl_->apply(*preset);
 }
 
 void MsrManager::restore() noexcept {
