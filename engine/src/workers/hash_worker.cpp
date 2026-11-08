@@ -206,7 +206,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             // pool jobs can start at any nonce and addition must wrap.
             const auto nonce_offset = static_cast<std::uint64_t>(worker_id) +
                 cursor * static_cast<std::uint64_t>(worker_count);
-            if (nonce_offset >= kNonceSpace) {
+            if (nonce_offset >= nonce_space(work->job)) {
                 flush_pending();
                 exhausted_generation = work->generation;
                 continue;

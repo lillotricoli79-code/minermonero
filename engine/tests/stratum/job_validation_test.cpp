@@ -88,7 +88,8 @@ int main() {
                     parsed_nicehash.nonce_fixed == 0xab000000U &&
                     parsed_nicehash.nonce_mask == 0x00ffffffU &&
                     nonce_at_offset(parsed_nicehash, 0x00ffffffULL) == 0xabffffffU &&
-                    nonce_at_offset(parsed_nicehash, 0x01000000ULL) == 0xab000000U,
+                    nonce_at_offset(parsed_nicehash, 0x01000000ULL) == 0xab000000U &&
+                    nonce_space(parsed_nicehash) == 0x01000000ULL,
                 "NiceHash nonce allocation did not preserve the pool prefix or wrap its 24-bit counter");
     auto inferred_nicehash = nicehash_job;
     inferred_nicehash.erase("nicehash");
@@ -125,6 +126,10 @@ int main() {
     target_update.target /= 2;
     ok &= check(job.same_work(target_update),
                 "target-only update incorrectly changed job identity");
+    auto changed_nonce_mode = parsed_nicehash;
+    changed_nonce_mode.nonce_mask = UINT32_MAX;
+    ok &= check(!parsed_nicehash.same_work(changed_nonce_mode),
+                "different pool nonce allocation modes were treated as the same work");
     auto changed_job_id = job;
     changed_job_id.id = "job-2";
     ok &= check(!job.same_work(changed_job_id),

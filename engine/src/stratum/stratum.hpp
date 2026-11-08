@@ -53,7 +53,8 @@ struct Job {
 
     // Target-only updates keep the same nonce work; adapted from RxMiner (MIT).
     bool same_work(const Job& other) const {
-        return id == other.id && blob == other.blob && seed == other.seed;
+        return id == other.id && blob == other.blob && seed == other.seed &&
+            nonce_mask == other.nonce_mask && nonce_fixed == other.nonce_fixed;
     }
 };
 
@@ -71,6 +72,10 @@ struct PoolConfig {
 
 // Allocate a nonce within the pool-provided nonce range. NiceHash jobs keep
 // the server-assigned high byte fixed and wrap only the low 24-bit counter.
+inline std::uint64_t nonce_space(const Job& job) noexcept {
+    return static_cast<std::uint64_t>(job.nonce_mask) + 1;
+}
+
 inline std::uint32_t nonce_at_offset(const Job& job,
                                      std::uint64_t offset) noexcept {
     return job.nonce_fixed |
