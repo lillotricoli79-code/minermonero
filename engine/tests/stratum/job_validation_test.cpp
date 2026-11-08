@@ -106,6 +106,10 @@ int main() {
     inferred_nicehash.erase("nicehash");
     ok &= check(parse_job(inferred_nicehash).nonce_fixed == 0xab000000U,
                 "non-zero pool nonce prefix was not detected when NiceHash metadata was absent");
+    auto explicit_false_with_prefix = nicehash_job;
+    explicit_false_with_prefix["nicehash"] = false;
+    ok &= check(parse_job(explicit_false_with_prefix).nonce_fixed == 0xab000000U,
+                "explicit false metadata incorrectly disabled XMRig nonce-prefix detection");
     const auto ordinary_nonce_job = parse_job(wire_job);
     ok &= check(ordinary_nonce_job.nonce == 0x12345678U &&
                     ordinary_nonce_job.nonce_mask == UINT32_MAX &&
