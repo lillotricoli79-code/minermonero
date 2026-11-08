@@ -36,7 +36,10 @@ namespace randomx {
 
 	template<size_t alignment>
 	void* AlignedAllocator<alignment>::allocMemory(size_t count) {
-		void *mem = rx_aligned_alloc(count, alignment);
+		/* RxMiner MIT adaptation: RandomX cache and dataset use page-backed mappings.
+		 * The allocator returns at least system-page alignment; on Linux, large
+		 * allocations are 2 MiB aligned for transparent huge-page promotion. */
+		void *mem = allocMemoryPages(count);
 		if (mem == nullptr)
 			throw std::bad_alloc();
 		return mem;
