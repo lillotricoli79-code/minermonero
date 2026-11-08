@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
+#include <map>
+#include <tuple>
 
 #ifdef _WIN32
 #ifndef _WIN32_WINNT
@@ -32,7 +34,8 @@ namespace unique_rx::platform {
 
 #ifdef _WIN32
 inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
-    std::vector<std::vector<std::pair<WORD, DWORD>>> cores;
+    // Interleave physical cores across NUMA nodes before placing SMT siblings.
+    std::map<WORD, std::vector<std::vector<std::pair<WORD, DWORD>>>> nodes;
     DWORD bytes = 0;
     GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &bytes);
     if (GetLastError() == ERROR_INSUFFICIENT_BUFFER && bytes != 0) {
@@ -45,15 +48,23 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
                 if (item->Size == 0 || offset + item->Size > bytes) break;
                 if (item->Relationship == RelationProcessorCore) {
                     std::vector<std::pair<WORD, DWORD>> siblings;
+                    WORD node = 0;
                     const auto& core = item->Processor;
                     for (WORD g = 0; g < core.GroupCount; ++g) {
                         const auto& mask = core.GroupMask[g];
                         for (DWORD bit = 0; bit < sizeof(KAFFINITY) * 8; ++bit) {
-                            if ((mask.Mask & (static_cast<KAFFINITY>(1) << bit)) != 0)
-                                siblings.emplace_back(mask.Group, bit);
+                            if ((mask.Mask & (static_cast<KAFFINITY>(1) << bit)) == 0) continue;
+                            PROCESSOR_NUMBER processor{};
+                            processor.Group = mask.Group;
+                            processor.Number = static_cast<BYTE>(bit);
+                            USHORT processor_node = 0;
+                            if (GetNumaProcessorNodeEx(&processor, &processor_node)) {
+                                node = processor_node;
+                            }
+                            siblings.emplace_back(mask.Group, bit);
                         }
                     }
-                    if (!siblings.empty()) cores.push_back(std::move(siblings));
+                    if (!siblings.empty()) nodes[node].push_back(std::move(siblings));
                 }
                 offset += item->Size;
             }
@@ -62,10 +73,13 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
     std::vector<std::pair<WORD, DWORD>> result;
     for (std::size_t sibling = 0; ; ++sibling) {
         bool added = false;
-        for (const auto& core : cores) {
-            if (sibling < core.size()) {
-                result.push_back(core[sibling]);
-                added = true;
+        for (const auto& [node, cores] : nodes) {
+            (void)node;
+            for (const auto& core : cores) {
+                if (sibling < core.size()) {
+                    result.push_back(core[sibling]);
+                    added = true;
+                }
             }
         }
         if (!added) break;
@@ -80,15 +94,28 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
 }
 #elif defined(__linux__)
 inline std::vector<unsigned int> ordered_processors(const cpu_set_t& allowed) {
-    std::map<std::pair<int, int>, std::vector<unsigned int>> cores;
+    // NUMA node is the outer ordering key: workers are spread over memory
+    // domains before SMT siblings are considered within each physical core.
+    std::map<std::tuple<int, int, int>, std::vector<unsigned int>> cores;
     for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
         if (!CPU_ISSET(cpu, &allowed)) continue;
-        const auto root = std::filesystem::path("/sys/devices/system/cpu") /
-            ("cpu" + std::to_string(cpu)) / "topology";
-        int package = -1, core = cpu;
-        std::ifstream(root / "physical_package_id") >> package;
-        std::ifstream(root / "core_id") >> core;
-        cores[{package, core}].push_back(static_cast<unsigned int>(cpu));
+        const auto cpu_root = std::filesystem::path("/sys/devices/system/cpu") /
+            ("cpu" + std::to_string(cpu));
+        const auto topology = cpu_root / "topology";
+        int package = -1, core = cpu, node = -1;
+        std::ifstream(topology / "physical_package_id") >> package;
+        std::ifstream(topology / "core_id") >> core;
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(cpu_root, ec)) {
+            const auto name = entry.path().filename().string();
+            if (name.size() > 4 && name.starts_with("node") &&
+                std::all_of(name.begin() + 4, name.end(),
+                    [](unsigned char ch) { return ch >= '0' && ch <= '9'; })) {
+                try { node = std::stoi(name.substr(4)); } catch (...) { node = -1; }
+                break;
+            }
+        }
+        cores[{node, package, core}].push_back(static_cast<unsigned int>(cpu));
     }
     std::vector<std::vector<unsigned int>> siblings;
     siblings.reserve(cores.size());
