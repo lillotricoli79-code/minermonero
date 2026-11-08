@@ -175,8 +175,9 @@ std::vector<unsigned int> online_cpu_ids() {
                 if (last < first || last - first > 4096) {
                     throw std::runtime_error("invalid Linux online CPU range");
                 }
-                for (unsigned int cpu = first; cpu <= last; ++cpu) {
+                for (unsigned int cpu = first;; ++cpu) {
                     cpus.push_back(cpu);
+                    if (cpu == last) break;
                 }
             }
             if (!cpus.empty()) return cpus;
