@@ -4,6 +4,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <algorithm>
 
 namespace {
 
@@ -117,7 +119,7 @@ int main() {
                 "disabled CPU configuration still selected mining threads");
     const auto full_cpu_threads = select_cpu_threads(
         nlohmann::json{{"enabled", true}, {"max-threads-hint", 100}});
-    ok &= check(full_cpu_threads >= 1 && full_cpu_threads <= 64,
+    ok &= check(full_cpu_threads >= 1 && full_cpu_threads <= std::max(1U, std::thread::hardware_concurrency()),
                 "CPU topology selection exceeded supported thread bounds");
     const auto minimum_cpu_threads = select_cpu_threads(
         nlohmann::json{{"enabled", true}, {"max-threads-hint", 1}});
