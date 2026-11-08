@@ -224,3 +224,18 @@ Non definire il progetto “finito” se manca uno dei criteri sopra.
 ---
 
 **Regola finale:** queste disposizioni sono permanenti per il progetto. Prima di ogni intervento rileggere il README e preservare il lavoro già presente. Le modifiche devono migliorare il miner reale, non soltanto aggiungere file o dichiarazioni.
+
+## 14. Disposizioni operative esplicite dell'utente — priorità e ritmo
+
+Questa sezione integra le regole precedenti e deve essere rispettata in ogni sessione di lavoro.
+
+1. **Eseguire le disposizioni esplicite dell'utente.** Non sostituirle con iniziative autonome, audit non richiesti, riorganizzazioni arbitrarie, spiegazioni ripetute o attività estranee alla consegna. In caso di conflitto tra una scelta autonoma e un'istruzione esplicita dell'utente, prevale l'istruzione dell'utente, nel rispetto di sicurezza, correttezza tecnica e licenze.
+2. **Priorità alla consegna concreta.** L'obiettivo è completare il miner richiesto nel repository principale `main`, non limitarsi a descrivere cosa andrebbe fatto, creare elenchi di attività o aggiungere documentazione al posto del codice.
+3. **Usare implementazioni sorgente reali dei miner di riferimento.** Recuperare i file e i moduli effettivi, selezionare le parti compatibili, conservarne provenienza e licenza e integrarle nel progetto. Non inventare implementazioni sostitutive quando esiste codice riutilizzabile compatibile. Non copiare codice senza licenza compatibile o senza rispettarne gli obblighi.
+4. **Nessun lavoro parallelo.** Integrare il lavoro nel progetto principale e nella sua struttura esistente. Non creare rami, repository, progetti o copie parallele salvo richiesta esplicita.
+5. **Rilettura periodica.** Rileggere questa sezione e le disposizioni pertinenti del README all'inizio del lavoro, prima di ogni nuova fase significativa e almeno ogni due minuti durante una sessione continuativa, per non perdere le istruzioni e non deviare dall'obiettivo.
+6. **Rapidità senza finzioni.** Procedere con la massima rapidità ragionevole, evitando interruzioni, aggiornamenti superflui e richieste di conferma non necessarie. Non fermarsi per riferire ogni singolo passaggio: comunicare quando serve una decisione indispensabile oppure quando la consegna è pronta. Non sacrificare correttezza, compilabilità, sicurezza MSR o licenze per dichiarare un completamento anticipato.
+7. **Tempo indicativo di consegna.** L'utente richiede il massimo impegno per consegnare il progetto entro un'ora. Questo è un obiettivo di urgenza, non un'autorizzazione a dichiarare completate funzioni non implementate o non verificate. Se una verifica o una parte essenziale non è materialmente completabile nel tempo disponibile, indicare con precisione cosa è stato fatto e cosa resta.
+8. **Pubblicazione.** L'utente ha autorizzato il lavoro direttamente su `main`, inclusi i commit necessari. Non usare rami paralleli. Non eseguire force push o operazioni distruttive.
+9. **Consegna finale.** Consegnare il progetto effettivamente aggiornato, con riepilogo conciso dei moduli integrati, commit pubblicati, verifiche realmente eseguite e limitazioni residue. Non dichiarare finito ciò che non è stato effettivamente realizzato.
+
