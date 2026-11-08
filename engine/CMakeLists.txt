@@ -26,6 +26,10 @@ target_include_directories(unique-rx PRIVATE src "${randomx_SOURCE_DIR}/src")
 target_link_libraries(unique-rx PRIVATE randomx Threads::Threads OpenSSL::SSL
   OpenSSL::Crypto nlohmann_json::nlohmann_json)
 
+if(WIN32)
+  target_link_libraries(unique-rx PRIVATE ws2_32)
+endif()
+
 if(BUILD_TESTING)
   add_executable(unique-rx-jit-tests tests/x64_jit_test.cpp)
   target_compile_features(unique-rx-jit-tests PRIVATE cxx_std_20)
@@ -45,6 +49,9 @@ if(BUILD_TESTING)
     "${randomx_SOURCE_DIR}/src")
   target_link_libraries(unique-rx-stratum-tests PRIVATE randomx Threads::Threads
     OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
+  if(WIN32)
+    target_link_libraries(unique-rx-stratum-tests PRIVATE ws2_32)
+  endif()
   add_test(NAME unique-rx-stratum-job-validation COMMAND unique-rx-stratum-tests)
 
   if(UNIX)
