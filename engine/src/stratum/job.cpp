@@ -290,6 +290,25 @@ bool rpc_response_failed(const nlohmann::json& message) noexcept {
     return false;
 }
 
+// NyxRX protocol.rs format_error port: preserve pool-provided human-readable
+// messages instead of logging opaque JSON objects.
+std::string format_rpc_error(const nlohmann::json& error) {
+    if (error.is_string()) return error.get<std::string>();
+    if (error.is_array()) {
+        std::string result;
+        for (const auto& part : error) {
+            if (!part.is_string()) continue;
+            if (!result.empty()) result += ": ";
+            result += part.get_ref<const std::string&>();
+        }
+        return result.empty() ? error.dump() : result;
+    }
+    if (error.is_object() && error.contains("message") && error["message"].is_string()) {
+        return error["message"].get<std::string>();
+    }
+    return error.dump();
+}
+
 bool login_advertises_nicehash(const nlohmann::json& result) noexcept {
     if (!result.is_object() || !result.contains("extensions") ||
         !result["extensions"].is_array()) return false;
@@ -313,7 +332,7 @@ std::string validate_login_response(const nlohmann::json& message) {
         throw std::invalid_argument("pool login response is not an object");
     }
     if (message.contains("error") && !message["error"].is_null()) {
-        throw std::runtime_error("pool rejected login: " + message["error"].dump());
+        throw std::runtime_error("pool rejected login: " + format_rpc_error(message["error"]));
     }
     if (!message.contains("result") || !message["result"].is_object()) {
         throw std::runtime_error("pool login response has no result object");
