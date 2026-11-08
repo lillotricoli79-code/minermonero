@@ -12,7 +12,7 @@ if ($npm) {
     if ($LASTEXITCODE -ne 0) { throw "Dashboard build failed." }
 }
 else {
-    Write-Warning "Node.js/npm not found: dashboard build skipped. Install Node.js 22+ to build the UI."
+    Write-Warning "Node.js/npm not found: dashboard build skipped. Install Node.js 20.19+ or 22.12+ to build the UI."
 }
 
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
