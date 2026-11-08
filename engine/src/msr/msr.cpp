@@ -31,6 +31,7 @@
 #endif
 #include <windows.h>
 #include <winreg.h>
+#include "platform/affinity.hpp"
 #ifdef _MSC_VER
 #include <intrin.h>
 #else
@@ -344,21 +345,20 @@ struct MsrManager::Impl {
         if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
         originals.clear();
         initialize_pawnio();
-        const WORD groups = GetActiveProcessorGroupCount();
-        if (groups == 0) throw std::runtime_error("Windows reports no active processor groups");
+        const auto processors = platform::available_processors();
+        if (processors.empty()) {
+            throw std::runtime_error("Windows reports no processors available to this process");
+        }
 
-        for (WORD group = 0; group < groups; ++group) {
-            const DWORD processors = GetActiveProcessorCount(group);
-            for (DWORD processor = 0; processor < processors; ++processor) {
-                if (processor >= sizeof(KAFFINITY) * 8) {
-                    throw std::runtime_error("processor group exceeds supported affinity mask");
-                }
-                ThreadAffinity affinity(group, static_cast<BYTE>(processor));
-                for (const auto& write : preset.writes) {
-                    const auto register_id = static_cast<std::uint32_t>(write.register_id);
-                    originals.push_back({group, static_cast<BYTE>(processor),
-                                         register_id, read_current_msr(register_id), false});
-                }
+        for (const auto& [group, processor] : processors) {
+            if (processor >= sizeof(KAFFINITY) * 8) {
+                throw std::runtime_error("processor group exceeds supported affinity mask");
+            }
+            ThreadAffinity affinity(group, static_cast<BYTE>(processor));
+            for (const auto& write : preset.writes) {
+                const auto register_id = static_cast<std::uint32_t>(write.register_id);
+                originals.push_back({group, static_cast<BYTE>(processor),
+                                     register_id, read_current_msr(register_id), false});
             }
         }
 

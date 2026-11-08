@@ -229,6 +229,7 @@ Non definire il progetto “finito” se manca uno dei criteri sopra.
 
 - Il percorso AES VAES in `engine/src/randomx/upstream/src/aes_hash_vaes.cpp` deriva da `c0mm4nd/rxminer`, commit `5fe52dde2650c623fd0472804152a94711889dce`; le porzioni RxMiner sono MIT, con testo conservato in `engine/src/randomx/upstream/LICENSES/RXMINER-MIT.txt`.
 - Il profilo MSR AMD Zen 3 in `engine/src/msr/presets.hpp` è portato da `c0mm4nd/rxminer/src/msr.rs`, commit `5fe52dde2650c623fd0472804152a94711889dce`; licenza MIT. Sono mantenuti allow-list e valori dei registri della sorgente di riferimento.
+- Il lock inter-processo Linux MSR in `engine/src/msr/msr.cpp` adatta il blocco `flock` di `c0mm4nd/rxminer/src/msr.rs`, commit `5fe52dde2650c623fd0472804152a94711889dce`; licenza MIT.
 - Il codice RandomX upstream resta BSD-3-Clause secondo la licenza conservata in `engine/src/randomx/upstream/LICENSE`.
 
 ## 15. Documento operativo vincolante — istruzioni aggiornate dell'utente

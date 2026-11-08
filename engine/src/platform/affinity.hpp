@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <set>
 #include <tuple>
 
 #ifdef _WIN32
@@ -34,8 +35,47 @@
 namespace unique_rx::platform {
 
 #ifdef _WIN32
+inline std::vector<std::pair<WORD, DWORD>> available_processors() {
+    // Windows 10 normally constrains a process to one processor group;
+    // Windows 11 can span groups. Query the groups actually assigned to this
+    // process instead of counting every active CPU in the whole machine.
+    std::vector<WORD> groups(64);
+    USHORT group_count = static_cast<USHORT>(groups.size());
+    if (GetProcessGroupAffinity(GetCurrentProcess(), &group_count, groups.data()) &&
+        group_count != 0) {
+        groups.resize(group_count);
+    } else {
+        groups.clear();
+        const WORD active_groups = GetActiveProcessorGroupCount();
+        for (WORD group = 0; group < active_groups; ++group) groups.push_back(group);
+    }
+
+    DWORD_PTR process_mask = 0;
+    DWORD_PTR system_mask = 0;
+    const bool has_single_group_mask = groups.size() == 1 &&
+        GetProcessAffinityMask(GetCurrentProcess(), &process_mask, &system_mask) != 0 &&
+        process_mask != 0;
+
+    std::vector<std::pair<WORD, DWORD>> result;
+    for (const WORD group : groups) {
+        const DWORD active = GetActiveProcessorCount(group);
+        const DWORD limit = std::min<DWORD>(
+            active, static_cast<DWORD>(sizeof(KAFFINITY) * 8));
+        for (DWORD processor = 0; processor < limit; ++processor) {
+            if (has_single_group_mask &&
+                (process_mask & (static_cast<DWORD_PTR>(1) << processor)) == 0) {
+                continue;
+            }
+            result.emplace_back(group, processor);
+        }
+    }
+    return result;
+}
+
 inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
     // Interleave physical cores across NUMA nodes before placing SMT siblings.
+    const auto allowed = available_processors();
+    const std::set<std::pair<WORD, DWORD>> allowed_set(allowed.begin(), allowed.end());
     std::map<WORD, std::vector<std::vector<std::pair<WORD, DWORD>>>> nodes;
     DWORD bytes = 0;
     GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &bytes);
@@ -54,7 +94,8 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
                     for (WORD g = 0; g < core.GroupCount; ++g) {
                         const auto& mask = core.GroupMask[g];
                         for (DWORD bit = 0; bit < sizeof(KAFFINITY) * 8; ++bit) {
-                            if ((mask.Mask & (static_cast<KAFFINITY>(1) << bit)) == 0) continue;
+                            if ((mask.Mask & (static_cast<KAFFINITY>(1) << bit)) == 0 ||
+                                !allowed_set.contains({mask.Group, bit})) continue;
                             PROCESSOR_NUMBER processor{};
                             processor.Group = mask.Group;
                             processor.Number = static_cast<BYTE>(bit);
@@ -85,12 +126,7 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
         }
         if (!added) break;
     }
-    if (result.empty()) {
-        const WORD groups = GetActiveProcessorGroupCount();
-        for (WORD group = 0; group < groups; ++group)
-            for (DWORD cpu = 0; cpu < GetActiveProcessorCount(group); ++cpu)
-                result.emplace_back(group, cpu);
-    }
+    if (result.empty()) result = allowed;
     return result;
 }
 #elif defined(__linux__)

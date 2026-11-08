@@ -1,4 +1,5 @@
 #include "topology.hpp"
+#include "platform/affinity.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -120,12 +121,10 @@ std::optional<std::uint32_t> available_cgroup_cpu_quota() {
 
 std::uint32_t available_logical_threads() {
 #ifdef _WIN32
-    std::uint32_t count = 0;
-    const WORD groups = GetActiveProcessorGroupCount();
-    for (WORD group = 0; group < groups; ++group) {
-        count += GetActiveProcessorCount(group);
+    const auto processors = platform::available_processors();
+    if (!processors.empty()) {
+        return static_cast<std::uint32_t>(processors.size());
     }
-    if (count != 0) return count;
 #elif defined(__linux__)
     const auto cpus = platform::linux_cpu::allowed_cpus();
     if (!cpus.empty()) return static_cast<std::uint32_t>(cpus.size());
@@ -214,6 +213,8 @@ std::optional<std::uint64_t> available_l3_cache_bytes() {
 
 std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
 #ifdef _WIN32
+    const auto allowed = platform::available_processors();
+    const std::set<std::pair<WORD, DWORD>> allowed_set(allowed.begin(), allowed.end());
     DWORD bytes = 0;
     GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &bytes);
     if (GetLastError() == ERROR_INSUFFICIENT_BUFFER && bytes != 0) {
@@ -227,7 +228,21 @@ std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
                 item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(
                     storage.data() + offset);
                 if (item->Size == 0 || offset + item->Size > bytes) break;
-                if (item->Relationship == RelationProcessorCore) ++count;
+                if (item->Relationship == RelationProcessorCore) {
+                    bool visible = false;
+                    for (WORD group = 0; group < item->Processor.GroupCount; ++group) {
+                        const auto& mask = item->Processor.GroupMask[group];
+                        for (DWORD bit = 0; bit < sizeof(KAFFINITY) * 8; ++bit) {
+                            if ((mask.Mask & (static_cast<KAFFINITY>(1) << bit)) != 0 &&
+                                allowed_set.contains({mask.Group, bit})) {
+                                visible = true;
+                                break;
+                            }
+                        }
+                        if (visible) break;
+                    }
+                    if (visible) ++count;
+                }
                 offset += item->Size;
             }
             if (count != 0) return std::min(count, logical_fallback);

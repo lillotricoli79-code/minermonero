@@ -9,7 +9,6 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <cstring>
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -114,12 +113,18 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
                     const auto nonce_offset = input.size();
                     input.resize(nonce_offset + sizeof(std::uint32_t));
                     std::uint32_t nonce = lane;
-                    std::memcpy(input.data() + nonce_offset, &nonce, sizeof(nonce));
+                    const auto write_nonce_le = [&](std::uint32_t value) {
+                        input[nonce_offset] = static_cast<char>(value);
+                        input[nonce_offset + 1] = static_cast<char>(value >> 8);
+                        input[nonce_offset + 2] = static_cast<char>(value >> 16);
+                        input[nonce_offset + 3] = static_cast<char>(value >> 24);
+                    };
+                    write_nonce_le(nonce);
                     randomx_calculate_hash_first(vms[lane].get(), input.data(), input.size());
                     while (!failed.load(std::memory_order_acquire) &&
                            std::chrono::steady_clock::now() < deadline) {
                         nonce += lanes;
-                        std::memcpy(input.data() + nonce_offset, &nonce, sizeof(nonce));
+                        write_nonce_le(nonce);
                         randomx_calculate_hash_next(vms[lane].get(), input.data(), input.size(),
                                                     last_hash[lane].data());
                         ++lane_hashes[lane];
