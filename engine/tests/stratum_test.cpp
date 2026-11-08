@@ -88,8 +88,8 @@ int main() {
                   "oversized job blob was accepted");
 
     // CPU topology selection and safety bounds.
-    ok &= check(select_cpu_threads(nlohmann::json{{"enabled", false}}) == 1,
-                "disabled CPU configuration did not select the safe single-thread fallback");
+    ok &= check(select_cpu_threads(nlohmann::json{{"enabled", false}}) == 0,
+                "disabled CPU configuration still selected mining threads");
     const auto full_cpu_threads = select_cpu_threads(
         nlohmann::json{{"enabled", true}, {"max-threads-hint", 100}});
     ok &= check(full_cpu_threads >= 1 && full_cpu_threads <= 64,
@@ -101,6 +101,10 @@ int main() {
 
     // Pool URL parsing, defaults, IPv6 and TLS fingerprint validation.
     auto config = base_pool_config();
+    config["cpu"] = {{"enabled", false}};
+    ok &= rejects([&] { parse_pool_config(config); },
+                  "disabled CPU mining configuration was accepted");
+    config = base_pool_config();
     const auto pool = parse_pool_config(config);
     ok &= check(pool.host == "pool.example.net" && pool.port == "3333" &&
                     pool.wallet == "test-wallet" && pool.password == "x" &&
