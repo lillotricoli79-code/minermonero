@@ -20,6 +20,11 @@ struct Job {
     std::array<std::uint8_t, 32> seed{};
     std::uint64_t target = 0;
     std::uint32_t nonce = 0;
+
+    // Target-only updates keep the same nonce work; adapted from RxMiner (MIT).
+    bool same_work(const Job& other) const {
+        return id == other.id && blob == other.blob && seed == other.seed;
+    }
 };
 
 struct PoolConfig {
