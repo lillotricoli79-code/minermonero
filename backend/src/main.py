@@ -565,17 +565,17 @@ class MinerController:
             if process is None or process.poll() is not None:
                 self.process = None
                 raise HTTPException(status_code=409, detail="Nessun miner avviato da questa dashboard")
+        try:
             if os.name == "nt":
-                try:
-                    process.send_signal(signal.CTRL_BREAK_EVENT)
-                except (OSError, ValueError):
-                    self._log(
-                        "CTRL_BREAK_EVENT non disponibile: arresto forzato; "
-                        "il ripristino MSR non è garantito."
-                    )
-                    process.terminate()
+                process.send_signal(signal.CTRL_BREAK_EVENT)
             else:
                 process.terminate()
+        except (AttributeError, OSError, ValueError):
+            # The child can exit between poll() and signal delivery.
+            try:
+                process.terminate()
+            except OSError:
+                pass
         try:
             process.wait(timeout=30)
         except subprocess.TimeoutExpired:
@@ -583,7 +583,10 @@ class MinerController:
                 "Il miner non ha chiuso entro 30 secondi: terminazione forzata; "
                 "il ripristino MSR potrebbe non essere stato eseguito."
             )
-            process.kill()
+            try:
+                process.kill()
+            except OSError:
+                pass
             process.wait(timeout=5)
         self._log("Arresto miner completato.")
 
