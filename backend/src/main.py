@@ -312,6 +312,10 @@ class MinerController:
         native_candidates = [
             shutil.which("unique-rx"),
             str(ROOT / "engine" / "build" / "unique-rx"),
+            str(ROOT / "engine" / "build" / "unique-rx.exe"),
+            str(ROOT / "engine" / "build-mingw" / "unique-rx.exe"),
+            str(ROOT / "engine" / "build-msvc" / "unique-rx.exe"),
+            str(ROOT / "engine" / "build-msvc" / "Release" / "unique-rx.exe"),
         ]
         native_path = next(
             (path for path in native_candidates if path and Path(path).is_file()),
