@@ -59,14 +59,18 @@ class SummaryTests(unittest.TestCase):
 
         self.assertEqual(result["hashrate"]["10s"], 1200)
         self.assertEqual(result["hashrate"]["60s"], 900)
-        self.assertEqual(result["shares"], {"accepted": 12, "rejected": 3, "total": 15})
+        self.assertEqual(result["shares"], {
+            "accepted": 12, "rejected": 3, "total": 15, "stale": None, "pending": None,
+        })
         self.assertEqual(result["uptime_seconds"], 61)
 
     def test_missing_telemetry_stays_unknown(self):
         result = normalize_summary({})
 
         self.assertEqual(result["hashrate"], {"10s": None, "60s": None, "15m": None})
-        self.assertEqual(result["shares"], {"accepted": None, "rejected": None, "total": None})
+        self.assertEqual(result["shares"], {
+            "accepted": None, "rejected": None, "total": None, "stale": None, "pending": None,
+        })
         self.assertIsNone(result["uptime_seconds"])
 
 
