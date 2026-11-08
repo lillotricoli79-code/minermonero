@@ -48,6 +48,9 @@ std::vector<std::uint8_t> decode_hex(std::string_view value) {
 }
 
 std::uint64_t parse_share_target(std::string_view value) {
+    if (value.size() != 8 && value.size() != 16) {
+        throw std::invalid_argument("pool target must be 4 or 8 bytes");
+    }
     const auto bytes = decode_hex(value);
     if (bytes.size() == 4) {
         const std::uint32_t compact = static_cast<std::uint32_t>(bytes[0]) |
@@ -74,14 +77,21 @@ Job parse_job(const nlohmann::json& value) {
     }
     Job job;
     job.id = value.at("job_id").get<std::string>();
-    if (job.id.empty()) throw std::invalid_argument("pool job id is empty");
-    job.blob = decode_hex(value.at("blob").get<std::string>());
-    if (job.blob.size() < kNonceOffset + sizeof(std::uint32_t) ||
-        job.blob.size() > kMaximumBlobSize) {
+    if (job.id.empty() || job.id.size() > 256) {
+        throw std::invalid_argument("pool job id length is invalid");
+    }
+    const auto blob_hex = value.at("blob").get<std::string>();
+    if ((blob_hex.size() & 1U) != 0 ||
+        blob_hex.size() < (kNonceOffset + sizeof(std::uint32_t)) * 2 ||
+        blob_hex.size() > kMaximumBlobSize * 2) {
         throw std::invalid_argument("pool job blob length is invalid");
     }
-    const auto seed = decode_hex(value.at("seed_hash").get<std::string>());
-    if (seed.size() != job.seed.size()) throw std::invalid_argument("seed hash must be 32 bytes");
+    job.blob = decode_hex(blob_hex);
+    const auto seed_hex = value.at("seed_hash").get<std::string>();
+    if (seed_hex.size() != job.seed.size() * 2) {
+        throw std::invalid_argument("seed hash must be 32 bytes");
+    }
+    const auto seed = decode_hex(seed_hex);
     std::copy(seed.begin(), seed.end(), job.seed.begin());
     job.target = parse_share_target(value.at("target").get<std::string>());
     std::memcpy(&job.nonce, job.blob.data() + kNonceOffset, sizeof(job.nonce));
