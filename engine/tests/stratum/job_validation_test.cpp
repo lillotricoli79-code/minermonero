@@ -79,6 +79,14 @@ int main() {
     ok &= rejects([&] { parse_job(invalid_job); },
                   "empty job identifier was accepted");
     invalid_job = wire_job;
+    invalid_job["job_id"] = std::string(257, 'j');
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "oversized job identifier was accepted");
+    invalid_job = wire_job;
+    invalid_job["target"] = std::string(1024 * 1024, 'f');
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "oversized share target was accepted");
+    invalid_job = wire_job;
     invalid_job["seed_hash"] = "00";
     ok &= rejects([&] { parse_job(invalid_job); },
                   "incorrect seed hash length was accepted");
