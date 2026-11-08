@@ -44,6 +44,9 @@ class ShellLogTests(unittest.TestCase):
 
             self.assertTrue(path.is_file())
             self.assertTrue(Path(f"{path}.1").is_file())
+            history = "\\n".join(log.recent_lines(20))
+            self.assertIn("shell-output-line-4", history)
+            self.assertNotIn("shell-output-line-0", history)
 
 
 class SummaryTests(unittest.TestCase):
