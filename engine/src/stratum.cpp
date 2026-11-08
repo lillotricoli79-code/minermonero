@@ -30,7 +30,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <unordered_set>
+#include <unordered_map>
 
 namespace unique_rx {
 namespace {
@@ -74,6 +74,8 @@ struct MiningState {
     std::atomic<std::uint64_t> submitted{0};
     std::atomic<std::uint64_t> accepted{0};
     std::atomic<std::uint64_t> rejected{0};
+    std::atomic<std::uint64_t> stale_shares{0};
+    std::atomic<std::uint64_t> expired_shares{0};
     std::mutex share_mutex;
     std::deque<Share> shares;
     std::mutex error_mutex;
@@ -166,7 +168,8 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             ++cursor;
             const auto count = state.hashes.fetch_add(1, std::memory_order_relaxed) + 1;
 
-            if (state.current_work()->generation == work->generation &&
+            const auto latest_work = state.current_work();
+            if (latest_work && latest_work->generation == work->generation &&
                 meets_target(hash, work->job.target)) {
                 {
                     std::lock_guard lock(state.share_mutex);
@@ -481,7 +484,10 @@ int run_miner(const std::filesystem::path& config_path,
         std::shared_ptr<randomx_cache> cache;
         const auto flags = randomx_get_flags();
         std::uint64_t generation = 0;
-        std::unordered_set<std::uint64_t> pending;
+        using Clock = std::chrono::steady_clock;
+        constexpr auto kShareResponseTimeout = std::chrono::seconds(60);
+        constexpr std::size_t kMaximumPendingShares = 4096;
+        std::unordered_map<std::uint64_t, Clock::time_point> pending;
         std::uint64_t next_id = 2;
         std::uint64_t last_sample_hashes = 0;
         auto started = std::chrono::steady_clock::now();
@@ -513,8 +519,11 @@ int run_miner(const std::filesystem::path& config_path,
             for (const auto& share : ready) {
                 const auto work = state.current_work();
                 if (!work || work->generation != share.generation || session_id.empty()) {
-                    state.rejected.fetch_add(1, std::memory_order_relaxed);
+                    state.stale_shares.fetch_add(1, std::memory_order_relaxed);
                     continue;
+                }
+                if (pending.size() >= kMaximumPendingShares) {
+                    throw std::runtime_error("too many unanswered pool share submissions");
                 }
                 const auto submit_id = next_id++;
                 std::array<std::uint8_t, 4> nonce_bytes{};
@@ -524,7 +533,7 @@ int run_miner(const std::filesystem::path& config_path,
                     {"job_id", share.job_id},
                     {"nonce", hex_encode(nonce_bytes.data(), nonce_bytes.size())},
                     {"result", hex_encode(share.hash.data(), share.hash.size())}}}});
-                pending.insert(submit_id);
+                pending.emplace(submit_id, Clock::now());
                 state.submitted.fetch_add(1, std::memory_order_relaxed);
             }
         };
@@ -558,6 +567,16 @@ int run_miner(const std::filesystem::path& config_path,
                         if (rejected) state.rejected.fetch_add(1, std::memory_order_relaxed);
                         else state.accepted.fetch_add(1, std::memory_order_relaxed);
                     }
+                }
+            }
+
+            const auto now = Clock::now();
+            for (auto it = pending.begin(); it != pending.end();) {
+                if (now - it->second >= kShareResponseTimeout) {
+                    it = pending.erase(it);
+                    state.expired_shares.fetch_add(1, std::memory_order_relaxed);
+                } else {
+                    ++it;
                 }
             }
 
@@ -595,8 +614,13 @@ int run_miner(const std::filesystem::path& config_path,
                     {"hashrate", {{"10s", rate_for(std::chrono::seconds(10))},
                                    {"60s", rate_for(std::chrono::seconds(60))},
                                    {"15m", rate_for(std::chrono::seconds(900))}}},
-                    {"shares", {{"accepted", state.accepted.load()},
+                    {"shares", {{"found", state.found.load()},
+                                 {"submitted", state.submitted.load()},
+                                 {"accepted", state.accepted.load()},
                                  {"rejected", state.rejected.load()},
+                                 {"stale", state.stale_shares.load()},
+                                 {"expired", state.expired_shares.load()},
+                                 {"pending", pending.size()},
                                  {"total", state.accepted.load() + state.rejected.load()}}},
                     {"uptime_seconds", uptime},
                     {"pool", pool.host + ":" + pool.port}, {"connected", true},
