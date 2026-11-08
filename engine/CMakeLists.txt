@@ -70,7 +70,7 @@ if(BUILD_TESTING)
   add_test(NAME unique-rx-batch-and-lane-equivalence COMMAND unique-rx-tests)
 
   add_executable(unique-rx-worker-tests tests/workers/worker_validation_test.cpp
-    src/core/mining.cpp src/workers/hash_worker.cpp)
+    src/logging/log.cpp src/core/mining.cpp src/workers/hash_worker.cpp)
   target_compile_features(unique-rx-worker-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-worker-tests PRIVATE src "${randomx_SOURCE_DIR}/src")
   target_link_libraries(unique-rx-worker-tests PRIVATE randomx Threads::Threads
@@ -86,7 +86,7 @@ if(BUILD_TESTING)
   target_link_libraries(unique-rx-msr-tests PRIVATE Threads::Threads)
   add_test(NAME unique-rx-msr-lifecycle COMMAND unique-rx-msr-tests)
 
-  add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/stratum/client.cpp
+  add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/logging/log.cpp src/stratum/client.cpp
     src/stratum/job.cpp src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp)
   target_compile_features(unique-rx-stratum-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-stratum-tests PRIVATE src
@@ -99,7 +99,7 @@ if(BUILD_TESTING)
   add_test(NAME unique-rx-stratum-job-validation COMMAND unique-rx-stratum-tests)
 
   add_executable(unique-rx-stratum-integration-tests
-    tests/stratum/loopback_test.cpp src/stratum/client.cpp src/stratum/job.cpp
+    tests/stratum/loopback_test.cpp src/logging/log.cpp src/stratum/client.cpp src/stratum/job.cpp
     src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp
     src/stratum/transport.cpp)
   target_compile_features(unique-rx-stratum-integration-tests PRIVATE cxx_std_20)
