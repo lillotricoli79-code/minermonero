@@ -146,8 +146,46 @@ int main() {
         return 1;
     }
 
+    const auto closed_port = reserve_closed_port();
+    if (closed_port == 0) {
+        pool.join();
+        unique_rx::platform::close_socket(listener);
+        return 1;
+    }
+    const auto config_path = std::filesystem::temp_directory_path() /
+        ("unique-rx-stratum-" + std::to_string(process_id()) + ".json");
+    const nlohmann::json config{
+        {"pools", nlohmann::json::array({
+            nlohmann::json{
+                {"url", "127.0.0.1:" + std::to_string(closed_port)},
+                {"user", "unavailable-pool-wallet"}, {"pass", "x"},
+                {"enabled", true}, {"tls", false},
+            },
+            nlohmann::json{
+                {"url", "127.0.0.1:" + std::to_string(ntohs(address.sin_port))},
+                {"user", "loopback-test-wallet"}, {"pass", "x"},
+                {"rig-id", "test"}, {"enabled", true}, {"tls", false},
+            },
+        })},
+        {"cpu", {{"enabled", true}, {"max-threads-hint", 1}}},
+        {"randomx", {{"wrmsr", false}, {"full-memory", false}}},
+    };
+    {
+        std::ofstream file(config_path);
+        if (!file) {
+            unique_rx::platform::close_socket(listener);
+            return 1;
+        }
+        file << config.dump(2);
+        if (!file) {
+            file.close();
+            std::filesystem::remove(config_path);
+            unique_rx::platform::close_socket(listener);
+            return 1;
+        }
+    }
     std::atomic<bool> server_ok{false};
-    std::thread pool([&] {
+    std::jthread pool([&] {
         try {
             if (!unique_rx::platform::wait_socket(
                     listener, unique_rx::platform::kReadEvent, 20000)) {
@@ -155,7 +193,10 @@ int main() {
             }
             const Socket client = accept(listener, nullptr, nullptr);
             if (!unique_rx::platform::socket_valid(client)) return;
-            set_receive_timeout(client);
+            if (!set_receive_timeout(client)) {
+                unique_rx::platform::close_socket(client);
+                return;
+            }
             std::string line;
             if (!read_line(client, line)) {
                 unique_rx::platform::close_socket(client);
@@ -218,34 +259,6 @@ int main() {
         }
     });
 
-    const auto closed_port = reserve_closed_port();
-    if (closed_port == 0) {
-        pool.join();
-        unique_rx::platform::close_socket(listener);
-        return 1;
-    }
-    const auto config_path = std::filesystem::temp_directory_path() /
-        ("unique-rx-stratum-" + std::to_string(process_id()) + ".json");
-    const nlohmann::json config{
-        {"pools", nlohmann::json::array({
-            nlohmann::json{
-                {"url", "127.0.0.1:" + std::to_string(closed_port)},
-                {"user", "unavailable-pool-wallet"}, {"pass", "x"},
-                {"enabled", true}, {"tls", false},
-            },
-            nlohmann::json{
-                {"url", "127.0.0.1:" + std::to_string(ntohs(address.sin_port))},
-                {"user", "loopback-test-wallet"}, {"pass", "x"},
-                {"rig-id", "test"}, {"enabled", true}, {"tls", false},
-            },
-        })},
-        {"cpu", {{"enabled", true}, {"max-threads-hint", 1}}},
-        {"randomx", {{"wrmsr", false}, {"full-memory", false}}},
-    };
-    {
-        std::ofstream file(config_path);
-        file << config.dump(2);
-    }
     std::ostringstream miner_output;
     std::ostringstream miner_errors;
     auto* previous_output = std::cout.rdbuf(miner_output.rdbuf());
