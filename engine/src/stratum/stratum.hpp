@@ -31,6 +31,7 @@ struct PoolConfig {
     std::string tls_fingerprint;
     std::uint32_t threads = 1;
     bool tls = false;
+    bool keepalive = false;
 };
 
 std::vector<std::uint8_t> decode_hex(std::string_view value);
