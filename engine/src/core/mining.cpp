@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace unique_rx::core {
 namespace {
