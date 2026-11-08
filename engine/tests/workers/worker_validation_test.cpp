@@ -21,6 +21,16 @@ int main() {
     using unique_rx::core::MiningState;
     constexpr const char* expected_error = "invalid CPU worker index or worker count";
     bool ok = true;
+    unique_rx::core::Hash target_hash{};
+    target_hash[31] = 0x01;
+    ok &= check(unique_rx::core::hash_meets_target(target_hash, 0x0100000000000001ULL),
+                "RandomX target comparison did not decode hash bytes as little-endian");
+    ok &= check(!unique_rx::core::hash_meets_target(target_hash, 0x0100000000000000ULL),
+                "RandomX target comparison accepted a hash equal to target");
+    target_hash.fill(0);
+    target_hash[24] = 0x02;
+    ok &= check(unique_rx::core::hash_meets_target(target_hash, 3),
+                "RandomX target comparison rejected a lower little-endian hash");
 
     MiningState state;
     unique_rx::core::hash_worker(state, 0, 0, 0);

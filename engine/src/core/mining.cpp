@@ -4,6 +4,14 @@
 
 namespace unique_rx::core {
 
+bool hash_meets_target(const Hash& hash, std::uint64_t target) noexcept {
+    std::uint64_t value = 0;
+    for (std::size_t index = 0; index < sizeof(value); ++index) {
+        value |= static_cast<std::uint64_t>(hash[24 + index]) << (index * 8);
+    }
+    return value < target;
+}
+
 std::shared_ptr<const MiningWork> MiningState::current_work() {
     std::lock_guard lock(work_mutex);
     return work;

@@ -16,6 +16,8 @@ namespace unique_rx::core {
 
 using Hash = std::array<std::uint8_t, RANDOMX_HASH_SIZE>;
 
+bool hash_meets_target(const Hash& hash, std::uint64_t target) noexcept;
+
 struct MiningWork {
     Job job;
     std::shared_ptr<randomx_cache> cache;

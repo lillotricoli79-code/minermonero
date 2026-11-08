@@ -31,12 +31,6 @@ void write_nonce(std::vector<std::uint8_t>& blob, std::uint32_t nonce) {
     std::copy(encoded.begin(), encoded.end(), blob.begin() + kNonceOffset);
 }
 
-bool meets_target(const Hash& hash, std::uint64_t target) {
-    std::uint64_t high = 0;
-    std::memcpy(&high, hash.data() + 24, sizeof(high));
-    return high < target;
-}
-
 inline constexpr std::size_t kMaximumQueuedShares = 4096;
 
 std::uint64_t complete_hash(MiningState& state,
@@ -45,7 +39,7 @@ std::uint64_t complete_hash(MiningState& state,
     const auto count = state.hashes.fetch_add(1, std::memory_order_relaxed) + 1;
     const auto latest_work = state.current_work();
     if (latest_work && latest_work->generation == work->generation) {
-        if (meets_target(hash, latest_work->job.target)) {
+        if (hash_meets_target(hash, latest_work->job.target)) {
             {
                 std::lock_guard lock(state.share_mutex);
                 if (state.shares.size() < kMaximumQueuedShares) {
@@ -57,7 +51,7 @@ std::uint64_t complete_hash(MiningState& state,
             }
             state.found.fetch_add(1, std::memory_order_relaxed);
         }
-    } else if (meets_target(hash, work->job.target)) {
+    } else if (hash_meets_target(hash, work->job.target)) {
         state.stale_shares.fetch_add(1, std::memory_order_relaxed);
     }
     return count;
