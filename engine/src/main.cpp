@@ -1,5 +1,6 @@
 #include "stratum/stratum.hpp"
 #include "randomx/benchmark.hpp"
+#include "logging/log.hpp"
 
 #include <cstdint>
 #include <charconv>
@@ -95,10 +96,10 @@ int main(int argc, char** argv) {
                                         key, input, prefetch_mode,
                                         jit_huge_pages != 0) ? 0 : 1;
     } catch (const std::exception& error) {
-        std::cerr << "UNIQUE RX fatal error: " << error.what() << '\n';
+        unique_rx::logging::error("fatal", error.what());
         return 1;
     } catch (...) {
-        std::cerr << "UNIQUE RX fatal error: unknown exception\n";
+        unique_rx::logging::error("fatal", "unknown exception");
         return 1;
     }
 }
