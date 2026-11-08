@@ -106,6 +106,10 @@ jobs:
 
       - name: Install OpenSSL
         shell: pwsh
+        env:
+          # Use the CMake already provisioned on the hosted runner instead of
+          # downloading vcpkg's pinned copy from GitHub on every cold cache.
+          VCPKG_FORCE_SYSTEM_BINARIES: "1"
         run: vcpkg install openssl:x64-windows
 
       - name: Configure native engine
