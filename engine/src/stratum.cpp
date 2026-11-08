@@ -230,7 +230,7 @@ public:
                 if (count <= 0) {
                     const int error = SSL_get_error(ssl_, count);
                     if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
-                        wait_for(POLLOUT, 1000);
+                        wait_for(error == SSL_ERROR_WANT_READ ? POLLIN : POLLOUT, 1000);
                         continue;
                     }
                     throw std::runtime_error("TLS write to pool failed");
@@ -295,10 +295,14 @@ private:
         pollfd descriptor{socket_, events, 0};
         const int result = poll(&descriptor, 1, timeout_ms);
         if (result < 0 && errno != EINTR) throw std::runtime_error("pool socket poll failed");
-        if (result > 0 && (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
+        if (result > 0 && (descriptor.revents & (POLLERR | POLLNVAL))) {
             throw std::runtime_error("pool socket disconnected");
         }
-        return result > 0 && (descriptor.revents & events) != 0;
+        if (result > 0 && (descriptor.revents & events) != 0) return true;
+        if (result > 0 && (descriptor.revents & POLLHUP) != 0) {
+            throw std::runtime_error("pool socket disconnected");
+        }
+        return false;
     }
 
     void connect_tls(const PoolConfig& config) {
@@ -512,18 +516,21 @@ int run_miner(const std::filesystem::path& config_path,
 
         const auto send_ready_shares = [&] {
             std::deque<Share> ready;
+            const auto available_slots = kMaximumPendingShares - pending.size();
+            if (available_slots == 0) return;
             {
                 std::lock_guard lock(state.share_mutex);
-                ready.swap(state.shares);
+                const auto take = std::min(available_slots, state.shares.size());
+                for (std::size_t index = 0; index < take; ++index) {
+                    ready.push_back(std::move(state.shares.front()));
+                    state.shares.pop_front();
+                }
             }
             for (const auto& share : ready) {
                 const auto work = state.current_work();
                 if (!work || work->generation != share.generation || session_id.empty()) {
                     state.stale_shares.fetch_add(1, std::memory_order_relaxed);
                     continue;
-                }
-                if (pending.size() >= kMaximumPendingShares) {
-                    throw std::runtime_error("too many unanswered pool share submissions");
                 }
                 const auto submit_id = next_id++;
                 std::array<std::uint8_t, 4> nonce_bytes{};
