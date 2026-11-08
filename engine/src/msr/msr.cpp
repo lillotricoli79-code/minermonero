@@ -269,8 +269,8 @@ struct MsrManager::Impl {
         try {
             for (auto& original : originals) {
                 ThreadAffinity affinity(original.group, original.processor);
-                write_current_msr(kRandomXIntelMsrValue);
                 original.modified = true;
+                write_current_msr(kRandomXIntelMsrValue);
                 if (read_current_msr() != kRandomXIntelMsrValue) {
                     throw std::runtime_error("Intel MSR 0x1A4 read-back verification failed");
                 }
@@ -289,6 +289,9 @@ struct MsrManager::Impl {
             try {
                 ThreadAffinity affinity(original.group, original.processor);
                 write_current_msr(original.value);
+                if (read_current_msr() != original.value) {
+                    throw std::runtime_error("Intel MSR 0x1A4 restore read-back verification failed");
+                }
                 original.modified = false;
             } catch (const std::exception& error) {
                 restoration_pending = true;
@@ -329,9 +332,10 @@ struct MsrManager::Impl {
                                         "cannot open " + path.string());
             }
             std::uint64_t original = 0;
-            if (::pread(fd, &original, sizeof(original), kIntelMiscFeatureControl) !=
-                static_cast<ssize_t>(sizeof(original))) {
-                const int error = errno;
+            const auto bytes_read = ::pread(
+                fd, &original, sizeof(original), kIntelMiscFeatureControl);
+            if (bytes_read != static_cast<ssize_t>(sizeof(original))) {
+                const int error = bytes_read < 0 ? errno : EIO;
                 ::close(fd);
                 throw std::system_error(error, std::generic_category(),
                                         "cannot read MSR 0x1A4 from " + path.string());
@@ -377,7 +381,17 @@ struct MsrManager::Impl {
                     restoration_pending = true;
                     std::cerr << "MSR restore warning: failed to restore MSR 0x1A4\n";
                 } else {
-                    original.modified = false;
+                    std::uint64_t restored_value = 0;
+                    const auto bytes_read = ::pread(
+                        original.fd, &restored_value, sizeof(restored_value),
+                        kIntelMiscFeatureControl);
+                    if (bytes_read == static_cast<ssize_t>(sizeof(restored_value)) &&
+                        restored_value == original.value) {
+                        original.modified = false;
+                    } else {
+                        restoration_pending = true;
+                        std::cerr << "MSR restore warning: read-back verification failed for MSR 0x1A4\n";
+                    }
                 }
             }
             restoration_pending = restoration_pending || original.modified;
