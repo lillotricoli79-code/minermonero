@@ -382,7 +382,10 @@ class MinerController:
                 "managed": True,
                 "error": None,
                 "hashrate": {"10s": None, "60s": None, "15m": None},
-                "shares": {"accepted": 0, "rejected": 0, "total": 0},
+                "shares": {
+                    "accepted": 0, "rejected": 0, "total": 0,
+                    "stale": 0, "pending": 0, "expired": 0, "dropped": 0,
+                },
                 "uptime_seconds": None,
                 "algorithm": None,
                 "job_id": None,
@@ -403,7 +406,10 @@ class MinerController:
                 "managed": managed,
                 "error": str(exc) if managed else None,
                 "hashrate": {"10s": None, "60s": None, "15m": None},
-                "shares": {"accepted": None, "rejected": None, "total": None},
+                "shares": {
+                    "accepted": None, "rejected": None, "total": None,
+                    "stale": None, "pending": None, "expired": None, "dropped": None,
+                },
                 "uptime_seconds": None,
                 "cpu": None,
                 "pool": None,

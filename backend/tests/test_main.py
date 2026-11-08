@@ -269,6 +269,23 @@ class ConfigValidationTests(unittest.TestCase):
 
 
 class MinerStatusTests(unittest.TestCase):
+    def test_native_startup_status_has_complete_telemetry_shape(self):
+        class FakeProcess:
+            def poll(self):
+                return None
+
+        controller = MinerController()
+        controller.process = FakeProcess()
+        controller.engine_kind = "unique-rx"
+        status = controller.status()
+        self.assertEqual(
+            set(status["shares"]),
+            {"accepted", "rejected", "total", "stale", "pending", "expired", "dropped"},
+        )
+        self.assertIsNone(status["job_id"])
+        self.assertIsNone(status["height"])
+
+
     def test_native_status_is_read_from_one_process_snapshot(self):
         class FakeProcess:
             def poll(self):
