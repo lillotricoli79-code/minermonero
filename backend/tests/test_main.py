@@ -325,6 +325,28 @@ class MinerStatusTests(unittest.TestCase):
         self.assertEqual(status["hashrate"]["10s"], 12.0)
 
 
+class MinerOutputReaderTests(unittest.TestCase):
+    def test_exit_log_uses_engine_kind_captured_for_that_process(self):
+        class FinishedProcess:
+            stdout = ()
+
+            def poll(self):
+                return 0
+
+        controller = MinerController()
+        process = FinishedProcess()
+        controller.process = process
+        controller.engine_kind = "xmrig"
+
+        controller._read_output(process, "unique-rx")
+
+        self.assertEqual(
+            controller.recent_logs()[-1]["message"],
+            "unique-rx terminato (codice 0).",
+        )
+        self.assertIsNone(controller.process)
+
+
 class MinerShutdownTests(unittest.TestCase):
     def test_stop_tolerates_child_exit_during_signal_delivery(self):
         class ExitedProcess:

@@ -533,7 +533,11 @@ class MinerController:
                 )
             else:
                 self._log(f"Avvio {engine_kind} richiesto dall'utente.")
-            threading.Thread(target=self._read_output, args=(process,), daemon=True).start()
+            threading.Thread(
+                target=self._read_output,
+                args=(process, engine_kind),
+                daemon=True,
+            ).start()
         except OSError as exc:
             # Do not clear a process that a concurrent start request may
             # already have published after this Popen attempt failed.
@@ -544,7 +548,9 @@ class MinerController:
                     self.native_status = None
             raise HTTPException(status_code=500, detail=f"Impossibile avviare XMRig: {exc}") from exc
 
-    def _read_output(self, process: subprocess.Popen[str]) -> None:
+    def _read_output(
+        self, process: subprocess.Popen[str], engine_kind: str
+    ) -> None:
         if process.stdout:
             for line in process.stdout:
                 line = line.rstrip()
@@ -562,7 +568,7 @@ class MinerController:
                             self._log("Schema telemetria UNIQUE RX non valido.")
                 else:
                     self._log(line)
-        self._log(f"{self.engine_kind or 'Miner'} terminato (codice {process.poll()}).")
+        self._log(f"{engine_kind} terminato (codice {process.poll()}).")
         # Clear only this exact process: an immediately restarted miner may
         # already have replaced self.process while this reader is unwinding.
         with self.lock:
