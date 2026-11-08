@@ -1,56 +1,57 @@
 $ErrorActionPreference = "Stop"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$engineDir = Join-Path $repoRoot "engine"
-$destinationDir = Join-Path $engineDir "msr"
-$archive = Join-Path $env:TEMP "pawnio-modules-0.2.11.zip"
-$extractDir = Join-Path $env:TEMP "pawnio-modules-0.2.11"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
+$destinationDir = Join-Path $repoRoot "engine\\msr"
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("unique-rx-pawnio-" + [guid]::NewGuid().ToString("N"))
+$archive = Join-Path $tempRoot "release_0_2_11.zip"
+$extractDir = Join-Path $tempRoot "extracted"
 
 $uri = "https://github.com/namazso/PawnIO.Modules/releases/download/0.2.11/release_0_2_11.zip"
 $expectedArchiveSha256 = "43608cb89bc84247fef1368a139013f7d043e17db6d6c8dfc9b46bf0905a81f4"
 $expectedModuleSha256 = "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f"
 
-Write-Host "Downloading the signed PawnIO Intel MSR module..."
-Invoke-WebRequest -Uri $uri -OutFile $archive
 try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $actualSha256 = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actualSha256 -ne $expectedArchiveSha256) {
-    Remove-Item $archive -Force -ErrorAction SilentlyContinue
-    throw "PawnIO module archive SHA-256 mismatch. The file was not installed."
-}
+    New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+    Write-Host "Downloading signed PawnIO Modules release 0.2.11..."
+    Invoke-WebRequest -Uri $uri -OutFile $archive -UseBasicParsing
 
-if (Test-Path $extractDir) {
-    Remove-Item $extractDir -Recurse -Force
-}
-New-Item -ItemType Directory -Path $extractDir | Out-Null
-Expand-Archive -Path $archive -DestinationPath $extractDir -Force
+    $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($archiveHash -ne $expectedArchiveSha256) {
+        throw "PawnIO module archive SHA-256 mismatch. Refusing to install."
+    }
 
-$module = Get-ChildItem -Path $extractDir -Filter "IntelMSR.bin" -File -Recurse |
-    Select-Object -First 1
-if (-not $module) {
-    throw "IntelMSR.bin was not found in the verified PawnIO module archive."
-}
-$actualModuleSha256 = (Get-FileHash -Path $module.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualModuleSha256 -ne $expectedModuleSha256) {
-    throw "IntelMSR.bin SHA-256 mismatch. The module was not installed."
-}
+    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+    Expand-Archive -LiteralPath $archive -DestinationPath $extractDir -Force
+    $module = Get-ChildItem -LiteralPath $extractDir -Filter "IntelMSR.bin" -File -Recurse |
+        Select-Object -First 1
+    if (-not $module) {
+        throw "IntelMSR.bin was not found in the verified PawnIO module archive."
+    }
 
-New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
-Copy-Item -Path $module.FullName -Destination (Join-Path $destinationDir "IntelMSR.bin") -Force
+    $moduleHash = (Get-FileHash -LiteralPath $module.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($moduleHash -ne $expectedModuleSha256) {
+        throw "IntelMSR.bin SHA-256 mismatch. Refusing to install."
+    }
 
-$library = Join-Path $env:ProgramFiles "PawnIO\PawnIOLib.dll"
-Write-Host "Verified IntelMSR module installed at: $destinationDir\IntelMSR.bin"
-if (Test-Path $library) {
-    Write-Host "PawnIOLib.dll detected: $library"
-}
-else {
-    Write-Warning "PawnIO driver/library not detected. Install the official signed PawnIO driver from https://pawnio.eu/ before enabling native MSR."
-}
+    New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+    Copy-Item -LiteralPath $module.FullName -Destination (Join-Path $destinationDir "IntelMSR.bin") -Force
 
-Write-Host "Rebuild the native miner so CMake copies IntelMSR.bin beside unique-rx.exe."
+    Write-Host "Verified IntelMSR.bin installed in $destinationDir"
+    $pawnioKey = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO"
+    $pawnioInstall = Get-ItemProperty -LiteralPath $pawnioKey -ErrorAction SilentlyContinue
+    $pawnioLibrary = Join-Path $env:ProgramFiles "PawnIO\\PawnIOLib.dll"
+    if ($pawnioInstall -or (Test-Path -LiteralPath $pawnioLibrary)) {
+        Write-Host "PawnIO installation detected."
+    }
+    else {
+        Write-Warning "Install the official signed PawnIO driver from https://pawnio.eu/ before enabling native MSR."
+    }
+
+    Write-Host "Rebuild the native miner. CMake will copy the verified module beside unique-rx.exe."
 }
 finally {
-    Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $tempRoot) {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    }
 }
