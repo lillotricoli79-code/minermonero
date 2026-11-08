@@ -132,6 +132,14 @@ def safe_number(value: Any) -> float | None:
         return None
 
 
+def first_enabled_pool(config: dict[str, Any]) -> dict[str, Any]:
+    pools = config.get("pools") or []
+    for pool in pools:
+        if isinstance(pool, dict) and pool.get("enabled", True):
+            return pool
+    return {}
+
+
 def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
     hashrate = summary.get("hashrate") or {}
     total = hashrate.get("total") or []
@@ -261,8 +269,7 @@ class MinerController:
 
     def start(self) -> None:
         config = load_config()
-        pools = config.get("pools") or []
-        pool = pools[0] if pools and isinstance(pools[0], dict) else {}
+        pool = first_enabled_pool(config)
         if not str(pool.get("user", "")).strip():
             raise HTTPException(status_code=400, detail="Inserisci il wallet prima di avviare")
         if not str(pool.get("url", "")).strip():
@@ -432,8 +439,7 @@ def health() -> dict[str, str]:
 
 
 def public_config(config: dict[str, Any]) -> dict[str, Any]:
-    pools = config.get("pools") or []
-    pool = pools[0] if pools else {}
+    pool = first_enabled_pool(config)
     cpu = config.get("cpu") or {}
     randomx = config.get("randomx") or {}
     wrmsr = randomx.get("wrmsr")
@@ -462,8 +468,17 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
 
 def apply_config_update(current: dict[str, Any], update: MinerConfigUpdate) -> dict[str, Any]:
     result = json.loads(json.dumps(current))
-    pools = result.get("pools") or [{}]
-    pool = dict(pools[0]) if isinstance(pools[0], dict) else {}
+    pools = [
+        dict(pool) for pool in (result.get("pools") or [])
+        if isinstance(pool, dict)
+    ]
+    if not pools:
+        pools = [{}]
+    primary_index = next(
+        (index for index, pool in enumerate(pools) if pool.get("enabled", True)),
+        0,
+    )
+    pool = dict(pools[primary_index])
     pool.update({
         "url": update.pool,
         "user": update.wallet,
@@ -501,7 +516,8 @@ def apply_config_update(current: dict[str, Any], update: MinerConfigUpdate) -> d
         randomx["rdmsr"] = True
     elif randomx.get("wrmsr") is None:
         raise ValueError("Nessun preset MSR custom da preservare")
-    result.update({"cpu": cpu, "http": http, "pools": [pool], "randomx": randomx})
+    pools[primary_index] = pool
+    result.update({"cpu": cpu, "http": http, "pools": pools, "randomx": randomx})
     return result
 
 
