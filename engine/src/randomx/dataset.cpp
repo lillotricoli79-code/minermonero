@@ -1,6 +1,7 @@
 #include "dataset.hpp"
 
 #include <algorithm>
+#include <iostream>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -8,12 +9,18 @@
 namespace unique_rx {
 
 std::shared_ptr<randomx_dataset> create_randomx_dataset(
-    const std::shared_ptr<randomx_cache>& cache, randomx_flags flags,
-    std::uint32_t initialization_threads) {
+    const std::shared_ptr<randomx_cache>& cache,
+    std::uint32_t initialization_threads, randomx_flags& flags) {
     if (!cache) throw std::invalid_argument("RandomX dataset requires an initialized cache");
 
     const auto dataset_flags = flags & RANDOMX_FLAG_LARGE_PAGES;
     auto* raw_dataset = randomx_alloc_dataset(dataset_flags);
+    if (raw_dataset == nullptr && dataset_flags != RANDOMX_FLAG_DEFAULT) {
+        flags = static_cast<randomx_flags>(
+            static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
+        std::cerr << "RandomX large pages unavailable; using standard dataset pages.\\n";
+        raw_dataset = randomx_alloc_dataset(RANDOMX_FLAG_DEFAULT);
+    }
     if (raw_dataset == nullptr) {
         throw std::runtime_error("RandomX full dataset allocation failed");
     }
