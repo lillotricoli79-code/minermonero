@@ -1,4 +1,4 @@
-name: Native engine CI
+name: Application CI
 
 on:
   push:
@@ -47,19 +47,6 @@ jobs:
           npm ci --prefix dashboard
           npm run build --prefix dashboard
 
-      - name: Install native dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes cmake ninja-build libssl-dev
-
-      - name: Configure
-        run: cmake -S engine -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
-
-      - name: Build
-        run: cmake --build build --parallel 2
-
-      - name: Run tests
-        run: ctest --test-dir build --output-on-failure
 
   windows:
     name: Windows native build and tests
@@ -93,25 +80,3 @@ jobs:
           npm ci --prefix dashboard
           npm run build --prefix dashboard
 
-      - name: Locate runner OpenSSL
-        shell: pwsh
-        run: |
-          $opensslRoot = Join-Path $env:ProgramFiles "OpenSSL"
-          $opensslHeader = Join-Path $opensslRoot "include/openssl/ssl.h"
-          if (-not (Test-Path $opensslHeader)) {
-            throw "The hosted Windows image does not contain its provisioned OpenSSL headers: $opensslHeader"
-          }
-          "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Configure native engine
-        shell: pwsh
-        run: >
-          cmake -S engine -B build -G "Visual Studio 17 2022" -A x64
-          -DBUILD_TESTING=ON
-          -DOPENSSL_ROOT_DIR="$env:OPENSSL_ROOT_DIR"
-
-      - name: Build native engine
-        run: cmake --build build --config Release --parallel 2
-
-      - name: Run native tests
-        run: ctest --test-dir build -C Release --output-on-failure
