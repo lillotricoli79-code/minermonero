@@ -103,16 +103,23 @@ if ((CMAKE_SIZEOF_VOID_P EQUAL 8) AND (ARCH_ID STREQUAL "x86_64" OR ARCH_ID STRE
   if(MSVC)
     enable_language(ASM_MASM)
     list(APPEND randomx_sources src/jit_compiler_x86_static.asm)
-
     set_property(SOURCE src/jit_compiler_x86_static.asm PROPERTY LANGUAGE ASM_MASM)
-
     set_source_files_properties(src/argon2_avx2.c COMPILE_FLAGS /arch:AVX2)
-
     set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} /DRELWITHDEBINFO")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /DRELWITHDEBINFO")
+  else()
+    list(APPEND randomx_sources src/jit_compiler_x86_static.S)
+    set_property(SOURCE src/jit_compiler_x86_static.S PROPERTY LANGUAGE C)
+    set_property(SOURCE src/jit_compiler_x86_static.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
 
-    # Use the checked-in RandomX x86 assembly configuration.
-  endif()
+    if(ARCH STREQUAL "native")
+      add_flag("-march=native")
+    else()
+      add_flag("-maes")
+      check_c_compiler_flag(-mssse3 HAVE_SSSE3)
+      if(HAVE_SSSE3)
+        set_source_files_properties(src/argon2_ssse3.c COMPILE_FLAGS -mssse3)
+      endif()
       check_c_compiler_flag(-mavx2 HAVE_AVX2)
       if(HAVE_AVX2)
         set_source_files_properties(src/argon2_avx2.c COMPILE_FLAGS -mavx2)
