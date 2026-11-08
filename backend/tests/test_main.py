@@ -14,6 +14,7 @@ from backend.src.main import (
     MinerConfigUpdate,
     MinerController,
     apply_config_update,
+    find_native_engine,
     is_local_api_connection,
     load_config,
     msr_override_enabled,
@@ -79,6 +80,27 @@ class SummaryTests(unittest.TestCase):
             "expired": None, "dropped": None,
         })
         self.assertIsNone(result["uptime_seconds"])
+
+
+class NativeEngineSelectionTests(unittest.TestCase):
+    def test_prefers_newest_project_binary_across_build_directories(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            older = root / "engine" / "build" / "unique-rx.exe"
+            newer = root / "engine" / "build-mingw" / "unique-rx.exe"
+            older.parent.mkdir(parents=True)
+            newer.parent.mkdir(parents=True)
+            older.write_bytes(b"older")
+            newer.write_bytes(b"newer")
+            os.utime(older, (100, 100))
+            os.utime(newer, (200, 200))
+
+            self.assertEqual(find_native_engine(root), newer)
+
+    def test_returns_none_when_no_project_or_path_binary_exists(self):
+        with TemporaryDirectory() as directory:
+            with patch("backend.src.main.shutil.which", return_value=None):
+                self.assertIsNone(find_native_engine(Path(directory)))
 
 
 class ConfigPersistenceTests(unittest.TestCase):
