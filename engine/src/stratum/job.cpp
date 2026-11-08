@@ -60,7 +60,7 @@ std::uint64_t parse_share_target(std::string_view value) {
             (static_cast<std::uint32_t>(bytes[2]) << 16) |
             (static_cast<std::uint32_t>(bytes[3]) << 24);
         if (compact == 0) throw std::invalid_argument("zero pool target");
-        return UINT64_MAX / (UINT32_MAX / static_cast<std::uint64_t>(compact));
+        return static_cast<std::uint64_t>(compact) << 32;
     }
     if (bytes.size() == 8) {
         std::uint64_t target = 0;

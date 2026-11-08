@@ -41,8 +41,10 @@ int main() {
     bool ok = true;
 
     // Pool target and hexadecimal decoding.
-    ok &= check(parse_share_target("ffffffff") == UINT64_MAX,
-                "4-byte little-endian target normalization failed");
+    ok &= check(parse_share_target("ffffffff") == 0xffffffff00000000ULL,
+                "4-byte little-endian target scaling failed");
+    ok &= check(parse_share_target("00000080") == 0x8000000000000000ULL,
+                "4-byte target did not preserve the high-bit difficulty boundary");
     ok &= check(parse_share_target("0100000000000000") == 1,
                 "8-byte little-endian target parsing failed");
     ok &= check(decode_hex("00aF10") == std::vector<std::uint8_t>{0x00, 0xaf, 0x10},
