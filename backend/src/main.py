@@ -396,15 +396,15 @@ class MinerController:
         # The engine field is additive, so existing dashboard/API clients remain compatible.
         with self.log_lock:
             self.log_sequence += 1
+            source = engine or self.engine_kind or "dashboard"
             self.logs.append({
                 "id": self.log_sequence,
                 "time": time.time(),
-                "engine": engine or self.engine_kind or "dashboard",
+                "engine": source,
                 "message": message,
             })
             try:
-                prefix = f"[{engine}] " if engine else ""
-                self.shell_log.write(prefix + message)
+                self.shell_log.write(f"[{source}] {message}")
             except OSError:
                 # A full or unavailable disk must not stop the miner process.
                 pass
@@ -614,7 +614,7 @@ class MinerController:
                     try:
                         payload = json.loads(line[len("UNIQUE_RX_STATUS "):])
                     except json.JSONDecodeError:
-                        self._log("Riga telemetria UNIQUE RX non valida.")
+                        self._log(line, engine_kind)
                     else:
                         if isinstance(payload, dict) and "hashrate" in payload:
                             with self.lock:
