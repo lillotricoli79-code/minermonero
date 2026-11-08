@@ -168,6 +168,8 @@ def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
             "total": int(total_shares) if total_shares is not None else None,
             "stale": None,
             "pending": None,
+            "expired": None,
+            "dropped": None,
         },
         "uptime_seconds": int(uptime) if uptime is not None else None,
         "algorithm": None,

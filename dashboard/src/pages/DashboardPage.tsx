@@ -48,6 +48,8 @@ type Status = {
     total: number | null;
     stale: number | null;
     pending: number | null;
+    expired: number | null;
+    dropped: number | null;
   };
   uptime_seconds: number | null;
   algorithm: string | null;
@@ -584,6 +586,16 @@ function App() {
                             ? "Light"
                             : "—"
                       }
+                    />
+                    <DataRow
+                      icon={<RefreshCw size={15} />}
+                      label="Share scadute"
+                      value={formatCount(status.shares.expired)}
+                    />
+                    <DataRow
+                      icon={<CircleHelp size={15} />}
+                      label="Share perse"
+                      value={formatCount(status.shares.dropped)}
                     />
                     <DataRow
                       icon={<LockKeyhole size={15} />}
