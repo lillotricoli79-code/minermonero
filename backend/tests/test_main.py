@@ -325,6 +325,28 @@ class MinerStatusTests(unittest.TestCase):
 
 
 class MinerShutdownTests(unittest.TestCase):
+    def test_stop_tolerates_child_exit_during_signal_delivery(self):
+        class ExitedProcess:
+            def poll(self):
+                return None
+
+            def send_signal(self, value):
+                raise ProcessLookupError("already exited")
+
+            def terminate(self):
+                raise ProcessLookupError("already exited")
+
+            def wait(self, timeout):
+                return 0
+
+        controller = MinerController()
+        controller.process = ExitedProcess()
+        with patch("backend.src.main.os.name", "nt"), patch(
+            "backend.src.main.signal.CTRL_BREAK_EVENT", 123, create=True
+        ):
+            controller.stop()
+        self.assertIn("Arresto miner completato", controller.recent_logs()[-1]["message"])
+
     def test_windows_stop_requests_graceful_ctrl_break(self):
         class FakeProcess:
             def __init__(self):
