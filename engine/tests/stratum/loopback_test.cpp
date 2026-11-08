@@ -243,9 +243,12 @@ int main() {
         file << config.dump(2);
     }
     std::ostringstream miner_output;
+    std::ostringstream miner_errors;
     auto* previous_output = std::cout.rdbuf(miner_output.rdbuf());
+    auto* previous_error = std::cerr.rdbuf(miner_errors.rdbuf());
     const int result = unique_rx::run_miner(config_path, 1);
     std::cout.rdbuf(previous_output);
+    std::cerr.rdbuf(previous_error);
     pool.join();
     unique_rx::platform::close_socket(listener);
     std::filesystem::remove(config_path);
