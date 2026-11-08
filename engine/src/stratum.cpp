@@ -1,4 +1,5 @@
 #include "stratum.hpp"
+#include "randomx/cache.hpp"
 
 #include <randomx.h>
 
@@ -38,19 +39,12 @@
 namespace unique_rx {
 namespace {
 
-struct CacheRelease {
-    void operator()(randomx_cache* cache) const {
-        if (cache != nullptr) randomx_release_cache(cache);
-    }
-};
-
 struct VmRelease {
     void operator()(randomx_vm* vm) const {
         if (vm != nullptr) randomx_destroy_vm(vm);
     }
 };
 
-using Cache = std::unique_ptr<randomx_cache, CacheRelease>;
 using Vm = std::unique_ptr<randomx_vm, VmRelease>;
 using Hash = std::array<std::uint8_t, RANDOMX_HASH_SIZE>;
 
@@ -388,11 +382,7 @@ int run_miner(const std::filesystem::path& config_path,
 
         const auto install_job = [&](Job next_job) {
             if (!have_seed || next_job.seed != active_seed) {
-                auto* raw_cache = randomx_alloc_cache(flags);
-                if (raw_cache == nullptr) throw std::runtime_error("RandomX cache allocation failed");
-                cache = std::shared_ptr<randomx_cache>(raw_cache,
-                    [](randomx_cache* value) { randomx_release_cache(value); });
-                randomx_init_cache(cache.get(), next_job.seed.data(), next_job.seed.size());
+                cache = create_randomx_cache(next_job.seed, flags);
                 active_seed = next_job.seed;
                 have_seed = true;
             }
