@@ -76,7 +76,7 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
         }
     }
 
-    const auto vm_flags = full_memory
+    auto vm_flags = full_memory
         ? static_cast<randomx_flags>(flags | RANDOMX_FLAG_FULL_MEM)
         : flags;
     std::vector<Vm> vms;
