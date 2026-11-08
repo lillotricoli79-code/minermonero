@@ -352,8 +352,6 @@ int main() {
         miner_output.str().find("disconnected") == std::string::npos ||
         miner_output.str().find("pool login accepted") == std::string::npos ||
         miner_output.str().find("new job local-job") == std::string::npos ||
-        miner_output.str().find("share submitted: job local-job") == std::string::npos ||
-        miner_output.str().find("pool response received for share id") == std::string::npos ||
         miner_output.str().find("share accepted") == std::string::npos ||
         miner_output.str().find("share rejected") == std::string::npos ||
         miner_output.str().find("stale share") == std::string::npos) {
