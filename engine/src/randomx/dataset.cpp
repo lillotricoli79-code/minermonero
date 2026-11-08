@@ -6,6 +6,7 @@
 #include <atomic>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
