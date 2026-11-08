@@ -72,9 +72,11 @@ $gxx = Get-Command g++ -ErrorAction SilentlyContinue
 $ninja = Get-Command ninja -ErrorAction SilentlyContinue
 $mingwMake = Get-Command mingw32-make -ErrorAction SilentlyContinue
 
+$runtimeSearchDirs = @()
 if ($gxx) {
     $compilerBin = Split-Path -Parent $gxx.Source
     $mingwPrefix = Split-Path -Parent $compilerBin
+    $runtimeSearchDirs = @((Join-Path $mingwPrefix "bin"))
     $opensslHeader = Join-Path $mingwPrefix "include\openssl\ssl.h"
     if (-not (Test-Path -LiteralPath $opensslHeader)) {
         throw "OpenSSL MinGW non trovato in $mingwPrefix. Installa mingw-w64-x86_64-openssl."
@@ -110,6 +112,7 @@ else {
     }
     $toolchain = Join-Path $vcpkgRoot "scripts\buildsystems\vcpkg.cmake"
     if (-not (Test-Path $toolchain)) { throw "Toolchain vcpkg non trovata: $toolchain" }
+    $runtimeSearchDirs = @((Join-Path $vcpkgRoot "installed\x64-windows\bin"))
     $vcpkg = Join-Path $vcpkgRoot "vcpkg.exe"
     if (Test-Path $vcpkg) {
         & $vcpkg install openssl:x64-windows
@@ -149,6 +152,66 @@ $exeCandidates = @(
 )
 $exe = $exeCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $exe) { throw "Build completata ma unique-rx.exe non trovato nella cartella di output." }
+
+# Stage non-system runtime DLLs beside the executable. The backend launches the
+# miner from another process, so relying on an interactive MSYS2 PATH is unsafe.
+if ($gxx) {
+    $objdump = Get-Command objdump -ErrorAction SilentlyContinue
+    if (-not $objdump) { throw "objdump MinGW non trovato: impossibile verificare le DLL richieste dal miner." }
+    $exeDirectory = Split-Path -Parent $exe
+    $queue = [System.Collections.Generic.Queue[string]]::new()
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $queue.Enqueue($exe)
+    $systemDlls = @(
+        "advapi32.dll","bcrypt.dll","bcryptprimitives.dll","cfgmgr32.dll",
+        "comctl32.dll","comdlg32.dll","gdi32.dll","imm32.dll","iphlpapi.dll",
+        "kernel32.dll","kernelbase.dll","mpr.dll","msvcrt.dll","ntdll.dll",
+        "ole32.dll","oleaut32.dll","powrprof.dll","psapi.dll","rpcrt4.dll",
+        "sechost.dll","shell32.dll","shlwapi.dll","user32.dll","version.dll",
+        "winmm.dll","ws2_32.dll","wldap32.dll","wtsapi32.dll","ucrtbase.dll"
+    )
+    while ($queue.Count -gt 0) {
+        $current = $queue.Dequeue()
+        if (-not $seen.Add($current)) { continue }
+        $dependencies = @(& $objdump.Source -p $current 2>$null |
+            Select-String -Pattern '^\s*DLL Name:\s*(.+)
+Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
+Write-Host "Miner: $exe"
+Write-Host "Dashboard: $(Join-Path $dashboardDir 'dist\index.html')"
+Write-Host "Log Stratum: $(Join-Path $repoRoot 'unique-rx-stratum.log')"
+Write-Host "Il mining non viene avviato dalla build."
+ |
+            ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() })
+        foreach ($dependency in $dependencies) {
+            if ($dependency -match '^(api-ms-win-|ext-ms-win-)' -or
+                $systemDlls -contains $dependency.ToLowerInvariant()) { continue }
+            $resolved = $null
+            foreach ($directory in $runtimeSearchDirs) {
+                $candidate = Join-Path $directory $dependency
+                if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                    $resolved = $candidate
+                    break
+                }
+            }
+            if (-not $resolved) {
+                throw "Dipendenza DLL MinGW non risolta: $dependency (richiesta da $current)."
+            }
+            $destination = Join-Path $exeDirectory $dependency
+            if (-not (Test-Path -LiteralPath $destination) -or
+                (Get-FileHash $resolved -Algorithm SHA256).Hash -ne
+                (Get-FileHash $destination -Algorithm SHA256).Hash) {
+                Copy-Item -LiteralPath $resolved -Destination $destination -Force
+            }
+            $queue.Enqueue($destination)
+        }
+    }
+} elseif ($runtimeSearchDirs.Count -gt 0) {
+    # vcpkg's x64-windows triplet uses dynamic OpenSSL by default.
+    foreach ($pattern in @("libssl*.dll", "libcrypto*.dll")) {
+        Get-ChildItem -LiteralPath $runtimeSearchDirs[0] -Filter $pattern -File -ErrorAction SilentlyContinue |
+            ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Split-Path -Parent $exe) -Force }
+    }
+}
 
 Write-Host ""
 Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
