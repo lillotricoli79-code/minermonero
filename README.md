@@ -225,6 +225,11 @@ Non definire il progetto “finito” se manca uno dei criteri sopra.
 
 **Regola finale:** queste disposizioni sono permanenti per il progetto. Prima di ogni intervento rileggere il README e preservare il lavoro già presente. Le modifiche devono migliorare il miner reale, non soltanto aggiungere file o dichiarazioni.
 
+### Attribuzioni di codice integrato
+
+- Il percorso AES VAES in `engine/src/randomx/upstream/src/aes_hash_vaes.cpp` deriva da `c0mm4nd/rxminer`, commit `5fe52dde2650c623fd0472804152a94711889dce`; le porzioni RxMiner sono MIT, con testo conservato in `engine/src/randomx/upstream/LICENSES/RXMINER-MIT.txt`.
+- Il codice RandomX upstream resta BSD-3-Clause secondo la licenza conservata in `engine/src/randomx/upstream/LICENSE`.
+
 ## 14. Disposizioni operative esplicite dell'utente — priorità e ritmo
 
 Questa sezione integra le regole precedenti e deve essere rispettata in ogni sessione di lavoro.

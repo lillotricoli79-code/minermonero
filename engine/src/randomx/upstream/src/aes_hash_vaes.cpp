@@ -26,6 +26,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 /* VAES implementation adapted from c0mm4nd/rxminer, commit 5fe52dde2650c623fd0472804152a94711889dce. */
+/* RxMiner implementation portions are MIT-licensed; see ../LICENSES/RXMINER-MIT.txt. */
 /*
  * VAES 256-bit implementations of the RandomX AES fill/hash helpers.
  *
