@@ -571,11 +571,18 @@ class MinerController:
             else:
                 process.terminate()
         except (AttributeError, OSError, ValueError):
-            # The child can exit between poll() and signal delivery.
-            try:
-                process.terminate()
-            except OSError:
-                pass
+            # The child can exit between poll() and signal delivery. If it is
+            # still alive, terminate() bypasses the miner's graceful MSR
+            # restore path, so make that loss of guarantee explicit.
+            if process.poll() is None:
+                self._log(
+                    "Segnale di arresto graduale non disponibile: "
+                    "terminazione forzata; il ripristino MSR non è garantito."
+                )
+                try:
+                    process.terminate()
+                except OSError:
+                    pass
         try:
             process.wait(timeout=30)
         except subprocess.TimeoutExpired:

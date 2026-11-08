@@ -345,7 +345,9 @@ class MinerShutdownTests(unittest.TestCase):
             "backend.src.main.signal.CTRL_BREAK_EVENT", 123, create=True
         ):
             controller.stop()
-        self.assertIn("Arresto miner completato", controller.recent_logs()[-1]["message"])
+        messages = [entry["message"] for entry in controller.recent_logs()]
+        self.assertTrue(any("ripristino MSR non è garantito" in message for message in messages))
+        self.assertIn("Arresto miner completato", messages[-1])
 
     def test_windows_stop_requests_graceful_ctrl_break(self):
         class FakeProcess:
