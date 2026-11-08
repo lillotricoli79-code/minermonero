@@ -201,7 +201,13 @@ $launcherDir = Join-Path $packageDir "scripts\windows"
 New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start.bat") -Destination $launcherDir
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start.ps1") -Destination $launcherDir
-Write-Host "Launcher MSR amministrativo incluso nel pacchetto: $launcherDir"
+@'
+@echo off
+setlocal
+call "%~dp0scripts\windows\start.bat" %*
+exit /b %errorlevel%
+'@ | Set-Content -LiteralPath (Join-Path $packageDir "start.bat") -Encoding ascii
+Write-Host "Avvio rapido start.bat e launcher MSR amministrativo inclusi nel pacchetto."
 Write-Host ""
 Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
 Write-Host "Miner: $exe"
