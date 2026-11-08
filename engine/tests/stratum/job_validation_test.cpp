@@ -82,7 +82,7 @@ int main() {
     job_without_height.erase("height");
     ok &= check(!parse_job(job_without_height).height.has_value(),
                 "missing pool height was reported as a real block height");
-    invalid_job = wire_job;
+    auto invalid_job = wire_job;
     invalid_job["height"] = -1;
     ok &= rejects([&] { parse_job(invalid_job); },
                   "negative block height was accepted");
@@ -115,7 +115,7 @@ int main() {
     changed_seed.seed[0] = 1;
     ok &= check(!job.same_work(changed_seed),
                 "different RandomX seed was treated as the same work");
-    auto invalid_job = wire_job;
+    invalid_job = wire_job;
     invalid_job["blob"] = "00";
     ok &= rejects([&] { parse_job(invalid_job); },
                   "short job blob was accepted");
