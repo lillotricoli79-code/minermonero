@@ -177,9 +177,17 @@ def is_local_api_connection(peer_host: str, request_host: str) -> bool:
 
 
 def msr_override_enabled(randomx: dict[str, Any]) -> bool:
+    """Return True unless MSR is explicitly disabled.
+
+    The native engine does not implement MSR yet, so automatic, fast and
+    custom modes must be routed through XMRig instead of silently mining
+    without the requested CPU register preset.
+    """
     value = randomx.get("wrmsr")
-    if isinstance(value, bool) or value is None:
-        return value is True
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return True
     if isinstance(value, int):
         return value >= 0
     return isinstance(value, list) and bool(value)
@@ -252,7 +260,7 @@ class MinerController:
             raise HTTPException(status_code=400, detail="Inserisci il wallet prima di avviare")
         if not str(pool.get("url", "")).strip():
             raise HTTPException(status_code=400, detail="Configura il pool prima di avviare")
-        msr_fast = msr_override_enabled(config.get("randomx") or {})
+        msr_requires_xmrig = msr_override_enabled(config.get("randomx") or {})
         native_candidates = [
             shutil.which("unique-rx"),
             str(ROOT / "engine" / "build" / "unique-rx"),
@@ -261,7 +269,7 @@ class MinerController:
             (path for path in native_candidates if path and Path(path).is_file()),
             None,
         )
-        if native_path and not msr_fast:
+        if native_path and not msr_requires_xmrig:
             executable_path = native_path
             command = [native_path, "--mine", str(CONFIG_PATH)]
             engine_kind = "unique-rx"
@@ -274,8 +282,8 @@ class MinerController:
                         break
             if not executable_path:
                 detail = "Compila engine/unique-rx o installa XMRig"
-                if msr_fast:
-                    detail = "MSR Fast richiede XMRig finché il preset non è supportato dal motore nativo"
+                if msr_requires_xmrig:
+                    detail = "MSR automatico, Fast o personalizzato richiede XMRig finché il motore nativo non implementa MSR"
                 raise HTTPException(status_code=400, detail=detail)
             command = [str(executable_path), "-c", str(CONFIG_PATH)]
             engine_kind = "xmrig"
@@ -304,8 +312,12 @@ class MinerController:
                 self.engine_kind = engine_kind
                 self.native_status = None
                 process = self.process
-            if msr_fast and engine_kind == "xmrig":
-                self._log("Avvio XMRig: MSR Fast usa il preset CPU e ripristina i registri all'uscita.")
+            if engine_kind == "xmrig" and msr_requires_xmrig:
+                mode = public_config(config)["msr_mode"]
+                self._log(
+                    f"Avvio XMRig: modalità MSR {mode}; il motore nativo non ha ancora "
+                    "il supporto MSR completo."
+                )
             else:
                 self._log(f"Avvio {engine_kind} richiesto dall'utente.")
             threading.Thread(target=self._read_output, args=(process,), daemon=True).start()
