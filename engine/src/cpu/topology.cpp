@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef _WIN32_WINNT
@@ -13,6 +16,7 @@
 #endif
 #include <windows.h>
 #elif defined(__linux__)
+#include <fstream>
 #include <sched.h>
 #endif
 
@@ -37,20 +41,70 @@ std::uint32_t available_logical_threads() {
     return std::max(1U, std::thread::hardware_concurrency());
 }
 
+// RandomX benefits from starting with one worker per physical core. This
+// follows the physical-core-first policy used by mature RandomX miners rather
+// than assuming that half of every machine's logical CPUs are physical cores.
+std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
+#ifdef _WIN32
+    DWORD bytes = 0;
+    GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &bytes);
+    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER && bytes != 0) {
+        std::vector<unsigned char> storage(bytes);
+        auto* item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(
+            storage.data());
+        if (GetLogicalProcessorInformationEx(RelationProcessorCore, item, &bytes)) {
+            std::uint32_t count = 0;
+            DWORD offset = 0;
+            while (offset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) <= bytes) {
+                item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(
+                    storage.data() + offset);
+                if (item->Size == 0 || offset + item->Size > bytes) break;
+                if (item->Relationship == RelationProcessorCore) ++count;
+                offset += item->Size;
+            }
+            if (count != 0) return std::min(count, logical_fallback);
+        }
+    }
+#elif defined(__linux__)
+    cpu_set_t allowed;
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
+        std::set<std::pair<int, int>> cores;
+        for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+            if (!CPU_ISSET(cpu, &allowed)) continue;
+            const auto root = std::string("/sys/devices/system/cpu/cpu") +
+                std::to_string(cpu) + "/topology/";
+            std::ifstream package_file(root + "physical_package_id");
+            std::ifstream core_file(root + "core_id");
+            int package = 0;
+            int core = 0;
+            if (package_file >> package && core_file >> core) {
+                cores.emplace(package, core);
+            }
+        }
+        if (!cores.empty()) {
+            return std::min(static_cast<std::uint32_t>(cores.size()),
+                            logical_fallback);
+        }
+    }
+#endif
+    // If the OS does not expose physical topology, avoid an arbitrary 50%
+    // throttle: use the available logical count and let the user tune it.
+    return std::max(1U, logical_fallback);
+}
+
 } // namespace
 
 std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
     if (!cpu_config.value("enabled", true)) return 0;
 
     const auto logical_threads = available_logical_threads();
+    const auto physical_cores = available_physical_cores(logical_threads);
     const auto hint = std::min(cpu_config.value("max-threads-hint", 0U), 100U);
-    const auto selected = hint == 0
-        ? std::max(1U, logical_threads / 2)
-        : std::clamp(static_cast<std::uint32_t>(
-              std::lround(logical_threads * (hint / 100.0))),
-              1U, logical_threads);
+    if (hint == 0) return std::max(1U, physical_cores);
 
-    return std::min(selected, 64U);
+    return std::clamp(static_cast<std::uint32_t>(
+        std::lround(logical_threads * (hint / 100.0))),
+        1U, logical_threads);
 }
 
 } // namespace unique_rx
