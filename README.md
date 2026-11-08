@@ -34,6 +34,16 @@ Riferimenti già individuati:
 - **XMRig**: sorgente di integrazione per componenti reali di CPU, RandomX, MSR, Stratum, pool, TLS, strategie e gestione miner; licenza GPL-3.0. Se il codice XMRig viene incorporato o collegato nel miner distribuito, trattare l'opera combinata secondo gli obblighi GPL applicabili: mantenere copyright e licenza, rendere disponibile il corrispondente sorgente completo e le modifiche, rispettare gli obblighi di distribuzione e verificare la compatibilità delle altre componenti. Non rimuovere o aggirare tali obblighi.
 - **XMR-Miner**: non copiare codice finché non è individuata una licenza esplicita che autorizzi il riutilizzo.
 
+### Log e telemetria: attribuzioni e limiti
+
+- **RxMiner** (c0mm4nd/rxminer, MIT): riferimento per output console, file append, livelli, colori e diagnostica di rete. Unique RX mantiene un logger C++ proprio; la rotazione dei file (8 MiB, tre archivi) è un'implementazione indipendente, non una copia del logger Rust.
+- **NyxRX** (MaleficentAd1803/nyxrx, MIT secondo il README del progetto): riferimento funzionale per log rotanti, telemetria multi-finestra, stato pool/share e diagnostica MSR. Le funzioni vengono implementate nel motore esistente; non è stato importato il suo TUI o il suo backend.
+- **XMRig** (GPL-3.0): riferimento di compatibilità per protocollo e comportamento operativo. Non è stato copiato il suo sottosistema logger né codice GPL nel motore distribuito; le funzioni di diagnostica sono implementate indipendentemente. Un'integrazione futura di codice XMRig richiederebbe una revisione completa degli obblighi GPL.
+- **XMR-Miner**: il nome da solo non identifica un repository/licenza verificabile. Nessun codice o logger viene attribuito o copiato da questo progetto finché non è identificata la sorgente esatta e una licenza compatibile.
+- **RandomX upstream** (BSD-3-Clause): riferimento per la correttezza del motore e dei vettori hash, non una sorgente di messaggi shell di un miner.
+
+La shell nativa emette messaggi con timestamp, livello e categoria; il file unique-rx-stratum.log viene mantenuto accanto alla configurazione e ruota automaticamente. La dashboard acquisisce l'output reale del processo e i record UNIQUE_RX_STATUS; non genera hash rate o share sintetiche.
+
 Regole:
 - “Open source” non significa assenza di condizioni: verificare la licenza di ogni sorgente.
 - L'integrazione può comprendere interi moduli o sottosistemi upstream quando sono necessari al funzionamento del mix e la licenza lo consente. Non copiare repository alla cieca: selezionare i componenti necessari, collegarli realmente all'applicazione, conservarne gli avvisi e verificare dipendenze e obblighi di distribuzione.
