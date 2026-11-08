@@ -5,27 +5,22 @@
 #include <iostream>
 
 int main() {
-    // Intel mainstream Core/Xeon generations: the preset must not be
-    // restricted to the developer's i7-6700K model.
-    constexpr std::array<std::uint32_t, 12> intel_models{
-        0x1a, 0x2a, 0x3a, 0x3c, 0x4e, 0x5e,
-        0x8e, 0x9e, 0x97, 0x9a, 0xb7, 0xc5
-    };
-    for (const auto model : intel_models) {
-        const auto intel = unique_rx::msr_preset_for_cpu("GenuineIntel", 6, model);
-        if (!intel || intel->name != "intel" || intel->writes.size() != 1 ||
-            intel->writes[0].register_id != 0x1a4 ||
-            intel->writes[0].value != 0x0f || intel->writes[0].mask != 0x0f) {
-            std::cerr << "Intel family 6 MSR preset selection failed for model "
-                      << std::hex << model << "\n";
-            return 1;
-        }
+    const auto skylake = unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x5e);
+    if (!skylake || skylake->name != "intel_skylake_s" ||
+        skylake->writes.size() != 1 ||
+        skylake->writes[0].register_id != 0x1a4 ||
+        skylake->writes[0].value != 0x0f ||
+        skylake->writes[0].mask != 0x0f) {
+        std::cerr << "Intel Skylake-S MSR preset selection failed\n";
+        return 1;
     }
 
-    if (unique_rx::msr_preset_for_cpu("GenuineIntel", 5, 0x04) != std::nullopt ||
+    if (unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x8e) != std::nullopt ||
+        unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x9e) != std::nullopt ||
+        unique_rx::msr_preset_for_cpu("GenuineIntel", 5, 0x04) != std::nullopt ||
         unique_rx::msr_preset_for_cpu("GenuineIntel", 0x0f, 0x03) != std::nullopt ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 6, 0x5e) != std::nullopt) {
-        std::cerr << "Unsupported Intel/AMD family received Intel MSR preset\n";
+        std::cerr << "Unverified Intel/AMD CPU received Intel MSR preset\n";
         return 1;
     }
 
