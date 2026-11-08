@@ -35,6 +35,13 @@ if(WIN32)
 endif()
 
 if(BUILD_TESTING)
+  add_test(NAME unique-rx-cli-rejects-invalid-max-hashes
+    COMMAND unique-rx --mine config.json not-a-number)
+  set_tests_properties(unique-rx-cli-rejects-invalid-max-hashes PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME unique-rx-cli-rejects-extra-mine-arguments
+    COMMAND unique-rx --mine config.json 100 extra)
+  set_tests_properties(unique-rx-cli-rejects-extra-mine-arguments PROPERTIES WILL_FAIL TRUE)
+
   add_executable(unique-rx-cpu-topology-tests tests/cpu/topology_test.cpp src/cpu/topology.cpp)
   target_compile_features(unique-rx-cpu-topology-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-cpu-topology-tests PRIVATE src "${randomx_SOURCE_DIR}/src")
