@@ -498,11 +498,12 @@ class LocalApiTests(unittest.TestCase):
             self.assertTrue(native_msr_available(None))
 
     def test_native_msr_availability_returns_false_for_empty_process_affinity(self):
+        # Exercise Linux explicitly without changing pathlib's platform selector.
         with patch("backend.src.main.Path.read_text", return_value="0-3"), patch(
             "backend.src.main.os.sched_getaffinity", return_value=set(), create=True
         ), patch("backend.src.main.Path.is_file", return_value=True), patch(
             "backend.src.main.os.access", return_value=True
-        ), patch("backend.src.main.os.name", "posix"):
+        ), patch("backend.src.main.sys.platform", "linux"):
             self.assertFalse(native_msr_available(None))
 
     def test_fast_msr_config_uses_native_automatic_profile(self):
