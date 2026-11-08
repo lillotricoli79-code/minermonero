@@ -21,6 +21,7 @@
 #endif
 #include <windows.h>
 #elif defined(__linux__)
+#include "platform/linux_cpu_set.hpp"
 #include <pthread.h>
 #include <sched.h>
 #include <filesystem>
@@ -93,16 +94,16 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
     return result;
 }
 #elif defined(__linux__)
-inline std::vector<unsigned int> ordered_processors(const cpu_set_t& allowed) {
+inline std::vector<unsigned int> ordered_processors(
+    const std::vector<unsigned int>& allowed) {
     // NUMA node is the outer ordering key: workers are spread over memory
     // domains before SMT siblings are considered within each physical core.
     std::map<std::tuple<int, int, int>, std::vector<unsigned int>> cores;
-    for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
-        if (!CPU_ISSET(cpu, &allowed)) continue;
+    for (const auto cpu : allowed) {
         const auto cpu_root = std::filesystem::path("/sys/devices/system/cpu") /
             ("cpu" + std::to_string(cpu));
         const auto topology = cpu_root / "topology";
-        int package = -1, core = cpu, node = -1;
+        int package = -1, core = static_cast<int>(cpu), node = -1;
         std::ifstream(topology / "physical_package_id") >> package;
         std::ifstream(topology / "core_id") >> core;
         std::error_code ec;
@@ -115,7 +116,7 @@ inline std::vector<unsigned int> ordered_processors(const cpu_set_t& allowed) {
                 break;
             }
         }
-        cores[{node, package, core}].push_back(static_cast<unsigned int>(cpu));
+        cores[{node, package, core}].push_back(cpu);
     }
     std::vector<std::vector<unsigned int>> siblings;
     siblings.reserve(cores.size());
@@ -149,14 +150,10 @@ inline bool pin_current_thread(std::uint32_t logical_cpu) noexcept {
         affinity.Mask = static_cast<KAFFINITY>(1) << processors[logical_cpu].second;
         return SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr) != 0;
 #elif defined(__linux__)
-        cpu_set_t allowed;
-        if (sched_getaffinity(0, sizeof(allowed), &allowed) != 0) return false;
+        const auto allowed = linux_cpu::allowed_cpus();
         const auto processors = ordered_processors(allowed);
         if (logical_cpu >= processors.size()) return false;
-        cpu_set_t affinity;
-        CPU_ZERO(&affinity);
-        CPU_SET(processors[logical_cpu], &affinity);
-        return pthread_setaffinity_np(pthread_self(), sizeof(affinity), &affinity) == 0;
+        return linux_cpu::pin_current_thread(processors[logical_cpu]);
 #else
         (void)logical_cpu;
         return false;

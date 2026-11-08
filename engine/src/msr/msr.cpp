@@ -37,6 +37,9 @@
 #include <cpuid.h>
 #endif
 #else
+#ifdef __linux__
+#include "platform/linux_cpu_set.hpp"
+#endif
 #include <cerrno>
 #include <fcntl.h>
 #include <thread>
@@ -209,12 +212,12 @@ std::vector<unsigned int> online_cpu_ids() {
     }
 
     // Always intersect with the process cpuset, including when the kernel
-    // supplied the online list. Returning early here would tune host CPUs
-    // outside a container or a restricted service affinity mask.
-    cpu_set_t allowed;
-    if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
+    // supplied the online list. Use a dynamically sized mask so MSR tuning
+    // cannot silently skip CPUs above the legacy CPU_SETSIZE limit.
+    const auto allowed = platform::linux_cpu::allowed_cpus();
+    if (!allowed.empty()) {
         cpus.erase(std::remove_if(cpus.begin(), cpus.end(), [&](unsigned int cpu) {
-            return cpu >= CPU_SETSIZE || !CPU_ISSET(cpu, &allowed);
+            return std::find(allowed.begin(), allowed.end(), cpu) == allowed.end();
         }), cpus.end());
     }
     return cpus;
