@@ -66,6 +66,23 @@ int main() {
     ok &= check(job.id == "job-1" && job.blob.size() == 76 &&
                     job.target == UINT64_MAX,
                 "valid rx/0 job did not parse");
+
+    auto target_update = job;
+    target_update.target /= 2;
+    ok &= check(job.same_work(target_update),
+                "target-only update incorrectly changed job identity");
+    auto changed_job_id = job;
+    changed_job_id.id = "job-2";
+    ok &= check(!job.same_work(changed_job_id),
+                "different job identifier was treated as the same work");
+    auto changed_blob = job;
+    changed_blob.blob[0] = 1;
+    ok &= check(!job.same_work(changed_blob),
+                "different job blob was treated as the same work");
+    auto changed_seed = job;
+    changed_seed.seed[0] = 1;
+    ok &= check(!job.same_work(changed_seed),
+                "different RandomX seed was treated as the same work");
     auto invalid_job = wire_job;
     invalid_job["blob"] = "00";
     ok &= rejects([&] { parse_job(invalid_job); },
