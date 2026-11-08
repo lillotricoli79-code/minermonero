@@ -160,6 +160,7 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
     std::cout << "UNIQUE RX · RandomX benchmark\n"
               << "Mode: " << (use_jit ? "JIT" : "interpreter") << "\n"
               << "Lanes: " << lanes << "\n"
+              << "Memory: " << (full_memory ? "full dataset" : "light reference") << "\n"
               << "RandomX flags: 0x" << std::hex
               << static_cast<unsigned int>(vm_flags) << std::dec << "\n"
               << "Hashes: " << total_hashes << "\n"
