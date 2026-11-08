@@ -1,4 +1,5 @@
 #include "core/mining.hpp"
+#include "platform/affinity.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -37,6 +38,10 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     if (worker_count == 0 || worker_id >= worker_count) {
         state.report_worker_error("invalid CPU worker index or worker count");
         return;
+    }
+    if (!platform::pin_current_thread(worker_id)) {
+        std::cerr << "CPU worker " << worker_id
+                  << ": affinity unavailable; continuing without pinning\\n";
     }
 
     Vm vm;
