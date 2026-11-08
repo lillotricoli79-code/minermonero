@@ -11,7 +11,7 @@ std::shared_ptr<randomx_cache> create_randomx_cache(
     if (cache == nullptr && (flags & RANDOMX_FLAG_LARGE_PAGES) != 0) {
         flags = static_cast<randomx_flags>(
             static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
-        std::cerr << "RandomX large pages unavailable; using standard cache pages.\\n";
+        std::cerr << "RandomX large pages unavailable; using standard cache pages.\n";
         cache = randomx_alloc_cache(flags);
     }
     if (cache == nullptr) {
