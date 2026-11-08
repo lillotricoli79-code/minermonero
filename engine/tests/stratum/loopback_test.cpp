@@ -149,6 +149,10 @@ int main() {
     std::atomic<bool> server_ok{false};
     std::thread pool([&] {
         try {
+            if (!unique_rx::platform::wait_socket(
+                    listener, unique_rx::platform::kReadEvent, 20000)) {
+                return;
+            }
             const Socket client = accept(listener, nullptr, nullptr);
             if (!unique_rx::platform::socket_valid(client)) return;
             set_receive_timeout(client);
