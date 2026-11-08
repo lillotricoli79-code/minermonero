@@ -138,6 +138,9 @@ int run_miner(const std::filesystem::path& config_path,
         std::chrono::seconds retry_delay{1};
 
         const auto install_job = [&](Job next_job) {
+            const auto previous_work = state.current_work();
+            const bool same_work = previous_work &&
+                previous_work->job.same_work(next_job);
             if (!have_seed || next_job.seed != active_seed) {
                 cache = create_randomx_cache(next_job.seed, flags);
                 dataset.reset();
@@ -149,8 +152,10 @@ int run_miner(const std::filesystem::path& config_path,
                 active_seed = next_job.seed;
                 have_seed = true;
             }
+            const auto next_generation =
+                same_work ? previous_work->generation : ++generation;
             auto work = std::make_shared<MiningWork>(MiningWork{
-                std::move(next_job), cache, dataset, flags, full_memory, ++generation,
+                std::move(next_job), cache, dataset, flags, full_memory, next_generation,
             });
             state.set_work(std::move(work));
         };
