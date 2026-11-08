@@ -19,7 +19,9 @@ using Hash = std::array<std::uint8_t, RANDOMX_HASH_SIZE>;
 struct MiningWork {
     Job job;
     std::shared_ptr<randomx_cache> cache;
+    std::shared_ptr<randomx_dataset> dataset;
     randomx_flags flags;
+    bool full_memory;
     std::uint64_t generation;
 };
 
