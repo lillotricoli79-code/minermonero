@@ -53,7 +53,7 @@ Per lo sviluppo, avviare il backend e il frontend in due terminali:
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
+.venv/bin/uvicorn backend.src.main:app --host 127.0.0.1 --port 8000
 ```
 
 ```sh
