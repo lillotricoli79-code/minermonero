@@ -71,6 +71,8 @@ namespace randomx {
 		int registerUsage[RegistersCount];
 		uint8_t* code;
 		size_t mappedSize = 0;
+		bool hasBmi2 = false;
+		int prefetchMode = 1;
 		int32_t codePos;
 
 		void generateProgramPrologue(Program&, ProgramConfiguration&);

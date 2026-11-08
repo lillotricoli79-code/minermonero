@@ -78,6 +78,8 @@ Comportamento richiesto:
 - `off` disabilita le scritture MSR. `custom` richiede il backend XMRig esterno e non viene eseguita dal motore nativo. Il preset nativo è facoltativo: CPU non supportate, driver o permessi assenti non devono impedire l'avvio del mining.
 
 MSR è una funzione di ottimizzazione **facoltativa**, mai un requisito per avviare il miner.
+- `cpu.prefetch-mode` controlla il prefetch del scratchpad nel JIT x86: `0` disattivato, `1` T0 (predefinito), `2` NTA, `3` caricamento demand. La scelta è configurabile e non implica un vantaggio prestazionale senza benchmark sul processore effettivo.
+
 - `cpu.jit-huge-pages` abilita in modo facoltativo le pagine esplicite per il buffer JIT x86; se la prenotazione o i privilegi non sono disponibili, `allocJitMemory` ripiega automaticamente sulle pagine standard/THP. È disattivato per impostazione predefinita.
 
 

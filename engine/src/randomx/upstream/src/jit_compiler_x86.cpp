@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "program.hpp"
 #include "reciprocal.h"
 #include "virtual_memory.h"
+#include "cpu.hpp"
 
 namespace randomx {
 	/*
@@ -224,6 +225,8 @@ namespace randomx {
 	}
 
 	JitCompilerX86::JitCompilerX86() {
+		hasBmi2 = cpu.hasBmi2();
+		prefetchMode = rxm_get_prefetch_mode();
 		code = (uint8_t*)allocJitMemory(CodeSize, &mappedSize);
 		if (code == nullptr)
 			throw std::runtime_error("allocJitMemory");
@@ -328,7 +331,32 @@ namespace randomx {
 		emitByte(0xc0 + pcfg.readReg0);
 		emit(REX_XOR_RAX_R64);
 		emitByte(0xc0 + pcfg.readReg1);
-		emit(ADDR(randomx_prefetch_scratchpad), ADDR(randomx_prefetch_scratchpad_end) - ADDR(randomx_prefetch_scratchpad));
+		if (hasBmi2) {
+            const uint8_t rotate[] = {0xc4, 0xe3, 0xfb, 0xf0, 0xd0, 0x20};
+            emit(rotate); // rorx rdx, rax, 32
+        } else {
+            const uint8_t split[] = {0x48, 0x89, 0xc2, 0x48, 0xc1, 0xea, 0x20};
+            emit(split); // mov rdx, rax; shr rdx, 32
+        }
+        emit(AND_EAX_I);
+        emit32(RANDOMX_SCRATCHPAD_L3 - CacheLineSize);
+        const auto prefetch = [this](uint8_t sib) {
+            if (prefetchMode == 0) return;
+            if (prefetchMode == 3) {
+                const uint8_t load[] = {0x48, 0x8b, 0x0c};
+                emit(load); // mov rcx, [rsi + index]
+            } else {
+                emitByte(0x0f);
+                emitByte(0x18);
+                emitByte(prefetchMode == 2 ? 0x04 : 0x0c); // NTA or T0
+            }
+            emitByte(sib);
+        };
+        prefetch(0x06);
+        const uint8_t mask[] = {0x81, 0xe2};
+        emit(mask);
+        emit32(RANDOMX_SCRATCHPAD_L3 - CacheLineSize);
+        prefetch(0x16);
 		memcpy(code + codePos, codeLoopStore, loopStoreSize);
 		codePos += loopStoreSize;
 		emit(SUB_EBX);

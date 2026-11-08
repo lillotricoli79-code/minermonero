@@ -310,7 +310,7 @@ void rxm_set_jit_huge_pages(int enabled) {
     RXM_STORE(&rxm_jit_huge_pages, enabled != 0);
 }
 void rxm_set_prefetch_mode(int mode) {
-    RXM_STORE(&rxm_prefetch_mode, mode);
+    RXM_STORE(&rxm_prefetch_mode, mode < 0 ? 0 : (mode > 3 ? 3 : mode));
 }
 int rxm_get_prefetch_mode(void) {
     return RXM_LOAD(&rxm_prefetch_mode);

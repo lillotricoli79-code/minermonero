@@ -45,8 +45,11 @@ namespace randomx {
 		bool hasVaes() const {
 			return vaes_;
 		}
+		bool hasBmi2() const {
+			return bmi2_;
+		}
 	private:
-		bool aes_, ssse3_, avx2_, vaes_;
+		bool aes_, ssse3_, avx2_, vaes_, bmi2_;
 	};
 
 	extern const Cpu cpu;

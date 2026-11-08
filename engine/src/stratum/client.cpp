@@ -141,6 +141,10 @@ int run_miner(const std::filesystem::path& config_path,
         // Explicit JIT huge pages are optional and fall back to normal pages
         // when the OS privilege/reservation is unavailable.
         rxm_set_jit_huge_pages(cpu_config.value("jit-huge-pages", false) ? 1 : 0);
+        const auto prefetch_mode = cpu_config.value("prefetch-mode", 1);
+        if (prefetch_mode < 0 || prefetch_mode > 3)
+            throw std::runtime_error("cpu.prefetch-mode must be between 0 and 3");
+        rxm_set_prefetch_mode(prefetch_mode);
         std::uint64_t generation = 0;
         const auto pool_threads = pools.front().threads;
         // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.

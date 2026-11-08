@@ -59,7 +59,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace randomx {
 
-	Cpu::Cpu() : aes_(false), ssse3_(false), avx2_(false), vaes_(false) {
+	Cpu::Cpu() : aes_(false), ssse3_(false), avx2_(false), vaes_(false), bmi2_(false) {
 #ifdef HAVE_CPUID
 		int info[4];
 		cpuid(info, 0);
@@ -74,6 +74,7 @@ namespace randomx {
 		if (nIds >= 0x00000007) {
 			cpuid(info, 0x00000007);
 			avx2_ = avxState && (info[1] & (1 << 5)) != 0;
+			bmi2_ = (info[1] & (1 << 8)) != 0;
 			vaes_ = avx2_ && (info[2] & (1 << 9)) != 0;
 		}
 #elif defined(__aarch64__)
