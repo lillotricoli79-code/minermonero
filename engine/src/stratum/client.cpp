@@ -212,7 +212,7 @@ int run_miner(const std::filesystem::path& config_path,
             pending.clear();
             std::uint64_t next_id = 2;
             std::string session_id;
-            bool session_nicehash = false;
+            bool session_nicehash = pool.nicehash;
             auto next_keepalive = Clock::time_point::max();
             try {
                 StratumTransport transport;
@@ -320,7 +320,7 @@ int run_miner(const std::filesystem::path& config_path,
                         } else if (parse_rpc_response_id(message).value_or(0) == 1) {
                             session_id = validate_login_response(message);
                             const auto& result = message.at("result");
-                            session_nicehash = login_advertises_nicehash(result);
+                            session_nicehash = pool.nicehash || login_advertises_nicehash(result);
                             log_event("LOGIN_ACCEPTED", {{"session_id", session_id},
                                 {"job_id", result.at("job").value("job_id", std::string())}});
                             if (pool.keepalive) {
