@@ -85,7 +85,8 @@ int run_miner(const std::filesystem::path& config_path,
 
     using Clock = std::chrono::steady_clock;
     constexpr auto kShareResponseTimeout = std::chrono::seconds(60);
-    constexpr std::size_t kMaximumPendingShares = 4096;
+    // Match RxMiner's 8192-entry pending-submit backpressure ceiling.
+    constexpr std::size_t kMaximumPendingShares = 8192;
 
     try {
         std::ifstream file(config_path);
