@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -136,7 +137,7 @@ int main() {
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     address.sin_port = 0;
-    if (bind_loopback(listener, address) != 0 || listen(listener, 1) != 0) {
+    if (bind_loopback(listener, address) != 0 || listen(listener, 2) != 0) {
         unique_rx::platform::close_socket(listener);
         return 1;
     }
@@ -186,38 +187,30 @@ int main() {
     std::atomic<bool> server_ok{false};
     std::jthread pool([&] {
         try {
-            if (!unique_rx::platform::wait_socket(
-                    listener, unique_rx::platform::kReadEvent, 20000)) {
-                return;
-            }
-            const Socket client = accept(listener, nullptr, nullptr);
-            if (!unique_rx::platform::socket_valid(client)) return;
-            if (!set_receive_timeout(client)) {
-                unique_rx::platform::close_socket(client);
-                return;
-            }
-            std::string line;
-            if (!read_line(client, line)) {
-                unique_rx::platform::close_socket(client);
-                return;
-            }
-            const auto login = nlohmann::json::parse(line);
-            const bool valid_login =
-                login.value("jsonrpc", std::string()) == "2.0" &&
-                login.value("id", 0) == 1 &&
-                login.value("method", std::string()) == "login" &&
-                login.contains("params") && login["params"].is_object() &&
-                login["params"].value("login", std::string()) == "loopback-test-wallet" &&
-                login["params"].value("pass", std::string()) == "x" &&
-                login["params"].value("rigid", std::string()) == "test" &&
-                login["params"].contains("algo") &&
-                login["params"]["algo"].is_array() &&
-                login["params"]["algo"] == nlohmann::json::array({"rx/0"});
-            if (!valid_login) {
-                unique_rx::platform::close_socket(client);
-                return;
-            }
-
+            bool first_session_ok = false;
+            bool second_session_ok = false;
+            const auto valid_login_message = [](const nlohmann::json& login) {
+                return login.value("jsonrpc", std::string()) == "2.0" &&
+                    login.value("id", 0) == 1 &&
+                    login.value("method", std::string()) == "login" &&
+                    login.contains("params") && login["params"].is_object() &&
+                    login["params"].value("login", std::string()) == "loopback-test-wallet" &&
+                    login["params"].value("pass", std::string()) == "x" &&
+                    login["params"].value("rigid", std::string()) == "test" &&
+                    login["params"].contains("algo") &&
+                    login["params"]["algo"].is_array() &&
+                    login["params"]["algo"] == nlohmann::json::array({"rx/0"});
+            };
+            const auto valid_submit_message = [](const nlohmann::json& submit) {
+                return submit.value("jsonrpc", std::string()) == "2.0" &&
+                    submit.value("id", 0ULL) > 1 &&
+                    submit.value("method", std::string()) == "submit" &&
+                    submit.contains("params") && submit["params"].is_object() &&
+                    submit["params"].value("id", std::string()) == "local-session" &&
+                    submit["params"].value("job_id", std::string()) == "local-job" &&
+                    is_hex_string(submit["params"].value("nonce", std::string()), 8) &&
+                    is_hex_string(submit["params"].value("result", std::string()), 64);
+            };
             const nlohmann::json job{
                 {"job_id", "local-job"},
                 {"blob", std::string(76 * 2, '0')},
@@ -226,63 +219,124 @@ int main() {
                 {"height", 1},
                 {"algo", "rx/0"},
             };
-            const nlohmann::json response{
+            const nlohmann::json login_response{
                 {"id", 1}, {"jsonrpc", "2.0"},
                 {"result", {{"id", "local-session"}, {"status", "OK"}, {"job", job}}},
             };
-            line.clear();
-            if (!send_all(client, response.dump() + "\n")) {
-                unique_rx::platform::close_socket(client);
-                return;
-            }
-            bool valid_submits = true;
-            for (int index = 0; index < 3; ++index) {
-                line.clear();
+
+            // First authenticated session: accept one share, then deliberately
+            // drop the established TCP connection to exercise reconnect handling.
+            for (int connection_index = 0; connection_index < 2; ++connection_index) {
+                if (!unique_rx::platform::wait_socket(
+                        listener, unique_rx::platform::kReadEvent, 20000)) {
+                    return;
+                }
+                const Socket client = accept(listener, nullptr, nullptr);
+                if (!unique_rx::platform::socket_valid(client)) return;
+                if (!set_receive_timeout(client)) {
+                    unique_rx::platform::close_socket(client);
+                    return;
+                }
+                std::string line;
                 if (!read_line(client, line)) {
-                    valid_submits = false;
-                    break;
+                    unique_rx::platform::close_socket(client);
+                    return;
                 }
-                const auto submit = nlohmann::json::parse(line);
-                const bool valid_submit =
-                    submit.value("jsonrpc", std::string()) == "2.0" &&
-                    submit.value("id", 0ULL) > 1 &&
-                    submit.value("method", std::string()) == "submit" &&
-                    submit.contains("params") && submit["params"].is_object() &&
-                    submit["params"].value("id", std::string()) == "local-session" &&
-                    submit["params"].value("job_id", std::string()) == "local-job" &&
-                    is_hex_string(submit["params"].value("nonce", std::string()), 8) &&
-                    is_hex_string(submit["params"].value("result", std::string()), 64);
-                if (!valid_submit) {
-                    valid_submits = false;
-                    break;
+                const auto login = nlohmann::json::parse(line);
+                if (!valid_login_message(login) ||
+                    !send_all(client, login_response.dump() + "\n")) {
+                    unique_rx::platform::close_socket(client);
+                    return;
                 }
-                const nlohmann::json submit_response = index == 0
-                    ? nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                                     {"error", nlohmann::json::array({-1, "Stale share", nullptr})}}
-                    : index == 1
+
+                if (connection_index == 0) {
+                    line.clear();
+                    if (!read_line(client, line)) {
+                        unique_rx::platform::close_socket(client);
+                        return;
+                    }
+                    const auto submit = nlohmann::json::parse(line);
+                    if (!valid_submit_message(submit)) {
+                        unique_rx::platform::close_socket(client);
+                        return;
+                    }
+                    const nlohmann::json accepted{
+                        {"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                        {"result", {{"status", "OK"}}},
+                    };
+                    first_session_ok = send_all(client, accepted.dump() + "\n");
+                    unique_rx::platform::close_socket(client);
+                    if (!first_session_ok) return;
+                    continue;
+                }
+
+                bool valid_submits = true;
+                for (int index = 0; index < 3; ++index) {
+                    line.clear();
+                    if (!read_line(client, line)) {
+                        valid_submits = false;
+                        break;
+                    }
+                    const auto submit = nlohmann::json::parse(line);
+                    if (!valid_submit_message(submit)) {
+                        valid_submits = false;
+                        break;
+                    }
+                    const nlohmann::json submit_response = index == 0
                         ? nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                                         {"error", nlohmann::json::array({1, "Low difficulty share", nullptr})}}
-                        : nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                                         {"result", {{"status", "OK"}}}};
-                if (!send_all(client, submit_response.dump() + "\n")) {
-                    valid_submits = false;
-                    break;
+                                         {"error", nlohmann::json::array({-1, "Stale share", nullptr})}}
+                        : index == 1
+                            ? nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                                             {"error", nlohmann::json::array({1, "Low difficulty share", nullptr})}}
+                            : nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                                             {"result", {{"status", "OK"}}}};
+                    if (!send_all(client, submit_response.dump() + "\n")) {
+                        valid_submits = false;
+                        break;
+                    }
                 }
+                if (!valid_submits) {
+                    unique_rx::platform::close_socket(client);
+                    return;
+                }
+                second_session_ok = true;
+
+                // Stop only after the second authenticated session has submitted
+                // the three result classes. Continue servicing the miner's orderly
+                // two-second queue drain until it closes the socket.
+                std::raise(SIGINT);
+                while (read_line(client, line)) {
+                    const auto submit = nlohmann::json::parse(line);
+                    if (!valid_submit_message(submit)) {
+                        second_session_ok = false;
+                        break;
+                    }
+                    const nlohmann::json accepted{
+                        {"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                        {"result", {{"status", "OK"}}},
+                    };
+                    if (!send_all(client, accepted.dump() + "\n")) {
+                        second_session_ok = false;
+                        break;
+                    }
+                    line.clear();
+                }
+                unique_rx::platform::close_socket(client);
             }
-            server_ok.store(valid_submits, std::memory_order_release);
-            unique_rx::platform::close_socket(client);
+            server_ok.store(first_session_ok && second_session_ok,
+                            std::memory_order_release);
         } catch (const std::exception& error) {
             std::cerr << "mock pool error: " << error.what() << '\n';
         } catch (...) {
             std::cerr << "mock pool error: unknown exception\n";
         }
-    });
+    });;
 
     std::ostringstream miner_output;
     std::ostringstream miner_errors;
     auto* previous_output = std::cout.rdbuf(miner_output.rdbuf());
     auto* previous_error = std::cerr.rdbuf(miner_errors.rdbuf());
-    const int result = unique_rx::run_miner(config_path, 3);
+    const int result = unique_rx::run_miner(config_path, 0);
     std::cout.rdbuf(previous_output);
     std::cerr.rdbuf(previous_error);
     pool.join();
@@ -290,12 +344,13 @@ int main() {
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
         miner_errors.str().find("switching pool") == std::string::npos ||
+        miner_errors.str().find("disconnected") == std::string::npos ||
         miner_output.str().find("Share accepted") == std::string::npos ||
         miner_output.str().find("Share rejected") == std::string::npos ||
         miner_output.str().find("Share stale") == std::string::npos) {
-        std::cerr << "local Stratum failover/login/job/share acceptance test failed\n";
+        std::cerr << "local Stratum reconnect/login/job/share acceptance test failed\n";
         return 1;
     }
-    std::cout << "Local Stratum login, RandomX job, accepted, rejected and stale share handling passed.\n";
+    std::cout << "Local Stratum established-connection reconnect, login/job, accepted, rejected and stale share handling passed.\n";
     return 0;
 }

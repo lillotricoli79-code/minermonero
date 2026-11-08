@@ -119,7 +119,7 @@ Gestire esplicitamente:
 
 La dashboard deve mostrare contatori reali di accepted/rejected/stale, errori, connessione e hashrate. Non inventare share accettate o simulare risultati come se provenissero da una pool reale.
 
-I test loopback con server simulato sono utili e necessari, ma **non equivalgono a una prova con una pool reale**. Dichiarare chiaramente quale tipo di test è stato eseguito.
+I test loopback con server simulato sono utili e necessari, ma **non equivalgono a una prova con una pool reale**. Il test di riconnessione deve simulare una connessione TCP autenticata che cade dopo il login e verificare una seconda sessione e il drenaggio ordinato delle share. Dichiarare chiaramente quale tipo di test è stato eseguito.
 
 ## 8. Benchmark e prestazioni
 
