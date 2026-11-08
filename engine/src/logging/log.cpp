@@ -111,6 +111,14 @@ void set_file(const std::filesystem::path& path) {
     }
 }
 
+void close_file() {
+    std::lock_guard lock(output_mutex);
+    if (log_file.is_open()) {
+        log_file.flush();
+        log_file.close();
+    }
+}
+
 void info(std::string_view category, std::string_view message) {
     write("INFO", category, message);
 }
