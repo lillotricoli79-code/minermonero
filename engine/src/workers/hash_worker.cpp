@@ -41,7 +41,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     }
     if (!platform::pin_current_thread(worker_id)) {
         std::cerr << "CPU worker " << worker_id
-                  << ": affinity unavailable; continuing without pinning\\n";
+                  << ": affinity unavailable; continuing without pinning\n";
     }
 
     Vm vm;
