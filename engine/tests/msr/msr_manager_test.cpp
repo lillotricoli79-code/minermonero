@@ -1,9 +1,106 @@
 #include "msr/msr.hpp"
 #include "msr/presets.hpp"
+#include "msr/transaction.hpp"
 
 #include <iostream>
+#include <map>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace {
+struct MockMsrBackend {
+    std::map<std::pair<std::size_t, std::uint64_t>, std::uint64_t> registers;
+    std::size_t writes = 0;
+    std::size_t fail_write_at = 0;
+
+    std::uint64_t read(std::size_t cpu, std::uint64_t reg) const {
+        const auto found = registers.find({cpu, reg});
+        if (found == registers.end()) throw std::runtime_error("mock MSR is not initialized");
+        return found->second;
+    }
+
+    void write(std::size_t cpu, std::uint64_t reg, std::uint64_t value) {
+        ++writes;
+        if (fail_write_at != 0 && writes == fail_write_at) {
+            throw std::runtime_error("injected mock MSR write failure");
+        }
+        registers[{cpu, reg}] = value;
+    }
+};
+
+bool check(bool condition, const char* message) {
+    if (!condition) std::cerr << message << '\n';
+    return condition;
+}
+
+bool test_mock_msr_transactions() {
+    using unique_rx::MsrWrite;
+    using unique_rx::msr_detail::RegisterSnapshot;
+    using unique_rx::msr_detail::apply_registers;
+    using unique_rx::msr_detail::restore_registers;
+
+    const std::vector<std::size_t> cpus{0, 1};
+    const std::vector<MsrWrite> writes{
+        {0x10, 0x05, 0x0f},
+        {0x11, 0x123400, 0xffff00},
+    };
+    MockMsrBackend backend;
+    const std::map<std::pair<std::size_t, std::uint64_t>, std::uint64_t> initial{
+        {{0, 0x10}, 0xa5a50000}, {{0, 0x11}, 0x98765432},
+        {{1, 0x10}, 0x5a5a0000}, {{1, 0x11}, 0xabcdef01},
+    };
+    backend.registers = initial;
+    std::vector<RegisterSnapshot> snapshots;
+    const auto read = [&](std::size_t cpu, std::uint64_t reg) {
+        return backend.read(cpu, reg);
+    };
+    const auto write = [&](std::size_t cpu, std::uint64_t reg, std::uint64_t value) {
+        backend.write(cpu, reg, value);
+    };
+    const auto log = [](const char*) {};
+
+    apply_registers(cpus, writes, snapshots, read, write, log);
+    bool ok = true;
+    ok &= check(backend.read(0, 0x10) == 0xa5a50005, "masked MSR write failed on CPU 0");
+    ok &= check(backend.read(1, 0x10) == 0x5a5a0005, "masked MSR write failed on CPU 1");
+    ok &= check(backend.read(0, 0x11) == 0x98123432, "second masked MSR write failed on CPU 0");
+    ok &= check(backend.read(1, 0x11) == 0xab123401, "second masked MSR write failed on CPU 1");
+
+    ok &= check(!restore_registers(snapshots, read, write, log),
+                "successful mock MSR restore reported pending work");
+    ok &= check(backend.registers == initial, "mock MSR restore did not recover every original value");
+
+    backend.registers = initial;
+    backend.writes = 0;
+    backend.fail_write_at = 2;
+    bool apply_failed = false;
+    try {
+        apply_registers(cpus, writes, snapshots, read, write, log);
+    } catch (const std::exception&) {
+        apply_failed = true;
+    }
+    ok &= check(apply_failed, "injected MSR write failure was not propagated");
+    backend.fail_write_at = 0;
+    ok &= check(backend.registers == initial,
+                "partial mock MSR apply did not roll back all prior writes");
+
+    backend.writes = 0;
+    apply_registers(cpus, writes, snapshots, read, write, log);
+    backend.fail_write_at = backend.writes + 1;
+    ok &= check(restore_registers(snapshots, read, write, log),
+                "failed mock restore was not reported as pending");
+    backend.fail_write_at = 0;
+    ok &= check(!restore_registers(snapshots, read, write, log),
+                "mock restore retry did not clear pending state");
+    ok &= check(backend.registers == initial,
+                "mock restore retry did not recover all original values");
+    return ok;
+}
+} // namespace
 
 int main() {
+    if (!test_mock_msr_transactions()) return 1;
     const auto intel = unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x5e);
     if (!intel || intel->name != "intel_family_6" ||
         intel->writes.size() != 1 ||

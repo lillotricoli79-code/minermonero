@@ -1,5 +1,6 @@
 #include "msr.hpp"
 #include "presets.hpp"
+#include "msr/transaction.hpp"
 
 #include <algorithm>
 #include <array>
@@ -236,17 +237,6 @@ std::vector<unsigned int> online_cpu_ids() {
     return cpus;
 }
 
-struct LinuxRegisterOriginal {
-    std::uint64_t register_id = 0;
-    std::uint64_t value = 0;
-    bool modified = false;
-};
-
-struct LinuxOriginal {
-    int fd = -1;
-    std::vector<LinuxRegisterOriginal> registers;
-};
-
 #endif
 
 } // namespace
@@ -265,14 +255,8 @@ struct MsrManager::Impl {
     PawnioExecute execute = nullptr;
     PawnioClose close = nullptr;
 
-    struct WindowsOriginal {
-        WORD group = 0;
-        BYTE processor = 0;
-        std::uint32_t register_id = 0;
-        std::uint64_t value = 0;
-        bool modified = false;
-    };
-    std::vector<WindowsOriginal> originals;
+    std::vector<msr_detail::RegisterSnapshot> snapshots;
+    std::vector<std::pair<WORD, DWORD>> msr_processors;
 
     void initialize_pawnio() {
         if (handle != nullptr) return;
@@ -366,41 +350,57 @@ struct MsrManager::Impl {
         }
     }
 
+    std::uint64_t read_for_cpu(std::size_t cpu_index, std::uint64_t register_id) {
+        if (cpu_index >= msr_processors.size()) {
+            throw std::runtime_error("invalid CPU index in MSR transaction");
+        }
+        const auto [group, processor] = msr_processors[cpu_index];
+        if (processor >= sizeof(KAFFINITY) * 8) {
+            throw std::runtime_error("processor group exceeds supported affinity mask");
+        }
+        ThreadAffinity affinity(group, static_cast<BYTE>(processor));
+        return read_current_msr(static_cast<std::uint32_t>(register_id));
+    }
+
+    void write_for_cpu(std::size_t cpu_index, std::uint64_t register_id,
+                       std::uint64_t value) {
+        if (cpu_index >= msr_processors.size()) {
+            throw std::runtime_error("invalid CPU index in MSR transaction");
+        }
+        const auto [group, processor] = msr_processors[cpu_index];
+        if (processor >= sizeof(KAFFINITY) * 8) {
+            throw std::runtime_error("processor group exceeds supported affinity mask");
+        }
+        ThreadAffinity affinity(group, static_cast<BYTE>(processor));
+        write_current_msr(static_cast<std::uint32_t>(register_id), value);
+    }
+
     void apply(const MsrPreset& preset) {
         if (active) return;
         if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
-        originals.clear();
+        snapshots.clear();
         initialize_pawnio();
-        const auto processors = platform::available_processors();
-        if (processors.empty()) {
+        msr_processors = platform::available_processors();
+        if (msr_processors.empty()) {
             throw std::runtime_error("Windows reports no processors available to this process");
         }
-
-        for (const auto& [group, processor] : processors) {
-            if (processor >= sizeof(KAFFINITY) * 8) {
-                throw std::runtime_error("processor group exceeds supported affinity mask");
-            }
-            ThreadAffinity affinity(group, static_cast<BYTE>(processor));
-            for (const auto& write : preset.writes) {
-                const auto register_id = static_cast<std::uint32_t>(write.register_id);
-                originals.push_back({group, static_cast<BYTE>(processor),
-                                     register_id, read_current_msr(register_id), false});
-            }
+        std::vector<std::size_t> cpu_indices;
+        cpu_indices.reserve(msr_processors.size());
+        for (std::size_t index = 0; index < msr_processors.size(); ++index) {
+            cpu_indices.push_back(index);
         }
-
+        const auto read = [this](std::size_t cpu, std::uint64_t reg) {
+            return read_for_cpu(cpu, reg);
+        };
+        const auto write = [this](std::size_t cpu, std::uint64_t reg, std::uint64_t value) {
+            write_for_cpu(cpu, reg, value);
+        };
+        const auto log = [](const char* message) {
+            std::cerr << "MSR restore warning: " << message << '\n';
+        };
         try {
-            for (std::size_t index = 0; index < originals.size(); ++index) {
-                auto& original = originals[index];
-                const auto& write = preset.writes[index % preset.writes.size()];
-                ThreadAffinity affinity(original.group, original.processor);
-                const auto value = (write.value & write.mask) |
-                                   (original.value & ~write.mask);
-                original.modified = true;
-                write_current_msr(original.register_id, value);
-                if (read_current_msr(original.register_id) != value) {
-                    throw std::runtime_error("MSR read-back verification failed");
-                }
-            }
+            msr_detail::apply_registers(cpu_indices, preset.writes,
+                                        snapshots, read, write, log);
             active = true;
         } catch (...) {
             restore();
@@ -409,27 +409,16 @@ struct MsrManager::Impl {
     }
 
     void restore() noexcept {
-        bool restoration_pending = false;
-        for (auto it = originals.rbegin(); it != originals.rend(); ++it) {
-            auto& original = *it;
-            if (!original.modified) continue;
-            try {
-                ThreadAffinity affinity(original.group, original.processor);
-                write_current_msr(original.register_id, original.value);
-                if (read_current_msr(original.register_id) != original.value) {
-                    throw std::runtime_error("MSR restore read-back verification failed");
-                }
-                original.modified = false;
-            } catch (const std::exception& error) {
-                restoration_pending = true;
-                std::cerr << "MSR restore warning: " << error.what() << '\n';
-            } catch (...) {
-                restoration_pending = true;
-                std::cerr << "MSR restore warning: unknown error\n";
-            }
-            restoration_pending = restoration_pending || original.modified;
-        }
-        active = restoration_pending;
+        const auto read = [this](std::size_t cpu, std::uint64_t reg) {
+            return read_for_cpu(cpu, reg);
+        };
+        const auto write = [this](std::size_t cpu, std::uint64_t reg, std::uint64_t value) {
+            write_for_cpu(cpu, reg, value);
+        };
+        const auto log = [](const char* message) {
+            std::cerr << "MSR restore warning: " << message << '\n';
+        };
+        active = msr_detail::restore_registers(snapshots, read, write, log);
     }
 
     void close_pawnio() noexcept {
@@ -443,7 +432,8 @@ struct MsrManager::Impl {
         }
     }
 #else
-    std::vector<LinuxOriginal> originals;
+    std::vector<int> cpu_fds;
+    std::vector<msr_detail::RegisterSnapshot> snapshots;
     int lock_fd = -1;
 
     void acquire_process_lock() {
@@ -471,10 +461,49 @@ struct MsrManager::Impl {
         }
     }
 
+    void close_cpu_fds() noexcept {
+        for (int& fd : cpu_fds) {
+            if (fd >= 0) {
+                ::close(fd);
+                fd = -1;
+            }
+        }
+    }
+
+    std::uint64_t read_for_cpu(std::size_t cpu_index, std::uint64_t register_id) {
+        if (cpu_index >= cpu_fds.size() || cpu_fds[cpu_index] < 0) {
+            throw std::runtime_error("invalid CPU descriptor in MSR transaction");
+        }
+        std::uint64_t value = 0;
+        const auto offset = static_cast<off_t>(register_id);
+        const auto count = ::pread(cpu_fds[cpu_index], &value, sizeof(value), offset);
+        if (count != static_cast<ssize_t>(sizeof(value))) {
+            const int error = count < 0 ? errno : EIO;
+            throw std::system_error(error, std::generic_category(),
+                                    "cannot read MSR " + std::to_string(register_id));
+        }
+        return value;
+    }
+
+    void write_for_cpu(std::size_t cpu_index, std::uint64_t register_id,
+                       std::uint64_t value) {
+        if (cpu_index >= cpu_fds.size() || cpu_fds[cpu_index] < 0) {
+            throw std::runtime_error("invalid CPU descriptor in MSR transaction");
+        }
+        const auto offset = static_cast<off_t>(register_id);
+        const auto count = ::pwrite(cpu_fds[cpu_index], &value, sizeof(value), offset);
+        if (count != static_cast<ssize_t>(sizeof(value))) {
+            const int error = count < 0 ? errno : EIO;
+            throw std::system_error(error, std::generic_category(),
+                                    "cannot write MSR " + std::to_string(register_id));
+        }
+    }
+
     void apply(const MsrPreset& preset) {
         if (active) return;
         if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
-        originals.clear();
+        cpu_fds.clear();
+        snapshots.clear();
 
         try {
             acquire_process_lock();
@@ -482,7 +511,7 @@ struct MsrManager::Impl {
             if (cpus.empty()) {
                 throw std::runtime_error("no online CPU is available to this process for MSR tuning");
             }
-            originals.reserve(cpus.size());
+            cpu_fds.reserve(cpus.size());
             for (const unsigned int cpu : cpus) {
                 const auto path = std::filesystem::path("/dev/cpu") /
                     std::to_string(cpu) / "msr";
@@ -491,48 +520,24 @@ struct MsrManager::Impl {
                     throw std::system_error(errno, std::generic_category(),
                                             "cannot open " + path.string());
                 }
-                originals.push_back({fd, {}});
-                auto& cpu_originals = originals.back();
-                cpu_originals.registers.reserve(preset.writes.size());
-                for (const auto& write : preset.writes) {
-                    std::uint64_t original = 0;
-                    const auto offset = static_cast<off_t>(write.register_id);
-                    const auto bytes_read = ::pread(fd, &original, sizeof(original), offset);
-                    if (bytes_read != static_cast<ssize_t>(sizeof(original))) {
-                        const int error = bytes_read < 0 ? errno : EIO;
-                        throw std::system_error(error, std::generic_category(),
-                            "cannot read MSR " + std::to_string(write.register_id) +
-                            " from " + path.string());
-                    }
-                    cpu_originals.registers.push_back(
-                        {write.register_id, original, false});
-                }
+                cpu_fds.push_back(fd);
             }
-
-            for (auto& cpu_originals : originals) {
-                for (std::size_t index = 0; index < preset.writes.size(); ++index) {
-                    const auto& write = preset.writes[index];
-                    auto& snapshot = cpu_originals.registers[index];
-                    const auto value = (write.value & write.mask) |
-                                       (snapshot.value & ~write.mask);
-                    snapshot.modified = true;
-                    const auto offset = static_cast<off_t>(write.register_id);
-                    const auto written = ::pwrite(
-                        cpu_originals.fd, &value, sizeof(value), offset);
-                    if (written != static_cast<ssize_t>(sizeof(value))) {
-                        const int error = written < 0 ? errno : EIO;
-                        throw std::system_error(error, std::generic_category(),
-                            "cannot write MSR " + std::to_string(write.register_id));
-                    }
-                    std::uint64_t current_value = 0;
-                    const auto bytes_read = ::pread(
-                        cpu_originals.fd, &current_value, sizeof(current_value), offset);
-                    if (bytes_read != static_cast<ssize_t>(sizeof(current_value)) ||
-                        current_value != value) {
-                        throw std::runtime_error("MSR read-back verification failed");
-                    }
-                }
+            std::vector<std::size_t> cpu_indices;
+            cpu_indices.reserve(cpu_fds.size());
+            for (std::size_t index = 0; index < cpu_fds.size(); ++index) {
+                cpu_indices.push_back(index);
             }
+            const auto read = [this](std::size_t cpu, std::uint64_t reg) {
+                return read_for_cpu(cpu, reg);
+            };
+            const auto write = [this](std::size_t cpu, std::uint64_t reg, std::uint64_t value) {
+                write_for_cpu(cpu, reg, value);
+            };
+            const auto log = [](const char* message) {
+                std::cerr << "MSR restore warning: " << message << '\n';
+            };
+            msr_detail::apply_registers(cpu_indices, preset.writes,
+                                        snapshots, read, write, log);
             active = true;
         } catch (...) {
             restore();
@@ -541,44 +546,20 @@ struct MsrManager::Impl {
     }
 
     void restore() noexcept {
-        bool restoration_pending = false;
-        for (auto& cpu_originals : originals) {
-            bool cpu_pending = false;
-            for (auto it = cpu_originals.registers.rbegin();
-                 it != cpu_originals.registers.rend(); ++it) {
-                if (!it->modified) continue;
-                const auto offset = static_cast<off_t>(it->register_id);
-                const auto written = ::pwrite(
-                    cpu_originals.fd, &it->value, sizeof(it->value), offset);
-                if (written != static_cast<ssize_t>(sizeof(it->value))) {
-                    cpu_pending = true;
-                    std::cerr << "MSR restore warning: failed to restore register "
-                              << it->register_id << '\n';
-                    continue;
-                }
-                std::uint64_t restored_value = 0;
-                const auto bytes_read = ::pread(
-                    cpu_originals.fd, &restored_value, sizeof(restored_value), offset);
-                if (bytes_read == static_cast<ssize_t>(sizeof(restored_value)) &&
-                    restored_value == it->value) {
-                    it->modified = false;
-                } else {
-                    cpu_pending = true;
-                    std::cerr << "MSR restore warning: read-back verification failed for register "
-                              << it->register_id << '\n';
-                }
-            }
-            for (const auto& reg : cpu_originals.registers) {
-                cpu_pending = cpu_pending || reg.modified;
-            }
-            restoration_pending = restoration_pending || cpu_pending;
-            if (cpu_originals.fd >= 0 && !cpu_pending) {
-                ::close(cpu_originals.fd);
-                cpu_originals.fd = -1;
-            }
+        const auto read = [this](std::size_t cpu, std::uint64_t reg) {
+            return read_for_cpu(cpu, reg);
+        };
+        const auto write = [this](std::size_t cpu, std::uint64_t reg, std::uint64_t value) {
+            write_for_cpu(cpu, reg, value);
+        };
+        const auto log = [](const char* message) {
+            std::cerr << "MSR restore warning: " << message << '\n';
+        };
+        active = msr_detail::restore_registers(snapshots, read, write, log);
+        if (!active) {
+            close_cpu_fds();
+            release_process_lock();
         }
-        active = restoration_pending;
-        if (!restoration_pending) release_process_lock();
     }
 #endif
 
@@ -589,12 +570,7 @@ struct MsrManager::Impl {
         close_pawnio();
 #else
         // A final close is required even if the kernel rejected a restore write.
-        for (auto& original : originals) {
-            if (original.fd >= 0) {
-                ::close(original.fd);
-                original.fd = -1;
-            }
-        }
+        close_cpu_fds();
         release_process_lock();
 #endif
     }
