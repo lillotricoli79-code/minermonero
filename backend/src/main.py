@@ -8,6 +8,7 @@ import secrets
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import tempfile
@@ -303,7 +304,7 @@ def is_intel_cpu() -> bool:
 
 def native_msr_available(executable_path: str | None) -> bool:
     """Check that the native MSR provider and the signed Intel module are present."""
-    if os.name == "nt":
+    if sys.platform == "win32":
         program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
         libraries = [program_files / "PawnIO" / "PawnIOLib.dll"]
         try:
@@ -331,7 +332,7 @@ def native_msr_available(executable_path: str | None) -> bool:
             path.is_file() for path in modules
         )
 
-    if os.name == "posix":
+    if sys.platform.startswith("linux"):
         online_file = Path("/sys/devices/system/cpu/online")
         try:
             online = online_file.read_text(encoding="ascii").strip()
