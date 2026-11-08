@@ -1,8 +1,8 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
-$destinationDir = Join-Path $repoRoot "engine\\msr"
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$destinationDir = Join-Path $repoRoot "engine\msr"
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("unique-rx-pawnio-" + [guid]::NewGuid().ToString("N"))
 $archive = Join-Path $tempRoot "release_0_2_11.zip"
 $extractDir = Join-Path $tempRoot "extracted"
@@ -38,9 +38,9 @@ try {
     Copy-Item -LiteralPath $module.FullName -Destination (Join-Path $destinationDir "IntelMSR.bin") -Force
 
     Write-Host "Verified IntelMSR.bin installed in $destinationDir"
-    $pawnioKey = "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO"
+    $pawnioKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO"
     $pawnioInstall = Get-ItemProperty -LiteralPath $pawnioKey -ErrorAction SilentlyContinue
-    $pawnioLibrary = Join-Path $env:ProgramFiles "PawnIO\\PawnIOLib.dll"
+    $pawnioLibrary = Join-Path $env:ProgramFiles "PawnIO\PawnIOLib.dll"
     if ($pawnioInstall -or (Test-Path -LiteralPath $pawnioLibrary)) {
         Write-Host "PawnIO installation detected."
     }
