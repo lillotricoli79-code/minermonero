@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.24)
 project(UniqueRX LANGUAGES C CXX)
 
 include(CTest)
-include(FetchContent)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
@@ -11,12 +10,10 @@ if(NOT EXISTS "${randomx_SOURCE_DIR}/CMakeLists.txt")
   message(FATAL_ERROR "Vendored RandomX rx/0 source tree is missing; network fetching is disabled.")
 endif()
 add_subdirectory(src/randomx/upstream)
-FetchContent_Declare(
-  nlohmann_json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.12.0
-)
-FetchContent_MakeAvailable(nlohmann_json)
+add_library(nlohmann_json INTERFACE)
+add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
+target_include_directories(nlohmann_json INTERFACE
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party")
 
 add_executable(unique-rx src/main.cpp src/stratum/client.cpp src/stratum/job.cpp
   src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/randomx/benchmark.cpp
