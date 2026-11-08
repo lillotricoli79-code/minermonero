@@ -145,7 +145,9 @@ public:
 
         if (ssl_ != nullptr) ssl_read_want_ = platform::kReadEvent;
         buffer_.append(chunk.data(), static_cast<std::size_t>(count));
-        if (buffer_.size() > 1024 * 1024) throw std::runtime_error("oversized Stratum response");
+        // RxMiner's bounded JSON line parser uses a 4 MiB ceiling; keep the
+        // same bound so large but valid pool jobs are not truncated/rejected.
+        if (buffer_.size() > 4 * 1024 * 1024) throw std::runtime_error("oversized Stratum response");
         std::size_t consumed = 0;
         while (true) {
             const auto newline = buffer_.find('\n', consumed);
