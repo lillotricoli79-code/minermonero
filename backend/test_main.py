@@ -1,7 +1,11 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from pydantic import ValidationError
+
+from backend.src.shell_log import ShellLog
 
 from backend.main import (
     MinerConfigUpdate,
@@ -12,6 +16,34 @@ from backend.main import (
     normalize_summary,
     public_config,
 )
+
+
+class ShellLogTests(unittest.TestCase):
+    def test_writes_utf8_shell_output_to_persistent_file(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "logs" / "shell.log"
+            log = ShellLog(path)
+            try:
+                log.write("Avvio miner — RandomX")
+            finally:
+                log.close()
+
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("Avvio miner — RandomX", content)
+            self.assertIn("INFO", content)
+
+    def test_rotates_logs_at_configured_size(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "logs" / "shell.log"
+            log = ShellLog(path, max_bytes=40, backup_count=2)
+            try:
+                for index in range(5):
+                    log.write(f"shell-output-line-{index}-xxxxxxxx")
+            finally:
+                log.close()
+
+            self.assertTrue(path.is_file())
+            self.assertTrue(Path(f"{path}.1").is_file())
 
 
 class SummaryTests(unittest.TestCase):
