@@ -62,7 +62,12 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 continue;
             }
             if (!active_work || active_work->generation != work->generation) {
-                vm.reset(randomx_create_vm(work->flags, work->cache.get(), nullptr));
+                auto vm_flags = work->flags;
+                if (work->full_memory) vm_flags |= RANDOMX_FLAG_FULL_MEM;
+                vm.reset(randomx_create_vm(
+                    vm_flags,
+                    work->full_memory ? nullptr : work->cache.get(),
+                    work->full_memory ? work->dataset.get() : nullptr));
                 if (!vm) throw std::runtime_error("worker VM creation failed");
                 active_work = work;
                 blob = work->job.blob;
