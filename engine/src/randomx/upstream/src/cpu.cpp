@@ -87,4 +87,5 @@ namespace randomx {
 		//TODO POWER8 AES
 	}
 
+	const Cpu cpu;
 }

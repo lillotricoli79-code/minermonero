@@ -49,4 +49,5 @@ namespace randomx {
 		bool aes_, ssse3_, avx2_, vaes_;
 	};
 
+	extern const Cpu cpu;
 }
