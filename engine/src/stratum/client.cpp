@@ -195,6 +195,9 @@ int run_miner(const std::filesystem::path& config_path,
                 logging::info("net", "share submitted: job " +
                     details["params"].value("job_id", std::string()) +
                     ", nonce " + details["params"].value("nonce", std::string()));
+            } else if (event == "SUBMIT_RESPONSE") {
+                logging::info("net", "pool response received for share id " +
+                    std::to_string(details.value("id", std::uint64_t{0})));
             } else if (event == "SHARE_ACCEPTED") {
                 logging::info("cpu", "share accepted (response " +
                     std::to_string(details.value("response_id", std::uint64_t{0})) + ")");
