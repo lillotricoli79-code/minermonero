@@ -15,10 +15,14 @@ struct MockMsrBackend {
     std::size_t reads = 0;
     std::size_t fail_write_at = 0;
     std::size_t corrupt_read_at = 0;
+    std::size_t mutate_unmasked_read_at = 0;
     bool mutate_unmasked_after_write = false;
 
     std::uint64_t read(std::size_t cpu, std::uint64_t reg) {
         ++reads;
+        if (reads == mutate_unmasked_read_at) {
+            registers[{cpu, reg}] ^= 0x40000000ULL;
+        }
         const auto found = registers.find({cpu, reg});
         if (found == registers.end()) throw std::runtime_error("mock MSR is not initialized");
         return reads == corrupt_read_at ? found->second ^ 1ULL : found->second;
@@ -110,8 +114,33 @@ bool test_mock_msr_transactions() {
     ok &= check(backend.registers == expected_after_external_restore,
                 "masked restore overwrote unrelated concurrent register bits");
 
+    // Simulate an unrelated owner changing a register after the transaction
+    // snapshot but before the miner applies its masked write.
     backend.registers = initial;
     backend.writes = 0;
+    backend.reads = 0;
+    backend.mutate_unmasked_read_at = 5; // four snapshots, then first apply read
+    apply_registers(cpus, writes, snapshots, read, write, log);
+    backend.mutate_unmasked_read_at = 0;
+    const std::map<std::pair<std::size_t, std::uint64_t>, std::uint64_t>
+        expected_after_concurrent_change{
+            {{0, 0x10}, 0xa5a50005ULL ^ 0x40000000ULL},
+            {{0, 0x11}, 0x98123432ULL},
+            {{1, 0x10}, 0x5a5a0005ULL},
+            {{1, 0x11}, 0xab123401ULL},
+        };
+    ok &= check(backend.registers == expected_after_concurrent_change,
+                "MSR apply overwrote unrelated bits changed after the snapshot");
+    ok &= check(!restore_registers(snapshots, read, write, log),
+                "MSR restore failed after a concurrent pre-apply change");
+    auto expected_after_concurrent_restore = initial;
+    expected_after_concurrent_restore[{0, 0x10}] ^= 0x40000000ULL;
+    ok &= check(backend.registers == expected_after_concurrent_restore,
+                "MSR restore overwrote unrelated bits changed before apply");
+
+    backend.registers = initial;
+    backend.writes = 0;
+    backend.reads = 0;
     backend.fail_write_at = 2;
     bool apply_failed = false;
     try {

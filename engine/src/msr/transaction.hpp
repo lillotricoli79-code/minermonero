@@ -66,8 +66,12 @@ void apply_registers(const std::vector<std::size_t>& cpu_indices,
         for (std::size_t index = 0; index < snapshots.size(); ++index) {
             auto& snapshot = snapshots[index];
             const auto& item = writes[index % writes.size()];
+            // Merge the requested bits into the latest register value, not
+            // the earlier snapshot, so concurrent owners' unrelated changes
+            // are not overwritten during apply.
+            const auto current = read(snapshot.cpu_index, snapshot.register_id);
             const std::uint64_t value = (item.value & item.mask) |
-                                        (snapshot.value & ~item.mask);
+                                        (current & ~item.mask);
             snapshot.modified = true;
             write(snapshot.cpu_index, snapshot.register_id, value);
             if ((read(snapshot.cpu_index, snapshot.register_id) & item.mask) !=
