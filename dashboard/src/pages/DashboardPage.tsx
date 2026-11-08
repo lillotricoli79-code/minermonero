@@ -121,7 +121,7 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    void request<{ lines: string[] }>("/logs/history?limit=12")
+    void request<{ lines: string[] }>("/logs/history?limit=200")
       .then(({ lines }) => {
         if (!active || !lines.length) return;
         const entries = lines.map((line, index): LogItem => {
@@ -138,7 +138,7 @@ function App() {
         setLogs((current) => {
           const existing = new Set(current.map((item) => item.message));
           const unseen = entries.filter((item) => !existing.has(item.message));
-          return [...unseen, ...current].slice(-12);
+          return [...unseen, ...current].slice(-400);
         });
       })
       .catch(() => {
@@ -208,7 +208,7 @@ function App() {
             seen.add(key);
             unseen.push(item);
           }
-          return [...current, ...unseen].slice(-12);
+          return [...current, ...unseen].slice(-400);
         });
       }
     };
@@ -704,7 +704,7 @@ function App() {
                   <div className="log-list">
                     {logs.length ? (
                       logs
-                        .slice(-6)
+                        .slice(-200)
                         .reverse()
                         .map((entry) => (
                           <div className="log-line" key={entry.id}>
