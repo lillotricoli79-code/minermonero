@@ -389,7 +389,12 @@ struct MsrManager::Impl {
                 throw std::system_error(error, std::generic_category(),
                                         "cannot read MSR 0x1A4 from " + path.string());
             }
-            originals.push_back({fd, original, false});
+            try {
+                originals.push_back({fd, original, false});
+            } catch (...) {
+                ::close(fd);
+                throw;
+            }
         }
 
         try {
