@@ -268,6 +268,25 @@ class ConfigValidationTests(unittest.TestCase):
 
 
 
+class MinerStatusTests(unittest.TestCase):
+    def test_native_status_is_read_from_one_process_snapshot(self):
+        class FakeProcess:
+            def poll(self):
+                return None
+
+        controller = MinerController()
+        controller.process = FakeProcess()
+        controller.engine_kind = "unique-rx"
+        controller.native_status = {
+            "state": "ATTIVO",
+            "hashrate": {"10s": 12.0, "60s": 11.0, "15m": 10.0},
+        }
+        status = controller.status()
+        self.assertEqual(status["state"], "ATTIVO")
+        self.assertTrue(status["managed"])
+        self.assertEqual(status["hashrate"]["10s"], 12.0)
+
+
 class MinerShutdownTests(unittest.TestCase):
     def test_windows_stop_requests_graceful_ctrl_break(self):
         class FakeProcess:

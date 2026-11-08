@@ -364,11 +364,17 @@ class MinerController:
         return normalize_summary(payload)
 
     def status(self) -> dict[str, Any]:
-        managed = self.is_running()
-        if managed and self.engine_kind == "unique-rx":
-            with self.lock:
-                if self.native_status is not None:
-                    return {**self.native_status, "managed": True}
+        # Read process identity and its telemetry as one locked snapshot. The
+        # output-reader thread may clear/reassign these fields during shutdown
+        # or an immediate restart.
+        with self.lock:
+            process = self.process
+            managed = process is not None and process.poll() is None
+            engine_kind = self.engine_kind
+            native_status = self.native_status
+        if managed and engine_kind == "unique-rx":
+            if native_status is not None:
+                return {**native_status, "managed": True}
             return {
                 "state": "AVVIO",
                 "managed": True,
