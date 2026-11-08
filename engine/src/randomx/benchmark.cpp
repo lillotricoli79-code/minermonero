@@ -3,9 +3,11 @@
 #include <randomx.h>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -68,31 +70,59 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
 
     std::vector<std::uint64_t> lane_hashes(lanes, 0);
     std::vector<Hash> last_hash(lanes);
+    std::vector<std::exception_ptr> worker_errors(lanes);
     std::vector<std::jthread> workers;
     workers.reserve(lanes);
+    std::atomic<bool> failed{false};
     const auto started = std::chrono::steady_clock::now();
     const auto deadline = started + std::chrono::seconds(seconds);
 
-    for (unsigned int lane = 0; lane < lanes; ++lane) {
-        workers.emplace_back([&, lane] {
-            std::string input(payload);
-            const auto nonce_offset = input.size();
-            input.resize(nonce_offset + sizeof(std::uint32_t));
-            std::uint32_t nonce = lane;
-            std::memcpy(input.data() + nonce_offset, &nonce, sizeof(nonce));
-            randomx_calculate_hash_first(vms[lane].get(), input.data(), input.size());
-            while (std::chrono::steady_clock::now() < deadline) {
-                nonce += lanes;
-                std::memcpy(input.data() + nonce_offset, &nonce, sizeof(nonce));
-                randomx_calculate_hash_next(vms[lane].get(), input.data(), input.size(),
-                                            last_hash[lane].data());
-                ++lane_hashes[lane];
-            }
-            randomx_calculate_hash_last(vms[lane].get(), last_hash[lane].data());
-            ++lane_hashes[lane];
-        });
+    try {
+        for (unsigned int lane = 0; lane < lanes; ++lane) {
+            workers.emplace_back([&, lane] {
+                try {
+                    std::string input(payload);
+                    const auto nonce_offset = input.size();
+                    input.resize(nonce_offset + sizeof(std::uint32_t));
+                    std::uint32_t nonce = lane;
+                    std::memcpy(input.data() + nonce_offset, &nonce, sizeof(nonce));
+                    randomx_calculate_hash_first(vms[lane].get(), input.data(), input.size());
+                    while (!failed.load(std::memory_order_acquire) &&
+                           std::chrono::steady_clock::now() < deadline) {
+                        nonce += lanes;
+                        std::memcpy(input.data() + nonce_offset, &nonce, sizeof(nonce));
+                        randomx_calculate_hash_next(vms[lane].get(), input.data(), input.size(),
+                                                    last_hash[lane].data());
+                        ++lane_hashes[lane];
+                    }
+                    if (!failed.load(std::memory_order_acquire)) {
+                        randomx_calculate_hash_last(vms[lane].get(), last_hash[lane].data());
+                        ++lane_hashes[lane];
+                    }
+                } catch (...) {
+                    worker_errors[lane] = std::current_exception();
+                    failed.store(true, std::memory_order_release);
+                }
+            });
+        }
+    } catch (const std::exception& error) {
+        failed.store(true, std::memory_order_release);
+        for (auto& worker : workers) if (worker.joinable()) worker.join();
+        std::cerr << "Avvio worker benchmark non riuscito: " << error.what() << '\n';
+        return false;
     }
-    for (auto& worker : workers) worker.join();
+    for (auto& worker : workers) if (worker.joinable()) worker.join();
+    for (const auto& worker_error : worker_errors) {
+        if (!worker_error) continue;
+        try {
+            std::rethrow_exception(worker_error);
+        } catch (const std::exception& error) {
+            std::cerr << "Worker benchmark non riuscito: " << error.what() << '\n';
+        } catch (...) {
+            std::cerr << "Worker benchmark non riuscito con errore sconosciuto.\n";
+        }
+        return false;
+    }
 
     const auto elapsed = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - started).count();
