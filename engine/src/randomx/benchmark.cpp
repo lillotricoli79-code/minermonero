@@ -1,5 +1,6 @@
 #include "benchmark.hpp"
 #include "dataset.hpp"
+#include "platform/affinity.hpp"
 
 #include <randomx.h>
 
@@ -105,6 +106,10 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
         for (unsigned int lane = 0; lane < lanes; ++lane) {
             workers.emplace_back([&, lane] {
                 try {
+                    if (!platform::pin_current_thread(lane)) {
+                        std::cerr << "Benchmark lane " << lane
+                                  << ": affinity unavailable; continuing without pinning\\n";
+                    }
                     std::string input(payload);
                     const auto nonce_offset = input.size();
                     input.resize(nonce_offset + sizeof(std::uint32_t));
