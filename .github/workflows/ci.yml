@@ -135,7 +135,13 @@ jobs:
           New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "scripts\windows\start.bat") -Destination $launcherDir
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "scripts\windows\start.ps1") -Destination $launcherDir
-          "Portable miner and elevated MSR launcher staged: $out"
+          @'
+@echo off
+setlocal
+call "%~dp0scripts\windows\start.bat" %*
+exit /b %errorlevel%
+'@ | Set-Content -LiteralPath (Join-Path $out "start.bat") -Encoding ascii
+          "Portable miner, root start.bat and elevated MSR launcher staged: $out"
 
       - name: Upload verified Windows x64 executable
         uses: actions/upload-artifact@v4
