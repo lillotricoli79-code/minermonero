@@ -1,6 +1,7 @@
 #include "msr.hpp"
 #include "presets.hpp"
 #include "msr/transaction.hpp"
+#include "logging/log.hpp"
 
 #include <algorithm>
 #include <array>
@@ -396,7 +397,7 @@ struct MsrManager::Impl {
             write_for_cpu(cpu, reg, value);
         };
         const auto log = [](const char* message) {
-            std::cerr << "MSR restore warning: " << message << '\n';
+            logging::warning("msr", std::string("restore warning: ") + message);
         };
         try {
             msr_detail::apply_registers(cpu_indices, preset.writes,
@@ -416,7 +417,7 @@ struct MsrManager::Impl {
             write_for_cpu(cpu, reg, value);
         };
         const auto log = [](const char* message) {
-            std::cerr << "MSR restore warning: " << message << '\n';
+            logging::warning("msr", std::string("restore warning: ") + message);
         };
         active = msr_detail::restore_registers(snapshots, read, write, log);
     }
@@ -553,7 +554,7 @@ struct MsrManager::Impl {
             write_for_cpu(cpu, reg, value);
         };
         const auto log = [](const char* message) {
-            std::cerr << "MSR restore warning: " << message << '\n';
+            logging::warning("msr", std::string("restore warning: ") + message);
         };
         active = msr_detail::restore_registers(snapshots, read, write, log);
         if (!active) {
@@ -564,8 +565,18 @@ struct MsrManager::Impl {
 #endif
 
     ~Impl() {
+        const bool had_snapshots = !snapshots.empty();
         restore();
         if (active) restore();
+        try {
+            if (had_snapshots && !active) {
+                logging::info("msr", "original CPU register values restored");
+            } else if (active) {
+                logging::error("msr", "register restore remains pending after retry");
+            }
+        } catch (...) {
+            // Logging must never interfere with register restoration or shutdown.
+        }
 #ifdef _WIN32
         close_pawnio();
 #else
