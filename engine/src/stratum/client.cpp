@@ -98,13 +98,21 @@ int run_miner(const std::filesystem::path& config_path,
         if (!wrmsr.is_null() && !wrmsr.is_boolean() &&
             !(wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() < 0)) {
             throw std::runtime_error(
-                "Native engine supports the Intel automatic RandomX MSR preset only; "
-                "use XMRig for custom MSR configurations.");
+                "Native engine accepts automatic MSR tuning only; custom register "
+                "writes are intentionally unsupported.");
         }
         MsrManager msr(randomx_config.value("msr-module", std::string()));
         if (!msr_explicitly_disabled) {
-            msr.apply_randomx_preset();
-            std::cout << "Intel RandomX MSR preset applied and will be restored on exit.\n";
+            try {
+                msr.apply_randomx_preset();
+                std::cout << "Verified CPU-specific RandomX MSR preset applied; "
+                             "original registers will be restored on exit.\n";
+            } catch (const std::exception& error) {
+                // MSR tuning is an optional optimization. An unknown CPU, a missing
+                // driver, or unavailable permissions must never prevent rx/0 mining.
+                std::cerr << "MSR tuning skipped safely: " << error.what()
+                          << "; continuing with standard CPU settings.\n";
+            }
         }
 
         // This guard is declared after MsrManager so worker threads are stopped
