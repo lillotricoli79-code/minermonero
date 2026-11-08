@@ -75,11 +75,11 @@ bool run_mode(randomx_flags flags, const char* mode) {
 
     std::array<Hash, 2> lane_hashes{};
     std::array<std::jthread, 2> workers{
-        std::thread([&] {
+        std::jthread([&] {
             randomx_calculate_hash(lane_vms[0].get(), inputs[0].data(),
                                    inputs[0].size(), lane_hashes[0].data());
         }),
-        std::thread([&] {
+        std::jthread([&] {
             randomx_calculate_hash(lane_vms[1].get(), inputs[1].data(),
                                    inputs[1].size(), lane_hashes[1].data());
         }),
