@@ -15,6 +15,19 @@
 #include <vector>
 
 namespace unique_rx {
+namespace {
+
+std::string hex_encode(const unsigned char* bytes, std::size_t length) {
+    static constexpr char digits[] = "0123456789abcdef";
+    std::string result(length * 2, '0');
+    for (std::size_t index = 0; index < length; ++index) {
+        result[index * 2] = digits[bytes[index] >> 4];
+        result[index * 2 + 1] = digits[bytes[index] & 0x0f];
+    }
+    return result;
+}
+
+} // namespace
 
 struct StratumTransport::Impl {
 public:
