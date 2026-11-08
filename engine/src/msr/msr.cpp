@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iterator>
@@ -20,8 +21,12 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-#include <intrin.h>
 #include <winreg.h>
+#ifdef _MSC_VER
+#include <intrin.h>
+#else
+#include <cpuid.h>
+#endif
 #else
 #include <cerrno>
 #include <fcntl.h>
@@ -41,11 +46,19 @@ inline constexpr std::uint64_t kRandomXIntelMsrValue = 0xF;
 bool is_intel_cpu() {
     char vendor[13]{};
 #ifdef _WIN32
+#ifdef _MSC_VER
     int registers[4]{};
     __cpuid(registers, 0);
     std::memcpy(vendor, &registers[1], sizeof(int));
     std::memcpy(vendor + 4, &registers[3], sizeof(int));
     std::memcpy(vendor + 8, &registers[2], sizeof(int));
+#else
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+    if (!__get_cpuid(0, &eax, &ebx, &ecx, &edx)) return false;
+    std::memcpy(vendor, &ebx, sizeof(ebx));
+    std::memcpy(vendor + 4, &edx, sizeof(edx));
+    std::memcpy(vendor + 8, &ecx, sizeof(ecx));
+#endif
 #elif defined(__i386__) || defined(__x86_64__)
     unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
     if (!__get_cpuid(0, &eax, &ebx, &ecx, &edx)) return false;
