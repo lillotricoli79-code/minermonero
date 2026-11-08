@@ -74,6 +74,9 @@ Comportamento richiesto:
 
 ## 6. MSR e ottimizzazioni hardware
 
+- Le modalità dashboard `auto` e `fast` selezionano lo stesso preset CPU nativo verificato; `fast` è mantenuta solo per compatibilità con configurazioni precedenti e non rappresenta un secondo profilo.
+- `off` disabilita le scritture MSR. `custom` richiede il backend XMRig esterno e non viene eseguita dal motore nativo. Il preset nativo è facoltativo: CPU non supportate, driver o permessi assenti non devono impedire l'avvio del mining.
+
 MSR è una funzione di ottimizzazione **facoltativa**, mai un requisito per avviare il miner.
 
 Requisiti:

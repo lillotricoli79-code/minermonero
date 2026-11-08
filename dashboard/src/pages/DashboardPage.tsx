@@ -810,18 +810,19 @@ function App() {
                           )
                         }
                       >
-                        <option value="auto">Automatico · preset Intel nativo</option>
+                        <option value="auto">Automatico · preset CPU supportato</option>
                         <option value="off">Disattivato</option>
-                        <option value="fast">Fast · preset XMRig</option>
+                        <option value="fast">Fast · preset CPU nativo</option>
                         {config.msr_mode === "custom" && (
                           <option value="custom">Personalizzato · preservato</option>
                         )}
                       </select>
                       <small>
-                        Automatico usa il preset Intel nativo con ripristino dei
-                        registri originali. Fast, Personalizzato e CPU non
-                        Intel passano a XMRig. Richiede i privilegi necessari
-                        per accedere ai registri MSR.
+                        Automatico e Fast usano il preset CPU nativo
+                        supportato dal rilevamento hardware; Fast è un alias
+                        compatibile e non applica un profilo diverso.
+                        Personalizzato usa il backend XMRig. CPU non supportate
+                        o permessi MSR mancanti non bloccano il mining nativo.
                       </small>
                     </label>
                     <label className="field">
