@@ -1,16 +1,25 @@
 #include "msr/msr.hpp"
 
-#include <cassert>
+#include <iostream>
 
 int main() {
     unique_rx::MsrManager manager;
-    assert(!manager.active());
+    if (manager.active()) {
+        std::cerr << "MSR manager must start inactive\n";
+        return 1;
+    }
 
     manager.restore();
-    assert(!manager.active());
+    if (manager.active()) {
+        std::cerr << "MSR manager became active after an empty restore\n";
+        return 1;
+    }
 
     manager.restore();
-    assert(!manager.active());
+    if (manager.active()) {
+        std::cerr << "MSR manager restore is not idempotent\n";
+        return 1;
+    }
 
     return 0;
 }
