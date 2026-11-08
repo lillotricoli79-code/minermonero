@@ -1,0 +1,23 @@
+{
+  "cpu": {
+    "enabled": true,
+    "max-threads-hint": 0,
+    "huge-pages": false
+  },
+  "randomx": {
+    "full-memory": true,
+    "wrmsr": false,
+    "msr-module": "msr/IntelMSR.bin"
+  },
+  "pools": [
+    {
+      "enabled": true,
+      "url": "pool.example.org:3333",
+      "user": "YOUR_MONERO_WALLET_ADDRESS",
+      "pass": "x",
+      "rig-id": "unique-rx-worker",
+      "tls": false,
+      "keepalive": false
+    }
+  ]
+}
