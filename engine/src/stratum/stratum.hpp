@@ -85,6 +85,16 @@ inline std::uint32_t nonce_at_offset(const Job& job,
 std::vector<std::uint8_t> decode_hex(std::string_view value);
 std::uint64_t parse_share_target(std::string_view value);
 Job parse_job(const nlohmann::json& value);
+
+// C++ port of the RxMiner/NyxRX JSON-RPC Stratum protocol helpers.
+nlohmann::json make_login_request(std::uint64_t id, const PoolConfig& pool,
+                                  std::string_view agent);
+nlohmann::json make_submit_request(std::uint64_t id, std::string_view session_id,
+                                   std::string_view job_id, std::string_view nonce_hex,
+                                   std::string_view result_hex);
+nlohmann::json make_keepalive_request(std::uint64_t id, std::string_view session_id);
+std::string validate_login_response(const nlohmann::json& message);
+bool is_job_notification(const nlohmann::json& message) noexcept;
 std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config);
 PoolConfig parse_pool_config(const nlohmann::json& config);
 int run_miner(const std::filesystem::path& config_path,
