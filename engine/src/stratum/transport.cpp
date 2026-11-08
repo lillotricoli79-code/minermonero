@@ -96,8 +96,11 @@ public:
 
     std::vector<std::string> read_lines(int timeout_ms) {
         std::vector<std::string> lines;
-        const bool tls_buffered = ssl_ != nullptr && SSL_pending(ssl_) > 0;
-        if (!tls_buffered && !wait_for(platform::kReadEvent, timeout_ms)) return lines;
+        const bool tls_buffered =
+            ssl_ != nullptr && ssl_read_want_ == platform::kReadEvent &&
+            SSL_pending(ssl_) > 0;
+        const auto wanted_event = ssl_ != nullptr ? ssl_read_want_ : platform::kReadEvent;
+        if (!tls_buffered && !wait_for(wanted_event, timeout_ms)) return lines;
 
         std::array<char, 8192> chunk{};
         int count = 0;
@@ -105,7 +108,14 @@ public:
             count = SSL_read(ssl_, chunk.data(), static_cast<int>(chunk.size()));
             if (count <= 0) {
                 const int error = SSL_get_error(ssl_, count);
-                if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) return lines;
+                if (error == SSL_ERROR_WANT_READ) {
+                    ssl_read_want_ = platform::kReadEvent;
+                    return lines;
+                }
+                if (error == SSL_ERROR_WANT_WRITE) {
+                    ssl_read_want_ = platform::kWriteEvent;
+                    return lines;
+                }
                 if (error == SSL_ERROR_ZERO_RETURN) throw std::runtime_error("pool closed TLS connection");
                 throw std::runtime_error("TLS read from pool failed");
             }
@@ -119,6 +129,7 @@ public:
             }
         }
 
+        if (ssl_ != nullptr) ssl_read_want_ = platform::kReadEvent;
         buffer_.append(chunk.data(), static_cast<std::size_t>(count));
         if (buffer_.size() > 1024 * 1024) throw std::runtime_error("oversized Stratum response");
         std::size_t consumed = 0;
@@ -139,6 +150,7 @@ private:
     SSL_CTX* context_ = nullptr;
     SSL* ssl_ = nullptr;
     std::string buffer_;
+    short ssl_read_want_ = platform::kReadEvent;
 
     bool wait_for(short events, int timeout_ms) const {
         return platform::wait_socket(socket_, events, timeout_ms);
