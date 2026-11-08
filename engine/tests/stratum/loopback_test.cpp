@@ -353,7 +353,12 @@ int main() {
         miner_output.str().find("Share accepted") == std::string::npos ||
         miner_output.str().find("Share rejected") == std::string::npos ||
         miner_output.str().find("Share stale") == std::string::npos) {
-        std::cerr << "local Stratum reconnect/login/job/share acceptance test failed\n";
+        std::cerr << "local Stratum reconnect/login/job/share acceptance test failed"
+                  << " result=" << result
+                  << " server_ok=" << server_ok.load(std::memory_order_acquire)
+                  << "\n--- miner stdout ---\n" << miner_output.str()
+                  << "\n--- miner stderr ---\n" << miner_errors.str()
+                  << "\n";
         return 1;
     }
     std::cout << "Local Stratum established-connection reconnect, login/job, accepted, rejected and stale share handling passed.\n";
