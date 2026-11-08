@@ -78,8 +78,18 @@ std::uint64_t parse_share_target(std::string_view value) {
 }
 
 Job parse_job(const nlohmann::json& value) {
-    if (!value.is_object() || value.value("algo", std::string("rx/0")) != "rx/0") {
-        throw std::invalid_argument("pool job algorithm is not rx/0");
+    if (!value.is_object()) {
+        throw std::invalid_argument("pool job must be a JSON object");
+    }
+    // NyxRX RandomXVersion::parse_pool_name port: accept the V1 aliases
+    // while refusing rx/2 because this engine currently implements rx/0 only.
+    std::string algorithm = value.value("algo", std::string("rx/0"));
+    std::transform(algorithm.begin(), algorithm.end(), algorithm.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    if (algorithm != "rx/0" && algorithm != "rx" &&
+        algorithm != "randomx" && algorithm != "randomx/0") {
+        throw std::invalid_argument("unsupported pool algorithm: " + algorithm +
+                                    " (this engine supports RandomX V1 / rx/0)");
     }
     Job job;
     job.id = value.at("job_id").get<std::string>();
@@ -117,7 +127,7 @@ Job parse_job(const nlohmann::json& value) {
     const auto initial_nonce = decode_nonce_le(job.blob.data() + kNonceOffset);
     // Match NyxRX's pool-job handling: explicit nicehash metadata wins;
     // otherwise a non-zero initial nonce signals a pool-reserved prefix.
-    const bool nicehash = value.contains("nicehash")
+    const bool nicehash = value.contains("nicehash") && !value.at("nicehash").is_null()
         ? value.at("nicehash").get<bool>() : initial_nonce != 0;
     job.nonce_mask = nicehash ? 0x00ffffffU : UINT32_MAX;
     job.nonce_fixed = initial_nonce & ~job.nonce_mask;
