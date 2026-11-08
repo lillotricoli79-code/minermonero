@@ -1,4 +1,4 @@
-#include "stratum.hpp"
+#include "stratum/stratum.hpp"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
