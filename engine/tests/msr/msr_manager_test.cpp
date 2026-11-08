@@ -70,9 +70,15 @@ bool test_mock_msr_transactions() {
     ok &= check(backend.read(0, 0x11) == 0x98123432, "second masked MSR write failed on CPU 0");
     ok &= check(backend.read(1, 0x11) == 0xab123401, "second masked MSR write failed on CPU 1");
 
+    // Simulate firmware/another process changing bits outside our masks
+    // while the miner is active. Restore must not overwrite those unrelated bits.
+    backend.registers[{0, 0x10}] ^= 0x40000000ULL;
     ok &= check(!restore_registers(snapshots, read, write, log),
                 "successful mock MSR restore reported pending work");
-    ok &= check(backend.registers == initial, "mock MSR restore did not recover every original value");
+    auto expected_after_restore = initial;
+    expected_after_restore[{0, 0x10}] ^= 0x40000000ULL;
+    ok &= check(backend.registers == expected_after_restore,
+                "MSR restore overwrote bits outside the miner's write mask");
 
     backend.registers = initial;
     backend.writes = 0;

@@ -14,6 +14,7 @@ struct RegisterSnapshot {
     std::size_t cpu_index = 0;
     std::uint64_t register_id = 0;
     std::uint64_t value = 0;
+    std::uint64_t mask = 0;
     bool modified = false;
 };
 
@@ -24,8 +25,14 @@ bool restore_registers(std::vector<RegisterSnapshot>& snapshots,
     for (auto it = snapshots.rbegin(); it != snapshots.rend(); ++it) {
         if (!it->modified) continue;
         try {
-            write(it->cpu_index, it->register_id, it->value);
-            if (read(it->cpu_index, it->register_id) != it->value) {
+            // Restore only the bits this transaction changed. Preserve unrelated
+            // bits that firmware, the OS, or another owner may have changed since
+            // the original snapshot was taken.
+            const auto current = read(it->cpu_index, it->register_id);
+            const auto restored = (current & ~it->mask) | (it->value & it->mask);
+            write(it->cpu_index, it->register_id, restored);
+            if ((read(it->cpu_index, it->register_id) & it->mask) !=
+                (it->value & it->mask)) {
                 throw std::runtime_error("MSR restore read-back verification failed");
             }
             it->modified = false;
@@ -51,7 +58,7 @@ void apply_registers(const std::vector<std::size_t>& cpu_indices,
     for (const std::size_t cpu : cpu_indices) {
         for (const auto& item : writes) {
             snapshots.push_back({cpu, item.register_id,
-                                 read(cpu, item.register_id), false});
+                                 read(cpu, item.register_id), item.mask, false});
         }
     }
 
