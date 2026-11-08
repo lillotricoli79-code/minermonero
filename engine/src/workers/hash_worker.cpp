@@ -25,7 +25,8 @@ void write_nonce(std::vector<std::uint8_t>& blob, std::uint32_t nonce) {
     if (blob.size() < kNonceOffset + sizeof(nonce)) {
         throw std::runtime_error("RandomX job blob is too short for its nonce");
     }
-    std::memcpy(blob.data() + kNonceOffset, &nonce, sizeof(nonce));
+    const auto encoded = encode_nonce_le(nonce);
+    std::copy(encoded.begin(), encoded.end(), blob.begin() + kNonceOffset);
 }
 
 bool meets_target(const Hash& hash, std::uint64_t target) {

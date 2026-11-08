@@ -14,6 +14,22 @@ namespace unique_rx {
 inline constexpr std::size_t kNonceOffset = 39;
 inline constexpr std::size_t kMaximumBlobSize = 1024;
 
+inline std::uint32_t decode_nonce_le(const std::uint8_t* bytes) noexcept {
+    return static_cast<std::uint32_t>(bytes[0]) |
+        (static_cast<std::uint32_t>(bytes[1]) << 8) |
+        (static_cast<std::uint32_t>(bytes[2]) << 16) |
+        (static_cast<std::uint32_t>(bytes[3]) << 24);
+}
+
+inline std::array<std::uint8_t, 4> encode_nonce_le(std::uint32_t nonce) noexcept {
+    return {
+        static_cast<std::uint8_t>(nonce),
+        static_cast<std::uint8_t>(nonce >> 8),
+        static_cast<std::uint8_t>(nonce >> 16),
+        static_cast<std::uint8_t>(nonce >> 24),
+    };
+}
+
 struct Job {
     std::string id;
     std::vector<std::uint8_t> blob;

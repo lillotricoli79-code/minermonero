@@ -96,7 +96,7 @@ Job parse_job(const nlohmann::json& value) {
     const auto seed = decode_hex(seed_hex);
     std::copy(seed.begin(), seed.end(), job.seed.begin());
     job.target = parse_share_target(value.at("target").get<std::string>());
-    std::memcpy(&job.nonce, job.blob.data() + kNonceOffset, sizeof(job.nonce));
+    job.nonce = decode_nonce_le(job.blob.data() + kNonceOffset);
     return job;
 }
 

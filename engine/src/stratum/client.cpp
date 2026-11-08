@@ -233,8 +233,7 @@ int run_miner(const std::filesystem::path& config_path,
                             continue;
                         }
                         const auto submit_id = next_id++;
-                        std::array<std::uint8_t, 4> nonce_bytes{};
-                        std::memcpy(nonce_bytes.data(), &share.nonce, nonce_bytes.size());
+                        const auto nonce_bytes = encode_nonce_le(share.nonce);
                         try {
                             transport.send_json({{"id", submit_id}, {"jsonrpc", "2.0"},
                                 {"method", "submit"}, {"params", {{"id", session_id},

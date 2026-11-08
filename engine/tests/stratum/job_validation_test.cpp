@@ -64,10 +64,15 @@ int main() {
         {"target", "ffffffff"},
         {"algo", "rx/0"},
     };
+    wire_job["blob"] = std::string(kNonceOffset * 2, '0') +
+        "78563412" + std::string((76 - kNonceOffset - 4) * 2, '0');
     const auto job = parse_job(wire_job);
     ok &= check(job.id == "job-1" && job.blob.size() == 76 &&
-                    job.target == UINT64_MAX,
-                "valid rx/0 job did not parse");
+                    job.target == UINT64_MAX && job.nonce == 0x12345678U,
+                "valid rx/0 job or little-endian nonce did not parse");
+    ok &= check(encode_nonce_le(0x12345678U) ==
+                    std::array<std::uint8_t, 4>{0x78, 0x56, 0x34, 0x12},
+                "little-endian nonce encoding failed");
 
     auto target_update = job;
     target_update.target /= 2;
