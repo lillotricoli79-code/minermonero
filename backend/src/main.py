@@ -458,6 +458,13 @@ class MinerController:
                 else:
                     self._log(line)
         self._log(f"{self.engine_kind or 'Miner'} terminato (codice {process.poll()}).")
+        # Clear only this exact process: an immediately restarted miner may
+        # already have replaced self.process while this reader is unwinding.
+        with self.lock:
+            if self.process is process:
+                self.process = None
+                self.engine_kind = None
+                self.native_status = None
 
     def stop(self) -> None:
         with self.lock:
