@@ -112,7 +112,9 @@ int run_miner(const std::filesystem::path& config_path,
                 "writes are intentionally unsupported.");
         }
         MsrManager msr(randomx_config.value("msr-module", std::string()));
-        if (!msr_explicitly_disabled) {
+        if (msr_explicitly_disabled) {
+            logging::info("msr", "MSR tuning explicitly disabled by configuration");
+        } else {
             try {
                 msr.apply_randomx_preset();
                 logging::info("msr", "CPU-specific RandomX preset applied; original registers will be restored on exit");
@@ -159,6 +161,8 @@ int run_miner(const std::filesystem::path& config_path,
         rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
         logging::info("miner", "UniqueRX C++ RandomX V1 miner starting");
+        logging::info("config", std::to_string(pools.size()) +
+            " enabled pool endpoint(s) loaded; credentials are not logged");
         const auto cpu_features = cpu_summary.value("features", nlohmann::json::object());
         std::string cpu_line = cpu_summary.value("brand", std::string("Unknown CPU")) +
             " | " + std::to_string(cpu_summary.value("physical_cores", 0U)) +
@@ -239,11 +243,14 @@ int run_miner(const std::filesystem::path& config_path,
                 auto next_flags = flags;
                 auto next_cache = create_randomx_cache(next_job.seed, next_flags);
                 std::shared_ptr<randomx_dataset> next_dataset;
+                logging::info("memory", "RandomX cache initialized for new seed");
                 if (full_memory) {
+                    logging::info("memory", "initializing full RandomX dataset");
                     std::cout << "Initializing RandomX full dataset..." << std::flush;
                     next_dataset = create_randomx_dataset(
                         next_cache, pool_threads, next_flags);
                     std::cout << " ready\n";
+                    logging::info("memory", "full RandomX dataset ready");
                 }
                 cache = std::move(next_cache);
                 dataset = std::move(next_dataset);
@@ -580,6 +587,7 @@ int run_miner(const std::filesystem::path& config_path,
 
         state.stop.store(true, std::memory_order_release);
         for (auto& worker : workers) if (worker.joinable()) worker.join();
+        logging::info("miner", "mining workers stopped; final MSR restoration follows");
         {
             std::lock_guard lock(state.error_mutex);
             if (!state.worker_error.empty()) throw std::runtime_error(state.worker_error);
