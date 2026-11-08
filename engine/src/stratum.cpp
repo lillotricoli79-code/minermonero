@@ -1,4 +1,4 @@
-#include "stratum.hpp"
+#include "stratum/stratum.hpp"
 #include "core/mining.hpp"
 #include "randomx/cache.hpp"
 #include "platform/socket.hpp"
