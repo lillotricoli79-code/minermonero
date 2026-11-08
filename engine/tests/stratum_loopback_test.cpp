@@ -139,6 +139,7 @@ int main() {
             {"user", "loopback-test-wallet"}, {"pass", "x"},
             {"rig-id", "test"}, {"tls", false},
         }})},
+        {"cpu", {{"enabled", true}, {"max-threads-hint", 1}}},
     };
     {
         std::ofstream file(config_path);
