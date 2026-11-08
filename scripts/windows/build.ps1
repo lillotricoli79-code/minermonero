@@ -159,7 +159,7 @@ $exeDirectory = Split-Path -Parent $exe
 $queue = [System.Collections.Generic.Queue[string]]::new()
 $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $queue.Enqueue($exe)
-$systemDlls = @("advapi32.dll","bcrypt.dll","bcryptprimitives.dll","cfgmgr32.dll","comctl32.dll","comdlg32.dll","gdi32.dll","imm32.dll","iphlpapi.dll","kernel32.dll","kernelbase.dll","mpr.dll","msvcrt.dll","ntdll.dll","ole32.dll","oleaut32.dll","powrprof.dll","psapi.dll","rpcrt4.dll","sechost.dll","shell32.dll","shlwapi.dll","user32.dll","version.dll","winmm.dll","ws2_32.dll","wldap32.dll","wtsapi32.dll","ucrtbase.dll")
+$systemDlls = @("advapi32.dll","bcrypt.dll","bcryptprimitives.dll","cfgmgr32.dll","comctl32.dll","comdlg32.dll","gdi32.dll","imm32.dll","iphlpapi.dll","kernel32.dll","kernelbase.dll","mpr.dll","msvcrt.dll","ntdll.dll","ole32.dll","oleaut32.dll","powrprof.dll","psapi.dll","rpcrt4.dll","sechost.dll","shell32.dll","shlwapi.dll","user32.dll","version.dll","winmm.dll","ws2_32.dll","wldap32.dll","wtsapi32.dll","ucrtbase.dll","crypt32.dll","cryptbase.dll","cryptsp.dll","ncrypt.dll","secur32.dll")
 while ($queue.Count -gt 0) {
     $current = $queue.Dequeue()
     if (-not $seen.Add($current)) { continue }
