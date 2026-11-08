@@ -129,9 +129,8 @@ Job parse_job(const nlohmann::json& value) {
     // advertised/explicit true flag enables NiceHash, and a non-zero nonce
     // prefix is also detected automatically. An explicit false must not
     // erase a prefix that XMRig would recognize from the blob itself.
-    const bool nicehash =
-        (value.contains("nicehash") && !value.at("nicehash").is_null() &&
-         value.at("nicehash").get<bool>()) || initial_nonce != 0;
+    const bool nicehash = value.contains("nicehash") && !value.at("nicehash").is_null()
+        ? value.at("nicehash").get<bool>() : initial_nonce != 0;
     job.nonce_mask = nicehash ? 0x00ffffffU : UINT32_MAX;
     job.nonce_fixed = initial_nonce & ~job.nonce_mask;
     job.nonce = initial_nonce & job.nonce_mask;
