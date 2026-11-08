@@ -45,6 +45,9 @@ int main() {
     }
 
     if (unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x17, 0x01) ||
+        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x01) ||
+        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x21) ||
+        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x51) ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x40) ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x15, 0x02) ||
         unique_rx::msr_preset_for_cpu("UnknownVendor", 6, 0x5e)) {
