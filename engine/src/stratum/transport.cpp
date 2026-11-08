@@ -62,7 +62,16 @@ public:
             throw std::runtime_error("unable to connect to pool within 10 seconds");
         }
 
+        // connect_with_timeout leaves the socket nonblocking. OpenSSL's
+        // initial handshake is performed in blocking mode, then Stratum I/O
+        // returns to nonblocking operation.
+        if (!platform::set_blocking(socket_)) {
+            throw std::runtime_error("unable to set blocking pool socket for TLS handshake");
+        }
         if (config.tls) connect_tls(config);
+        if (!platform::set_nonblocking(socket_)) {
+            throw std::runtime_error("unable to set nonblocking pool socket");
+        }
     }
 
     void send_json(const nlohmann::json& value) {
