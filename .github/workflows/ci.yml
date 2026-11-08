@@ -94,30 +94,22 @@ jobs:
           npm ci --prefix dashboard
           npm run build --prefix dashboard
 
-      - name: Cache vcpkg OpenSSL installation
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.VCPKG_INSTALLATION_ROOT }}\installed
-            ${{ env.VCPKG_INSTALLATION_ROOT }}\downloads
-          key: vcpkg-${{ runner.os }}-openssl-x64-${{ hashFiles('engine/CMakeLists.txt') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-openssl-x64-
-
-      - name: Install OpenSSL
+      - name: Locate runner OpenSSL
         shell: pwsh
-        env:
-          # Use the CMake already provisioned on the hosted runner instead of
-          # downloading vcpkg's pinned copy from GitHub on every cold cache.
-          VCPKG_FORCE_SYSTEM_BINARIES: "1"
-        run: vcpkg install openssl:x64-windows
+        run: |
+          $opensslRoot = Join-Path $env:ProgramFiles "OpenSSL"
+          $opensslHeader = Join-Path $opensslRoot "include/openssl/ssl.h"
+          if (-not (Test-Path $opensslHeader)) {
+            throw "The hosted Windows image does not contain its provisioned OpenSSL headers: $opensslHeader"
+          }
+          "OPENSSL_ROOT_DIR=$opensslRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Configure native engine
         shell: pwsh
         run: >
           cmake -S engine -B build -G "Visual Studio 17 2022" -A x64
           -DBUILD_TESTING=ON
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DOPENSSL_ROOT_DIR="$env:OPENSSL_ROOT_DIR"
 
       - name: Build native engine
         run: cmake --build build --config Release --parallel 2
