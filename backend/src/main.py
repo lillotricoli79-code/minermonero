@@ -248,8 +248,10 @@ def msr_override_enabled(randomx: dict[str, Any]) -> bool:
         return False
     if isinstance(value, int) and not isinstance(value, bool) and value < 0:
         return False
-    if value is None or value is True:
+    if value is None:
         return not is_intel_cpu()
+    if value is True:
+        return True
     return True
 
 
