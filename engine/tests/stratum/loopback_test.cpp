@@ -236,7 +236,7 @@ int main() {
                 return;
             }
             bool valid_submits = true;
-            for (int index = 0; index < 2; ++index) {
+            for (int index = 0; index < 3; ++index) {
                 line.clear();
                 if (!read_line(client, line)) {
                     valid_submits = false;
@@ -258,9 +258,12 @@ int main() {
                 }
                 const nlohmann::json submit_response = index == 0
                     ? nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                                     {"error", nlohmann::json::array({1, "Low difficulty share", nullptr})}}
-                    : nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                                     {"result", {{"status", "OK"}}}};
+                                     {"error", nlohmann::json::array({-1, "Stale share", nullptr})}}
+                    : index == 1
+                        ? nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                                         {"error", nlohmann::json::array({1, "Low difficulty share", nullptr})}}
+                        : nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                                         {"result", {{"status", "OK"}}}};
                 if (!send_all(client, submit_response.dump() + "\n")) {
                     valid_submits = false;
                     break;
@@ -279,7 +282,7 @@ int main() {
     std::ostringstream miner_errors;
     auto* previous_output = std::cout.rdbuf(miner_output.rdbuf());
     auto* previous_error = std::cerr.rdbuf(miner_errors.rdbuf());
-    const int result = unique_rx::run_miner(config_path, 2);
+    const int result = unique_rx::run_miner(config_path, 3);
     std::cout.rdbuf(previous_output);
     std::cerr.rdbuf(previous_error);
     pool.join();
@@ -287,10 +290,11 @@ int main() {
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
         miner_errors.str().find("switching pool") == std::string::npos ||
-        miner_output.str().find("Share accepted") == std::string::npos ||\n        miner_output.str().find("Share rejected") == std::string::npos) {
+        miner_output.str().find("Share accepted") == std::string::npos ||\n        miner_output.str().find("Share rejected") == std::string::npos ||
+        miner_output.str().find("Share stale") == std::string::npos) {
         std::cerr << "local Stratum failover/login/job/share acceptance test failed\n";
         return 1;
     }
-    std::cout << "Local Stratum login, RandomX job and share submit passed.\n";
+    std::cout << "Local Stratum login, RandomX job, accepted, rejected and stale share handling passed.\n";
     return 0;
 }

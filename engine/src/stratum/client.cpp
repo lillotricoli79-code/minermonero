@@ -17,6 +17,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <csignal>
 #include <cstring>
 #include <deque>
@@ -200,9 +201,19 @@ int run_miner(const std::filesystem::path& config_path,
                     const bool accepted = !has_error && message.contains("result") &&
                         message["result"].is_object() &&
                         message["result"].value("status", std::string()) == "OK";
+                    std::string error_text = has_error ? message["error"].dump() : std::string();
+                    std::transform(error_text.begin(), error_text.end(), error_text.begin(),
+                        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+                    const bool stale = !accepted &&
+                        (error_text.find("stale") != std::string::npos ||
+                         error_text.find("job expired") != std::string::npos ||
+                         error_text.find("job not found") != std::string::npos);
                     if (accepted) {
                         std::cout << "Share accepted\n";
                         state.accepted.fetch_add(1, std::memory_order_relaxed);
+                    } else if (stale) {
+                        std::cout << "Share stale: " << error_text << '\n';
+                        state.stale_shares.fetch_add(1, std::memory_order_relaxed);
                     } else {
                         std::cout << "Share rejected: ";
                         if (has_error) std::cout << message["error"].dump();
