@@ -66,10 +66,6 @@ inline bool set_nonblocking(Socket socket) {
     u_long enabled = 1;
     return ioctlsocket(socket, FIONBIO, &enabled) == 0;
 }
-inline bool set_blocking(Socket socket) {
-    u_long enabled = 0;
-    return ioctlsocket(socket, FIONBIO, &enabled) == 0;
-}
 inline bool wait_socket(Socket socket, short events, int timeout_ms) {
     WSAPOLLFD descriptor{};
     descriptor.fd = socket;
@@ -150,10 +146,6 @@ inline int receive_bytes(Socket socket, char* data, std::size_t length) {
 inline bool set_nonblocking(Socket socket) {
     const int flags = fcntl(socket, F_GETFL, 0);
     return flags >= 0 && fcntl(socket, F_SETFL, flags | O_NONBLOCK) == 0;
-}
-inline bool set_blocking(Socket socket) {
-    const int flags = fcntl(socket, F_GETFL, 0);
-    return flags >= 0 && fcntl(socket, F_SETFL, flags & ~O_NONBLOCK) == 0;
 }
 inline bool wait_socket(Socket socket, short events, int timeout_ms) {
     pollfd descriptor{socket, events, 0};
