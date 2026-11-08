@@ -9,12 +9,11 @@ on:
 permissions:
   contents: read
 
-# Keep each CI generation isolated: an older runner blocked while installing
-# vcpkg dependencies must not hold validation of the current source revision.
-# Builds within the same generation are not cancelled by subsequent pushes.
+# Validate the newest source revision promptly. A stuck older run (for
+# example while vcpkg installs dependencies) must not block the current build.
 concurrency:
   group: native-ci-v2-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   linux:
