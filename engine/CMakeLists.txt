@@ -6,17 +6,11 @@ include(FetchContent)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/randomx/upstream/CMakeLists.txt")
-  set(randomx_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/randomx/upstream")
-  add_subdirectory(src/randomx/upstream)
-else()
-  FetchContent_Declare(
-    randomx
-    GIT_REPOSITORY https://github.com/tevador/RandomX.git
-    GIT_TAG 12f2c2ffe2108d6cf54c391fee33c8bc3646cdab
-  )
-  FetchContent_MakeAvailable(randomx)
+set(randomx_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/randomx/upstream")
+if(NOT EXISTS "${randomx_SOURCE_DIR}/CMakeLists.txt")
+  message(FATAL_ERROR "Vendored RandomX rx/0 source tree is missing; network fetching is disabled.")
 endif()
+add_subdirectory(src/randomx/upstream)
 FetchContent_Declare(
   nlohmann_json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
