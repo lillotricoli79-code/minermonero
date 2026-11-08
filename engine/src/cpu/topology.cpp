@@ -176,6 +176,10 @@ std::optional<std::uint64_t> available_l3_cache_bytes() {
     }
 #elif defined(__linux__)
     std::set<std::string> shared_l3;
+    std::set<unsigned int> allowed_cpus;
+    for (const auto cpu : platform::linux_cpu::allowed_cpus()) {
+        allowed_cpus.insert(cpu);
+    }
     std::uint64_t total = 0;
     std::error_code ec;
     const std::filesystem::path cpu_root("/sys/devices/system/cpu");
@@ -186,6 +190,18 @@ std::optional<std::uint64_t> available_l3_cache_bytes() {
             !std::all_of(name.begin() + 3, name.end(),
                          [](unsigned char ch) { return ch >= '0' && ch <= '9'; })) {
             continue;
+        }
+        // Count only cache domains that overlap the CPUs visible to this
+        // process. A container restricted to one NUMA node must not use the
+        // host's unrelated L3 caches to overestimate its RandomX cache budget.
+        if (!allowed_cpus.empty()) {
+            try {
+                const auto cpu_id = static_cast<unsigned int>(
+                    std::stoul(name.substr(3)));
+                if (!allowed_cpus.contains(cpu_id)) continue;
+            } catch (...) {
+                continue;
+            }
         }
         const auto cache_root = entry.path() / "cache";
         std::error_code cache_ec;
