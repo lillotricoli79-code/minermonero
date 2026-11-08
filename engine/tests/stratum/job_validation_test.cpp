@@ -82,6 +82,14 @@ int main() {
     job_without_height.erase("height");
     ok &= check(!parse_job(job_without_height).height.has_value(),
                 "missing pool height was reported as a real block height");
+    invalid_job = wire_job;
+    invalid_job["height"] = -1;
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "negative block height was accepted");
+    invalid_job = wire_job;
+    invalid_job["height"] = 1.5;
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "fractional block height was accepted");
     ok &= check(encode_nonce_le(0x12345678U) ==
                     std::array<std::uint8_t, 4>{0x78, 0x56, 0x34, 0x12},
                 "little-endian nonce encoding failed");
