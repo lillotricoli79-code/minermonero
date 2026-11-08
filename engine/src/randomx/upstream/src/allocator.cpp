@@ -44,7 +44,7 @@ namespace randomx {
 
 	template<size_t alignment>
 	void AlignedAllocator<alignment>::freeMemory(void* ptr, size_t count) {
-		rx_aligned_free(ptr);
+		freePagedMemory(ptr, count);
 	}
 
 	template struct AlignedAllocator<CacheLineSize>;

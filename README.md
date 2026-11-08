@@ -264,3 +264,5 @@ Questa sezione integra le regole precedenti e deve essere rispettata in ogni ses
 8. **Pubblicazione.** L'utente ha autorizzato il lavoro direttamente su `main`, inclusi i commit necessari. Non usare rami paralleli. Non eseguire force push o operazioni distruttive.
 9. **Consegna finale.** Consegnare il progetto effettivamente aggiornato, con riepilogo conciso dei moduli integrati, commit pubblicati, verifiche realmente eseguite e limitazioni residue. Non dichiarare finito ciò che non è stato effettivamente realizzato.
 
+
+- Le allocazioni RandomX page-backed, l'allineamento Linux a 2 MiB per Transparent Huge Pages, il fault-in delle huge pages esplicite e le API di policy THP/JIT/prefetch in `engine/src/randomx/upstream/src/virtual_memory.c` e `.h`, insieme all'adattamento dell'allocatore in `allocator.cpp`, derivano da `c0mm4nd/rxminer`, commit `5fe52dde2650c623fd0472804152a94711889dce`. Le modifiche RxMiner sono MIT; il copyright e la licenza BSD-3-Clause upstream RandomX sono conservati nei file.
