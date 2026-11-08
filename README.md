@@ -186,6 +186,11 @@ ctest --test-dir engine/build --output-on-failure
 
 Adattare i comandi al generatore e alla piattaforma (ad esempio configurazione Release su generatori multi-config). Gli script BAT/PowerShell per Windows e gli script shell per Linux devono essere inclusi e mantenuti funzionanti, senza avviare automaticamente una compilazione sul PC dell'utente.
 
+Script operativi aggiunti (da verificare nella fase finale):
+- Windows: `scripts/windows/start.ps1`, `scripts/windows/stop.ps1`, `scripts/windows/diagnose.ps1`.
+- Linux: `scripts/linux/start.sh`, `scripts/linux/stop.sh`, `scripts/linux/diagnose.sh`.
+- Gli script start/stop usano il backend locale su `127.0.0.1:8000`, così l'arresto passa dal gestore che invia il segnale di shutdown al motore e consente il ripristino MSR.
+
 ## 12. Test obbligatori
 
 A ogni modifica eseguire i test pertinenti e aggiungerne quando manca copertura.
