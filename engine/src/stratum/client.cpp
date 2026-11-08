@@ -85,7 +85,9 @@ int run_miner(const std::filesystem::path& config_path,
         bool have_seed = false;
         std::shared_ptr<randomx_cache> cache;
         std::shared_ptr<randomx_dataset> dataset;
-        const auto flags = randomx_get_flags();
+        auto flags = randomx_get_flags();
+        const auto cpu_config = config.value("cpu", nlohmann::json::object());
+        if (cpu_config.value("huge-pages", false)) flags |= RANDOMX_FLAG_LARGE_PAGES;
         std::uint64_t generation = 0;
         using Clock = std::chrono::steady_clock;
         constexpr auto kShareResponseTimeout = std::chrono::seconds(60);
