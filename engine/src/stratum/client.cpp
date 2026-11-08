@@ -2,6 +2,7 @@
 #include "core/mining.hpp"
 #include "randomx/cache.hpp"
 #include "randomx/dataset.hpp"
+#include "msr/msr.hpp"
 #include "platform/socket.hpp"
 #include "stratum/transport.hpp"
 
@@ -70,11 +71,16 @@ int run_miner(const std::filesystem::path& config_path,
         const bool msr_explicitly_disabled =
             (wrmsr.is_boolean() && !wrmsr.get<bool>()) ||
             (wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() < 0);
-        if (!msr_explicitly_disabled) {
+        if (!wrmsr.is_null() && !wrmsr.is_boolean() &&
+            !(wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() < 0)) {
             throw std::runtime_error(
-                "Native engine MSR is not implemented. Set randomx.wrmsr to false "
-                "only if you explicitly accept mining without MSR, or use XMRig "
-                "for automatic, Fast or custom MSR presets.");
+                "Native engine supports the Intel automatic RandomX MSR preset only; "
+                "use XMRig for custom MSR configurations.");
+        }
+        MsrManager msr(randomx_config.value("msr-module", std::string()));
+        if (!msr_explicitly_disabled) {
+            msr.apply_randomx_preset();
+            std::cout << "Intel RandomX MSR preset applied and will be restored on exit.\\n";
         }
 
         platform::NetworkRuntime network;
