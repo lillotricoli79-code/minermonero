@@ -1,5 +1,6 @@
 #include "core/mining.hpp"
 #include "platform/affinity.hpp"
+#include "virtual_memory.h"
 
 #include <algorithm>
 
@@ -68,10 +69,14 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         state.report_worker_error("invalid CPU worker index or worker count");
         return;
     }
-    if (!platform::pin_current_thread(worker_id)) {
+    const bool pinned = platform::pin_current_thread(worker_id);
+    if (!pinned) {
         std::cerr << "CPU worker " << worker_id
                   << ": affinity unavailable; continuing without pinning\n";
     }
+    // Scratchpad mappings are reused only by workers on the same NUMA node.
+    rxm_set_allocator_node(pinned
+        ? platform::numa_node_for_logical_cpu(worker_id) : -1);
 
     Vm vm;
     std::shared_ptr<const MiningWork> active_work;

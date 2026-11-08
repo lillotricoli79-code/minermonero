@@ -36,7 +36,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace {
     constexpr size_t scratchpadSize = 2UL << 20;
-    struct CachedPage { void* ptr; bool huge; };
+    thread_local int allocationNode = -1;
+    struct CachedPage { void* ptr; bool huge; int node; };
     struct ScratchpadPool {
         std::mutex mutex;
         std::vector<CachedPage> pages;
@@ -51,7 +52,7 @@ namespace {
             if (count != scratchpadSize) return nullptr;
             std::lock_guard<std::mutex> guard(mutex);
             for (auto it = pages.begin(); it != pages.end(); ++it) {
-                if (it->huge == huge) {
+                if (it->huge == huge && it->node == allocationNode) {
                     void* ptr = it->ptr;
                     pages.erase(it);
                     return ptr;
@@ -64,7 +65,7 @@ namespace {
             if (!ptr || count != scratchpadSize) return false;
             std::lock_guard<std::mutex> guard(mutex);
             if (pages.size() >= capacity) return false;
-            try { pages.push_back({ptr, huge}); }
+            try { pages.push_back({ptr, huge, allocationNode}); }
             catch (...) { return false; }
             return true;
         }
@@ -81,6 +82,10 @@ namespace {
 
 extern "C" void rxm_set_memory_pool(size_t capacity) {
     scratchpad_pool.set_capacity(capacity);
+}
+
+extern "C" void rxm_set_allocator_node(int node) {
+    allocationNode = node;
 }
 
 namespace randomx {

@@ -176,6 +176,37 @@ inline std::vector<unsigned int> ordered_processors(
 }
 #endif
 
+inline int numa_node_for_logical_cpu(std::uint32_t logical_cpu) noexcept {
+    try {
+#ifdef _WIN32
+        const auto processors = ordered_processors();
+        if (logical_cpu >= processors.size()) return -1;
+        PROCESSOR_NUMBER processor{};
+        processor.Group = processors[logical_cpu].first;
+        processor.Number = static_cast<BYTE>(processors[logical_cpu].second);
+        USHORT node = 0;
+        return GetNumaProcessorNodeEx(&processor, &node) ? static_cast<int>(node) : -1;
+#elif defined(__linux__)
+        const auto allowed = linux_cpu::allowed_cpus();
+        const auto processors = ordered_processors(allowed);
+        if (logical_cpu >= processors.size()) return -1;
+        const auto cpu_root = std::filesystem::path("/sys/devices/system/cpu") /
+            ("cpu" + std::to_string(processors[logical_cpu]));
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(cpu_root, ec)) {
+            const auto name = entry.path().filename().string();
+            if (name.size() > 4 && name.starts_with("node") &&
+                std::all_of(name.begin() + 4, name.end(),
+                    [](unsigned char ch) { return ch >= '0' && ch <= '9'; })) {
+                return std::stoi(name.substr(4));
+            }
+        }
+#endif
+    } catch (...) {
+    }
+    return -1;
+}
+
 inline bool pin_current_thread(std::uint32_t logical_cpu) noexcept {
     try {
 #ifdef _WIN32
