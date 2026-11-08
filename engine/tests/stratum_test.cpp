@@ -1,4 +1,5 @@
 #include "stratum.hpp"
+#include "cpu/topology.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -85,6 +86,18 @@ int main() {
     invalid_job["blob"] = std::string((kMaximumBlobSize + 1) * 2, '0');
     ok &= rejects([&] { parse_job(invalid_job); },
                   "oversized job blob was accepted");
+
+    // CPU topology selection and safety bounds.
+    ok &= check(select_cpu_threads(nlohmann::json{{"enabled", false}}) == 1,
+                "disabled CPU configuration did not select the safe single-thread fallback");
+    const auto full_cpu_threads = select_cpu_threads(
+        nlohmann::json{{"enabled", true}, {"max-threads-hint", 100}});
+    ok &= check(full_cpu_threads >= 1 && full_cpu_threads <= 64,
+                "CPU topology selection exceeded supported thread bounds");
+    const auto minimum_cpu_threads = select_cpu_threads(
+        nlohmann::json{{"enabled", true}, {"max-threads-hint", 1}});
+    ok &= check(minimum_cpu_threads >= 1 && minimum_cpu_threads <= full_cpu_threads,
+                "CPU low-thread hint did not stay within selected topology bounds");
 
     // Pool URL parsing, defaults, IPv6 and TLS fingerprint validation.
     auto config = base_pool_config();
