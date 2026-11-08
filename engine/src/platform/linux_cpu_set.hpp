@@ -40,8 +40,9 @@ inline bool pin_current_thread(unsigned int cpu) noexcept {
     // pthread_setaffinity_np also requires a mask at least as large as the
     // kernel's configured cpumask, not merely large enough for this CPU id.
     const auto minimum_words = static_cast<std::size_t>(cpu) / bits + 1;
-    for (std::size_t words = 16; words <= 16384; words *= 2) {
-        words = words < minimum_words ? minimum_words : words;
+    std::size_t words = 16;
+    while (words < minimum_words && words <= 16384) words *= 2;
+    for (; words <= 16384; words *= 2) {
         std::vector<unsigned long> mask(words, 0UL);
         mask[cpu / bits] |= 1UL << (cpu % bits);
         const int result = pthread_setaffinity_np(
