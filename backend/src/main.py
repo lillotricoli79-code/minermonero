@@ -366,8 +366,8 @@ class MinerController:
             if engine_kind == "xmrig" and msr_requires_xmrig:
                 mode = public_config(config)["msr_mode"]
                 self._log(
-                    f"Avvio XMRig: modalità MSR {mode}; il motore nativo non ha ancora "
-                    "il supporto MSR completo."
+                    f"Avvio XMRig: modalità MSR {mode}; il motore nativo supporta "
+                    "solo il preset automatico Intel reversibile."
                 )
             else:
                 self._log(f"Avvio {engine_kind} richiesto dall'utente.")
