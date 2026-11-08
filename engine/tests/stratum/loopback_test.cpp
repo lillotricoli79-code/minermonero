@@ -221,7 +221,8 @@ int main() {
             };
             const nlohmann::json login_response{
                 {"id", 1}, {"jsonrpc", "2.0"},
-                {"result", {{"id", "local-session"}, {"status", "OK"}, {"job", job}}},
+                // Standard XMRig-compatible pools may omit the optional status field.
+                {"result", {{"id", "local-session"}, {"job", job}}},
             };
 
             // First authenticated session: accept one share, then deliberately
