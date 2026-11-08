@@ -90,6 +90,16 @@ class ConfigPersistenceTests(unittest.TestCase):
                     load_config()
             self.assertEqual(path.read_text(encoding="utf-8"), original)
 
+    def test_invalid_randomx_section_is_not_replaced_with_defaults(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            original = json.dumps({"randomx": ["invalid"]})
+            path.write_text(original, encoding="utf-8")
+            with patch("backend.src.main.CONFIG_PATH", path):
+                with self.assertRaises(ValueError):
+                    load_config()
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
+
     def test_config_save_replaces_atomically_and_keeps_private_permissions(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"

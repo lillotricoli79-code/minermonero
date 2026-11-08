@@ -114,7 +114,7 @@ def load_config() -> dict[str, Any]:
             raise ValueError(f"Impossibile leggere config.json senza rischiare di sovrascriverlo: {exc}") from exc
         if not isinstance(saved, dict):
             raise ValueError("config.json deve contenere un oggetto JSON")
-        for section in ("cpu", "http"):
+        for section in ("cpu", "http", "randomx"):
             if section in saved and not isinstance(saved[section], dict):
                 raise ValueError(f"config.json: la sezione {section} deve essere un oggetto")
         if "pools" in saved and (
