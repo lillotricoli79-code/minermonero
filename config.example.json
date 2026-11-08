@@ -3,7 +3,8 @@
     "enabled": true,
     "threads": 0,
     "max-threads-hint": 0,
-    "huge-pages": false
+    "huge-pages": false,
+    "jit-huge-pages": false
   },
   "randomx": {
     "full-memory": true,
