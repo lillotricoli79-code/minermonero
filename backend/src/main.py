@@ -495,7 +495,13 @@ class MinerController:
                 self._log(f"Avvio {engine_kind} richiesto dall'utente.")
             threading.Thread(target=self._read_output, args=(process,), daemon=True).start()
         except OSError as exc:
-            self.process = None
+            # Do not clear a process that a concurrent start request may
+            # already have published after this Popen attempt failed.
+            with self.lock:
+                if self.process is not None and self.process.poll() is not None:
+                    self.process = None
+                    self.engine_kind = None
+                    self.native_status = None
             raise HTTPException(status_code=500, detail=f"Impossibile avviare XMRig: {exc}") from exc
 
     def _read_output(self, process: subprocess.Popen[str]) -> None:
