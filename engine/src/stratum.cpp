@@ -3,7 +3,6 @@
 
 #include <randomx.h>
 
-#include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
@@ -19,18 +18,14 @@
 #include <array>
 #include <atomic>
 #include <cerrno>
-#include <cctype>
 #include <chrono>
-#include <cmath>
 #include <cstring>
 #include <deque>
 #include <fstream>
 #include <functional>
-#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -104,12 +99,6 @@ std::string hex_encode(const std::uint8_t* bytes, std::size_t length) {
         result[index * 2 + 1] = digits[bytes[index] & 0x0f];
     }
     return result;
-}
-
-std::uint32_t read_nonce(const std::vector<std::uint8_t>& blob) {
-    std::uint32_t nonce = 0;
-    std::memcpy(&nonce, blob.data() + kNonceOffset, sizeof(nonce));
-    return nonce;
 }
 
 void write_nonce(std::vector<std::uint8_t>& blob, std::uint32_t nonce) {
@@ -323,13 +312,6 @@ private:
     }
 };
 
-std::uint32_t nonce_from_hash(const Hash& hash) {
-    return static_cast<std::uint32_t>(hash[0]) |
-           (static_cast<std::uint32_t>(hash[1]) << 8) |
-           (static_cast<std::uint32_t>(hash[2]) << 16) |
-           (static_cast<std::uint32_t>(hash[3]) << 24);
-}
-
 } // namespace
 
 int run_miner(const std::filesystem::path& config_path,
@@ -375,7 +357,6 @@ int run_miner(const std::filesystem::path& config_path,
         constexpr std::size_t kMaximumPendingShares = 4096;
         std::unordered_map<std::uint64_t, Clock::time_point> pending;
         std::uint64_t next_id = 2;
-        std::uint64_t last_sample_hashes = 0;
         auto started = std::chrono::steady_clock::now();
         auto last_sample_time = started;
         std::deque<std::pair<std::chrono::steady_clock::time_point, std::uint64_t>> samples;
@@ -477,7 +458,6 @@ int run_miner(const std::filesystem::path& config_path,
             send_ready_shares();
             if (now - last_sample_time >= std::chrono::seconds(1)) {
                 const auto total_hashes = state.hashes.load(std::memory_order_relaxed);
-                const auto elapsed = std::chrono::duration<double>(now - last_sample_time).count();
                 samples.emplace_back(now, total_hashes);
                 while (!samples.empty() && now - samples.front().first > std::chrono::seconds(900)) {
                     samples.pop_front();
@@ -510,9 +490,7 @@ int run_miner(const std::filesystem::path& config_path,
                     {"pool", pool.host + ":" + pool.port}, {"connected", true},
                 };
                 std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
-                last_sample_hashes = total_hashes;
                 last_sample_time = now;
-                static_cast<void>(elapsed);
             }
         }
 
@@ -523,7 +501,6 @@ int run_miner(const std::filesystem::path& config_path,
             std::lock_guard lock(state.error_mutex);
             if (!state.worker_error.empty()) throw std::runtime_error(state.worker_error);
         }
-        static_cast<void>(last_sample_hashes);
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "UNIQUE RX mining error: " << error.what() << '\n';
