@@ -197,6 +197,8 @@ def find_native_engine(root: Path = ROOT) -> Path | None:
         root / "engine" / "build" / "unique-rx",
         root / "engine" / "build" / "unique-rx.exe",
         root / "engine" / "build-mingw" / "unique-rx.exe",
+        root / "engine" / "build-mingw-ninja" / "unique-rx.exe",
+        root / "engine" / "build-mingw-make" / "unique-rx.exe",
         root / "engine" / "build-msvc" / "unique-rx.exe",
         root / "engine" / "build-msvc" / "Release" / "unique-rx.exe",
     ]
