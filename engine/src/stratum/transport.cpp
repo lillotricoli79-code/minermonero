@@ -18,7 +18,7 @@ namespace unique_rx {
 
 struct StratumTransport::Impl {
 public:
-    ~Transport() {
+    ~Impl() {
         if (ssl_ != nullptr) SSL_free(ssl_);
         if (context_ != nullptr) SSL_CTX_free(context_);
         platform::close_socket(socket_);
