@@ -189,6 +189,25 @@ def first_enabled_pool(config: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def find_native_engine(root: Path = ROOT) -> Path | None:
+    # Several historical build directories may coexist. Select the most
+    # recently produced project binary instead of silently launching an
+    # older engine just because its directory has higher search priority.
+    candidates = [
+        root / "engine" / "build" / "unique-rx",
+        root / "engine" / "build" / "unique-rx.exe",
+        root / "engine" / "build-mingw" / "unique-rx.exe",
+        root / "engine" / "build-msvc" / "unique-rx.exe",
+        root / "engine" / "build-msvc" / "Release" / "unique-rx.exe",
+    ]
+    existing = [candidate for candidate in candidates if candidate.is_file()]
+    if existing:
+        return max(existing, key=lambda candidate: candidate.stat().st_mtime_ns)
+
+    path_executable = shutil.which("unique-rx") or shutil.which("unique-rx.exe")
+    return Path(path_executable) if path_executable else None
+
+
 def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
     hashrate = summary.get("hashrate") or {}
     total = hashrate.get("total") or []
@@ -458,19 +477,8 @@ class MinerController:
         if not str(pool.get("url", "")).strip():
             raise HTTPException(status_code=400, detail="Configura il pool prima di avviare")
         msr_requires_xmrig = msr_override_enabled(config.get("randomx") or {})
-        native_candidates = [
-            shutil.which("unique-rx"),
-            shutil.which("unique-rx.exe"),
-            str(ROOT / "engine" / "build" / "unique-rx"),
-            str(ROOT / "engine" / "build" / "unique-rx.exe"),
-            str(ROOT / "engine" / "build-mingw" / "unique-rx.exe"),
-            str(ROOT / "engine" / "build-msvc" / "unique-rx.exe"),
-            str(ROOT / "engine" / "build-msvc" / "Release" / "unique-rx.exe"),
-        ]
-        native_path = next(
-            (path for path in native_candidates if path and Path(path).is_file()),
-            None,
-        )
+        native_executable = find_native_engine()
+        native_path = str(native_executable) if native_executable else None
         if native_path and not msr_requires_xmrig:
             executable_path = native_path
             command = [native_path, "--mine", str(CONFIG_PATH)]
