@@ -9,6 +9,7 @@
 #include <iterator>
 #include <stdexcept>
 #include <string>
+#include <sstream>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -154,6 +155,42 @@ std::filesystem::path default_module_path() {
 }
 
 #else
+
+std::vector<unsigned int> online_cpu_ids() {
+    std::ifstream online_file("/sys/devices/system/cpu/online");
+    std::string online;
+    if (online_file && std::getline(online_file, online)) {
+        try {
+            std::stringstream ranges(online);
+            std::string item;
+            std::vector<unsigned int> cpus;
+            while (std::getline(ranges, item, ',')) {
+                const auto dash = item.find('-');
+                if (dash == std::string::npos) {
+                    cpus.push_back(static_cast<unsigned int>(std::stoul(item)));
+                    continue;
+                }
+                const auto first = static_cast<unsigned int>(std::stoul(item.substr(0, dash)));
+                const auto last = static_cast<unsigned int>(std::stoul(item.substr(dash + 1)));
+                if (last < first || last - first > 4096) {
+                    throw std::runtime_error("invalid Linux online CPU range");
+                }
+                for (unsigned int cpu = first; cpu <= last; ++cpu) {
+                    cpus.push_back(cpu);
+                }
+            }
+            if (!cpus.empty()) return cpus;
+        } catch (const std::exception&) {
+            // Fall back to the contiguous hardware_concurrency range below.
+        }
+    }
+
+    const auto count = std::max(1U, std::thread::hardware_concurrency());
+    std::vector<unsigned int> cpus;
+    cpus.reserve(count);
+    for (unsigned int cpu = 0; cpu < count; ++cpu) cpus.push_back(cpu);
+    return cpus;
+}
 
 struct LinuxOriginal {
     int fd = -1;
@@ -329,9 +366,9 @@ struct MsrManager::Impl {
     void apply() {
         if (active) return;
         originals.clear();
-        const auto count = std::max(1U, std::thread::hardware_concurrency());
-        originals.reserve(count);
-        for (unsigned int cpu = 0; cpu < count; ++cpu) {
+        const auto cpus = online_cpu_ids();
+        originals.reserve(cpus.size());
+        for (const unsigned int cpu : cpus) {
             const auto path = std::filesystem::path("/dev/cpu") /
                 std::to_string(cpu) / "msr";
             const int fd = ::open(path.c_str(), O_RDWR | O_CLOEXEC);
