@@ -36,6 +36,13 @@ jobs:
       - name: Run native tests
         run: ctest --test-dir build --output-on-failure
 
+      - name: Upload Linux miner executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: unique-rx-linux-x64
+          path: build/unique-rx
+          if-no-files-found: error
+
   windows:
     name: Windows C++ miner build and tests
     runs-on: windows-2022
@@ -67,3 +74,10 @@ jobs:
 
       - name: Run native tests
         run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Upload Windows miner executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: unique-rx-windows-x64
+          path: build/Release/unique-rx.exe
+          if-no-files-found: error
