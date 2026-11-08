@@ -220,12 +220,29 @@ def is_intel_cpu() -> bool:
     return False
 
 
-def msr_override_enabled(randomx: dict[str, Any]) -> bool:
-    """Return True when XMRig is required for the requested MSR mode.
+def native_msr_available(executable_path: str | None) -> bool:
+    """Check that the native Intel MSR provider and its signed module are present."""
+    if os.name == "nt":
+        program_files = Path(os.environ.get("ProgramFiles", r"C:\\Program Files"))
+        libraries = [
+            program_files / "PawnIO" / "PawnIOLib.dll",
+            Path("C:/Program Files/PawnIO/PawnIOLib.dll"),
+        ]
+        modules = [ROOT / "engine" / "msr" / "IntelMSR.bin"]
+        if executable_path:
+            modules.append(Path(executable_path).resolve().parent / "msr" / "IntelMSR.bin")
+        return any(path.is_file() for path in libraries) and any(
+            path.is_file() for path in modules
+        )
 
-    The native engine supports the reversible automatic Intel RandomX preset.
-    Custom presets and non-Intel automatic presets still require XMRig.
-    """
+    if os.name == "posix":
+        device = Path("/dev/cpu/0/msr")
+        return device.exists() and os.access(device, os.R_OK | os.W_OK)
+    return False
+
+
+def msr_override_enabled(randomx: dict[str, Any]) -> bool:
+    """Return True when the requested MSR mode requires XMRig."""
     value = randomx.get("wrmsr")
     if value is False:
         return False
@@ -311,6 +328,7 @@ class MinerController:
         msr_requires_xmrig = msr_override_enabled(config.get("randomx") or {})
         native_candidates = [
             shutil.which("unique-rx"),
+            shutil.which("unique-rx.exe"),
             str(ROOT / "engine" / "build" / "unique-rx"),
             str(ROOT / "engine" / "build" / "unique-rx.exe"),
             str(ROOT / "engine" / "build-mingw" / "unique-rx.exe"),
@@ -321,6 +339,19 @@ class MinerController:
             (path for path in native_candidates if path and Path(path).is_file()),
             None,
         )
+        randomx_config = config.get("randomx") or {}
+        wrmsr_value = randomx_config.get("wrmsr")
+        msr_is_enabled = not (
+            wrmsr_value is False
+            or (isinstance(wrmsr_value, int) and not isinstance(wrmsr_value, bool) and wrmsr_value < 0)
+        )
+        if (
+            native_path
+            and not msr_requires_xmrig
+            and msr_is_enabled
+            and not native_msr_available(native_path)
+        ):
+            msr_requires_xmrig = True
         if native_path and not msr_requires_xmrig:
             executable_path = native_path
             command = [native_path, "--mine", str(CONFIG_PATH)]
@@ -335,7 +366,7 @@ class MinerController:
             if not executable_path:
                 detail = "Compila engine/unique-rx o installa XMRig"
                 if msr_requires_xmrig:
-                    detail = "Questo preset MSR richiede XMRig: il motore nativo gestisce il preset Intel automatico, mentre preset personalizzati o CPU non Intel richiedono XMRig"
+                    detail = "MSR nativo non disponibile: installa PawnIO e IntelMSR.bin per Intel, oppure installa XMRig per preset personalizzati o CPU non Intel"
                 raise HTTPException(status_code=400, detail=detail)
             command = [str(executable_path), "-c", str(CONFIG_PATH)]
             engine_kind = "xmrig"
