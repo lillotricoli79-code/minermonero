@@ -39,9 +39,9 @@ nel formato nativo XMRig. Il bridge e `unique-rx` leggono questo stesso file;
 non vengono creati profili o configurazioni generate. Il file è ignorato da Git
 e viene protetto con permessi locali restrittivi.
 
-MSR Automatico usa il preset Intel RandomX nativo, con lettura dei valori
-originali, verifica dopo la scrittura e ripristino all'uscita. Fast e
-Personalizzato passano a XMRig; anche le CPU non Intel usano XMRig per il
+MSR Automatico e Fast usano il preset Intel RandomX nativo, con lettura
+dei valori originali, verifica dopo la scrittura e ripristino all'uscita.
+Personalizzato passa a XMRig; anche le CPU non Intel usano XMRig per il
 preset richiesto. Su Windows il motore nativo richiede il driver PawnIO
 ufficiale e il modulo IntelMSR verificato tramite
 `scripts/windows/setup-msr.ps1`; su Linux richiede accesso a
