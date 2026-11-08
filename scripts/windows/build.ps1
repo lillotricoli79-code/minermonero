@@ -3,6 +3,18 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $engineDir = Join-Path $repoRoot "engine"
 
+$npm = Get-Command npm -ErrorAction SilentlyContinue
+if ($npm) {
+    Write-Host "Building local dashboard..."
+    & $npm.Source ci --prefix (Join-Path $repoRoot "dashboard")
+    if ($LASTEXITCODE -ne 0) { throw "Dashboard dependency installation failed." }
+    & $npm.Source run build --prefix (Join-Path $repoRoot "dashboard")
+    if ($LASTEXITCODE -ne 0) { throw "Dashboard build failed." }
+}
+else {
+    Write-Warning "Node.js/npm not found: dashboard build skipped. Install Node.js 22+ to build the UI."
+}
+
 if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
     throw "CMake is required. Install CMake and reopen PowerShell."
 }

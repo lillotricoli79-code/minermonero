@@ -6,6 +6,14 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 ENGINE_DIR="${REPO_ROOT}/engine"
 BUILD_DIR="${ENGINE_DIR}/build"
 
+if command -v npm >/dev/null 2>&1; then
+    printf '%s\\n' "Building local dashboard..."
+    npm ci --prefix "${REPO_ROOT}/dashboard"
+    npm run build --prefix "${REPO_ROOT}/dashboard"
+else
+    printf '%s\\n' "Node.js/npm not found: dashboard build skipped (Node.js 22+ required)." >&2
+fi
+
 command -v cmake >/dev/null 2>&1 || {
     printf '%s\n' "CMake is required." >&2
     exit 1
