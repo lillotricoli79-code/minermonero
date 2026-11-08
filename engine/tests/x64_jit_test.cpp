@@ -11,6 +11,10 @@
 #include <xmmintrin.h>
 #include <vector>
 
+#if defined(_MSC_VER) && defined(_M_X64)
+#include <intrin.h>
+#endif
+
 namespace {
 
 using BinaryFunction = std::uint64_t (*)(std::uint64_t, std::uint64_t);
@@ -20,13 +24,22 @@ using RoundingFunction = void (*)(std::uint64_t*);
 using MultiLaneFunction = void (*)(unique_rx::jit::LaneState*);
 
 std::uint64_t expected_unsigned_high(std::uint64_t left, std::uint64_t right) {
+#if defined(_MSC_VER) && defined(_M_X64)
+    return __umulh(left, right);
+#else
     return static_cast<std::uint64_t>((static_cast<unsigned __int128>(left) * right) >> 64);
+#endif
 }
 
 std::uint64_t expected_signed_high(std::uint64_t left, std::uint64_t right) {
+#if defined(_MSC_VER) && defined(_M_X64)
+    return static_cast<std::uint64_t>(__mulh(
+        static_cast<std::int64_t>(left), static_cast<std::int64_t>(right)));
+#else
     const auto signed_left = static_cast<__int128>(static_cast<std::int64_t>(left));
     const auto signed_right = static_cast<__int128>(static_cast<std::int64_t>(right));
     return static_cast<std::uint64_t>((signed_left * signed_right) >> 64);
+#endif
 }
 
 bool check(bool condition, const char* message) {
