@@ -14,7 +14,7 @@ std::uint64_t parse_unsigned64(const char* value, std::uint64_t fallback) {
     try {
         std::size_t consumed = 0;
         const auto parsed = std::stoull(value, &consumed, 10);
-        if (value[consumed] != '\\0') return 0;
+        if (value[consumed] != '\0') return 0;
         return parsed;
     } catch (const std::exception&) {
         return 0;
