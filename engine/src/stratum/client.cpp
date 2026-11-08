@@ -388,6 +388,12 @@ int run_miner(const std::filesystem::path& config_path,
                             }
                             auto job = parse_job(result.at("job"));
                             apply_nicehash_extension(job, session_nicehash);
+                            // The job included in the successful login response is
+                            // the first active job too; expose it in the same log
+                            // stream as subsequent mining.notify jobs.
+                            log_event("NEW_JOB", {{"job_id", job.id},
+                                {"height", job.height ? nlohmann::json(*job.height)
+                                                      : nlohmann::json(nullptr)}});
                             install_job(std::move(job));
                             retry_delay = std::chrono::seconds(1);
                         } else if (message.contains("id")) {
