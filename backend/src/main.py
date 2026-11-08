@@ -555,6 +555,14 @@ def get_logs(after: int = 0) -> dict[str, Any]:
     return {"items": controller.recent_logs(max(0, after))}
 
 
+@app.get("/api/logs/history")
+def get_log_history(limit: int = 200) -> dict[str, Any]:
+    try:
+        return {"lines": controller.shell_log.recent_lines(limit)}
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Impossibile leggere lo storico shell") from exc
+
+
 @app.post("/api/miner/start", status_code=202)
 def start_miner() -> dict[str, str]:
     controller.start()
