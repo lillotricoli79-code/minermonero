@@ -374,7 +374,9 @@ int run_miner(const std::filesystem::path& config_path,
                                          {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
                             {"uptime_seconds", uptime},
                             {"algorithm", "rx/0"}, {"job_id", work->job.id},
-                            {"height", work->job.height},
+                            {"height", work->job.height
+                                ? nlohmann::json(*work->job.height)
+                                : nlohmann::json(nullptr)},
                             {"threads", pool_threads}, {"cpu", cpu_summary},
                             {"msr_active", msr.active()}, {"full_memory", full_memory},
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},

@@ -76,8 +76,12 @@ int main() {
     const auto job = parse_job(wire_job);
     ok &= check(job.id == "job-1" && job.blob.size() == 76 &&
                     job.target == UINT64_MAX && job.nonce == 0x12345678U &&
-                    job.height == 2345678,
+                    job.height == std::optional<std::uint64_t>{2345678},
                 "valid rx/0 job or little-endian nonce did not parse");
+    auto job_without_height = wire_job;
+    job_without_height.erase("height");
+    ok &= check(!parse_job(job_without_height).height.has_value(),
+                "missing pool height was reported as a real block height");
     ok &= check(encode_nonce_le(0x12345678U) ==
                     std::array<std::uint8_t, 4>{0x78, 0x56, 0x34, 0x12},
                 "little-endian nonce encoding failed");

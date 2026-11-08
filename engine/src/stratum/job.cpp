@@ -100,7 +100,20 @@ Job parse_job(const nlohmann::json& value) {
     const auto seed = decode_hex(seed_hex);
     std::copy(seed.begin(), seed.end(), job.seed.begin());
     job.target = parse_share_target(value.at("target").get<std::string>());
-    job.height = value.value("height", std::uint64_t{0});
+    if (value.contains("height") && !value["height"].is_null()) {
+        const auto& height = value["height"];
+        if (height.is_number_unsigned()) {
+            job.height = height.get<std::uint64_t>();
+        } else if (height.is_number_integer()) {
+            const auto signed_height = height.get<std::int64_t>();
+            if (signed_height < 0) {
+                throw std::invalid_argument("job height cannot be negative");
+            }
+            job.height = static_cast<std::uint64_t>(signed_height);
+        } else {
+            throw std::invalid_argument("job height must be a non-negative integer");
+        }
+    }
     job.nonce = decode_nonce_le(job.blob.data() + kNonceOffset);
     return job;
 }
