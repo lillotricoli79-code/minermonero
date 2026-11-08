@@ -99,7 +99,11 @@ inline bool connect_with_timeout(Socket socket, const sockaddr* address,
     if (!set_nonblocking(socket)) return false;
     if (connect_socket(socket, address, length) == 0) return true;
     if (!socket_would_block(socket_error())) return false;
-    if (!wait_socket(socket, kWriteEvent, timeout_ms)) return false;
+    try {
+        if (!wait_socket(socket, kWriteEvent, timeout_ms)) return false;
+    } catch (const std::runtime_error&) {
+        return false;
+    }
     return pending_socket_error(socket) == 0;
 }
 inline std::string address_error(int error) {
@@ -181,7 +185,11 @@ inline bool connect_with_timeout(Socket socket, const sockaddr* address,
     if (!set_nonblocking(socket)) return false;
     if (connect_socket(socket, address, length) == 0) return true;
     if (!socket_would_block(socket_error())) return false;
-    if (!wait_socket(socket, kWriteEvent, timeout_ms)) return false;
+    try {
+        if (!wait_socket(socket, kWriteEvent, timeout_ms)) return false;
+    } catch (const std::runtime_error&) {
+        return false;
+    }
     return pending_socket_error(socket) == 0;
 }
 inline std::string address_error(int error) {
