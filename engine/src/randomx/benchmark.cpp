@@ -71,7 +71,7 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
             dataset = create_randomx_dataset(cache, init_threads, flags);
         } catch (const std::exception& error) {
             std::cerr << "Inizializzazione dataset RandomX non riuscita: "
-                      << error.what() << '\\n';
+                      << error.what() << '\n';
             return false;
         }
     }
