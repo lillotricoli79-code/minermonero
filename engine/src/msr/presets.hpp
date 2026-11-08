@@ -50,24 +50,17 @@ inline std::optional<MsrPreset> msr_preset_for_cpu(
         }};
     }
 
-    // AMD Zen 3 / Zen 4 families. The model allow-list follows the
-    // tested RxMiner profile; Zen 4 has its separate XMRig-derived values.
+    // AMD Zen 3 family 19h profile ported from RxMiner's MIT-licensed
+    // src/msr.rs at 5fe52dde2650c623fd0472804152a94711889dce.
+    // Keep the exact allow-list and register values from that implementation.
     if (family == 0x19 &&
         (model == 0x00 || model == 0x0f || model == 0x20 ||
          model == 0x2f || model == 0x50 || model == 0x5f)) {
         return MsrPreset{"amd_zen_19h", {
             write(0xc0011020, 0x0004480000000000, all_bits),
             write(0xc0011021, 0x001c000200000040, amd_mask),
-            write(0xc0011022, 0xc000000401570000, all_bits),
-            write(0xc001102b, 0x2000cc10, all_bits),
-        }};
-    }
-    if (family == 0x19 && (model == 0x61 || model == 0x75)) {
-        return MsrPreset{"amd_zen4_19h", {
-            write(0xc0011020, 0x0004400000000000, all_bits),
-            write(0xc0011021, 0x0004000000000040, amd_mask),
-            write(0xc0011022, 0x8680000401570000, all_bits),
-            write(0xc001102b, 0x2040cc10, all_bits),
+            write(0xc0011022, 0xc000000401500000, all_bits),
+            write(0xc001102b, 0x000000002000cc14, all_bits),
         }};
     }
     return std::nullopt;

@@ -31,15 +31,17 @@ int main() {
     }
     for (const auto model : {0x00U, 0x0fU, 0x20U, 0x2fU, 0x50U, 0x5fU}) {
         const auto zen = unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, model);
-        if (!zen || zen->name != "amd_zen_19h" || zen->writes.size() != 4) {
-            std::cerr << "AMD Zen family-19 preset selection failed\n";
-            return 1;
-        }
-    }
-    for (const auto model : {0x61U, 0x75U}) {
-        const auto zen4 = unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, model);
-        if (!zen4 || zen4->name != "amd_zen4_19h" || zen4->writes.size() != 4) {
-            std::cerr << "AMD Zen 4 preset selection failed\n";
+        if (!zen || zen->name != "amd_zen_19h" || zen->writes.size() != 4 ||
+            zen->writes[0].register_id != 0xc0011020 ||
+            zen->writes[0].value != 0x0004480000000000ULL ||
+            zen->writes[1].register_id != 0xc0011021 ||
+            zen->writes[1].value != 0x001c000200000040ULL ||
+            zen->writes[1].mask != ~std::uint64_t{0x20} ||
+            zen->writes[2].register_id != 0xc0011022 ||
+            zen->writes[2].value != 0xc000000401500000ULL ||
+            zen->writes[3].register_id != 0xc001102b ||
+            zen->writes[3].value != 0x2000cc14ULL) {
+            std::cerr << "AMD Zen family-19 RxMiner preset mismatch\n";
             return 1;
         }
     }
@@ -49,6 +51,8 @@ int main() {
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x21) ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x51) ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x40) ||
+        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x61) ||
+        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x75) ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x15, 0x02) ||
         unique_rx::msr_preset_for_cpu("UnknownVendor", 6, 0x5e)) {
         std::cerr << "Unsupported CPU received an MSR preset\n";
