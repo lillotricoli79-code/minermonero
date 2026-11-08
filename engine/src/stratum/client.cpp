@@ -6,6 +6,10 @@
 #include "platform/socket.hpp"
 #include "stratum/transport.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <randomx.h>
 
 
@@ -13,6 +17,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <cstring>
 #include <deque>
 #include <fstream>
@@ -34,6 +39,19 @@ using core::MiningWork;
 using core::Share;
 using core::hash_worker;
 
+volatile std::sig_atomic_t g_stop_requested = 0;
+
+void request_stop(int) {
+    g_stop_requested = 1;
+}
+
+#ifdef _WIN32
+BOOL WINAPI console_stop_handler(DWORD) {
+    g_stop_requested = 1;
+    return TRUE;
+}
+#endif
+
 std::string hex_encode(const std::uint8_t* bytes, std::size_t length) {
     static constexpr char digits[] = "0123456789abcdef";
     std::string result(length * 2, '0');
@@ -49,6 +67,12 @@ std::string hex_encode(const std::uint8_t* bytes, std::size_t length) {
 
 int run_miner(const std::filesystem::path& config_path,
               std::uint64_t maximum_hashes) {
+    g_stop_requested = 0;
+    std::signal(SIGINT, request_stop);
+    std::signal(SIGTERM, request_stop);
+#ifdef _WIN32
+    SetConsoleCtrlHandler(console_stop_handler, TRUE);
+#endif
     MiningState state;
     std::vector<std::jthread> workers;
     struct StopWorkers {
@@ -131,7 +155,7 @@ int run_miner(const std::filesystem::path& config_path,
             state.set_work(std::move(work));
         };
 
-        while (!state.stop.load(std::memory_order_acquire)) {
+        while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
             const auto& pool = pools[pool_index];
             state.set_work(nullptr);
             pending.clear();
@@ -207,7 +231,7 @@ int run_miner(const std::filesystem::path& config_path,
                     }
                 };
 
-                while (!state.stop.load(std::memory_order_acquire)) {
+                while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
                     for (const auto& line : transport.read_lines(2)) {
                         const auto message = nlohmann::json::parse(line);
                         if (message.value("method", std::string()) == "job") {
@@ -329,7 +353,13 @@ int run_miner(const std::filesystem::path& config_path,
                           << "; switching pool and retrying in " << retry_delay.count()
                           << "s\n";
                 pool_index = (pool_index + 1) % pools.size();
-                std::this_thread::sleep_for(retry_delay);
+                auto remaining_delay = retry_delay;
+                while (remaining_delay > std::chrono::seconds::zero() &&
+                       !g_stop_requested && !state.stop.load(std::memory_order_acquire)) {
+                    const auto step = std::min(remaining_delay, std::chrono::milliseconds(100));
+                    std::this_thread::sleep_for(step);
+                    remaining_delay -= step;
+                }
                 retry_delay = std::min(retry_delay * 2, std::chrono::seconds(30));
             }
         }
