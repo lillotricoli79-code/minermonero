@@ -1,19 +1,13 @@
 #include "stratum.hpp"
 #include "core/mining.hpp"
 #include "randomx/cache.hpp"
+#include "platform/socket.hpp"
 
 #include <randomx.h>
 
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
-
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include <algorithm>
 #include <array>
@@ -56,7 +50,7 @@ public:
     ~Transport() {
         if (ssl_ != nullptr) SSL_free(ssl_);
         if (context_ != nullptr) SSL_CTX_free(context_);
-        if (socket_ >= 0) close(socket_);
+        platform::close_socket(socket_);
     }
 
     void connect_to(const PoolConfig& config) {
@@ -66,21 +60,21 @@ public:
         addrinfo* addresses = nullptr;
         const int lookup = getaddrinfo(config.host.c_str(), config.port.c_str(),
                                        &hints, &addresses);
-        if (lookup != 0) throw std::runtime_error(gai_strerror(lookup));
+        if (lookup != 0) throw std::runtime_error(platform::address_error(lookup));
 
         for (auto* address = addresses; address != nullptr; address = address->ai_next) {
             socket_ = ::socket(address->ai_family, address->ai_socktype, address->ai_protocol);
-            if (socket_ < 0) continue;
-            if (::connect(socket_, address->ai_addr, address->ai_addrlen) == 0) break;
-            close(socket_);
-            socket_ = -1;
+            if (!platform::socket_valid(socket_)) continue;
+            if (platform::connect_socket(socket_, address->ai_addr,
+                                         static_cast<int>(address->ai_addrlen)) == 0) break;
+            platform::close_socket(socket_);
+            socket_ = platform::kInvalidSocket;
         }
         freeaddrinfo(addresses);
-        if (socket_ < 0) throw std::runtime_error("unable to connect to pool");
+        if (!platform::socket_valid(socket_)) throw std::runtime_error("unable to connect to pool");
 
         if (config.tls) connect_tls(config);
-        const auto flags = fcntl(socket_, F_GETFL, 0);
-        if (flags < 0 || fcntl(socket_, F_SETFL, flags | O_NONBLOCK) < 0) {
+        if (!platform::set_nonblocking(socket_)) {
             throw std::runtime_error("unable to set nonblocking pool socket");
         }
     }
@@ -96,17 +90,19 @@ public:
                 if (count <= 0) {
                     const int error = SSL_get_error(ssl_, count);
                     if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
-                        wait_for(error == SSL_ERROR_WANT_READ ? POLLIN : POLLOUT, 1000);
+                        wait_for(error == SSL_ERROR_WANT_READ ? platform::kReadEvent : platform::kWriteEvent, 1000);
                         continue;
                     }
                     throw std::runtime_error("TLS write to pool failed");
                 }
             } else {
-                count = static_cast<int>(send(socket_, wire.data() + sent,
-                                               wire.size() - sent, MSG_NOSIGNAL));
-                if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
-                    wait_for(POLLOUT, 1000);
-                    continue;
+                count = platform::send_bytes(socket_, wire.data() + sent, wire.size() - sent);
+                if (count < 0) {
+                    const int error = platform::socket_error();
+                    if (platform::socket_would_block(error) || platform::socket_interrupted(error)) {
+                        wait_for(platform::kWriteEvent, 1000);
+                        continue;
+                    }
                 }
                 if (count <= 0) throw std::runtime_error("socket write to pool failed");
             }
@@ -117,7 +113,7 @@ public:
     std::vector<std::string> read_lines(int timeout_ms) {
         std::vector<std::string> lines;
         const bool tls_buffered = ssl_ != nullptr && SSL_pending(ssl_) > 0;
-        if (!tls_buffered && !wait_for(POLLIN, timeout_ms)) return lines;
+        if (!tls_buffered && !wait_for(platform::kReadEvent, timeout_ms)) return lines;
 
         std::array<char, 8192> chunk{};
         int count = 0;
@@ -130,10 +126,13 @@ public:
                 throw std::runtime_error("TLS read from pool failed");
             }
         } else {
-            count = static_cast<int>(recv(socket_, chunk.data(), chunk.size(), 0));
+            count = platform::receive_bytes(socket_, chunk.data(), chunk.size());
             if (count == 0) throw std::runtime_error("pool closed connection");
-            if (count < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) return lines;
-            if (count < 0) throw std::runtime_error("socket read from pool failed");
+            if (count < 0) {
+                const int error = platform::socket_error();
+                if (platform::socket_would_block(error) || platform::socket_interrupted(error)) return lines;
+                throw std::runtime_error("socket read from pool failed");
+            }
         }
 
         buffer_.append(chunk.data(), static_cast<std::size_t>(count));
@@ -152,23 +151,13 @@ public:
     }
 
 private:
-    int socket_ = -1;
+    platform::Socket socket_ = platform::kInvalidSocket;
     SSL_CTX* context_ = nullptr;
     SSL* ssl_ = nullptr;
     std::string buffer_;
 
     bool wait_for(short events, int timeout_ms) const {
-        pollfd descriptor{socket_, events, 0};
-        const int result = poll(&descriptor, 1, timeout_ms);
-        if (result < 0 && errno != EINTR) throw std::runtime_error("pool socket poll failed");
-        if (result > 0 && (descriptor.revents & (POLLERR | POLLNVAL))) {
-            throw std::runtime_error("pool socket disconnected");
-        }
-        if (result > 0 && (descriptor.revents & events) != 0) return true;
-        if (result > 0 && (descriptor.revents & POLLHUP) != 0) {
-            throw std::runtime_error("pool socket disconnected");
-        }
-        return false;
+        return platform::wait_socket(socket_, events, timeout_ms);
     }
 
     void connect_tls(const PoolConfig& config) {
@@ -187,7 +176,7 @@ private:
         if (ssl_ == nullptr) throw std::runtime_error("TLS session creation failed");
         SSL_set_tlsext_host_name(ssl_, config.host.c_str());
         if (config.tls_fingerprint.empty()) SSL_set1_host(ssl_, config.host.c_str());
-        SSL_set_fd(ssl_, socket_);
+        SSL_set_fd(ssl_, static_cast<int>(socket_));
         if (SSL_connect(ssl_) != 1) throw std::runtime_error("TLS handshake with pool failed");
         if (!config.tls_fingerprint.empty()) verify_fingerprint(config.tls_fingerprint);
     }
