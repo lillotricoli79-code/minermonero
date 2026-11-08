@@ -123,6 +123,29 @@ function App() {
 
   useEffect(() => {
     let active = true;
+    void request<{ lines: string[] }>("/logs/history?limit=12")
+      .then(({ lines }) => {
+        if (!active || !lines.length) return;
+        const entries = lines.map((line, index): LogItem => {
+          const parsed = line.match(/^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}) \\w+ (.*)$/);
+          const time = parsed
+            ? Date.parse(parsed[1].replace(" ", "T")) / 1000
+            : Date.now() / 1000;
+          return {
+            id: index - lines.length,
+            time: Number.isFinite(time) ? time : Date.now() / 1000,
+            message: parsed ? parsed[2] : line,
+          };
+        });
+        setLogs((current) => {
+          const existing = new Set(current.map((item) => item.message));
+          const unseen = entries.filter((item) => !existing.has(item.message));
+          return [...unseen, ...current].slice(-12);
+        });
+      })
+      .catch(() => {
+        // The live log stream remains available if the history file cannot be read.
+      });
     void request<MinerConfig>("/config")
       .then((value) => {
         if (active) setConfig({ ...value, password: "" });
