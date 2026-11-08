@@ -132,6 +132,7 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
         entry.password = pool.value("pass", std::string("x"));
         entry.worker = pool.value("rig-id", std::string("rig01"));
         entry.tls = pool.value("tls", false);
+        entry.keepalive = pool.value("keepalive", false);
         entry.threads = cpu_threads;
         entry.tls_fingerprint = normalize_fingerprint(
             pool.value("tls-fingerprint", std::string()));
