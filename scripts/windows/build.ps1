@@ -4,6 +4,28 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $engineDir = Join-Path $repoRoot "engine"
 $dashboardDir = Join-Path $repoRoot "dashboard"
 
+# Obtain only the official, signed PawnIO Intel module and pin its exact digest.
+$msrModulePath = Join-Path $engineDir "msr\IntelMSR.bin"
+$expectedMsrSha256 = "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f"
+if (-not (Test-Path -LiteralPath $msrModulePath)) {
+    $archive = Join-Path $env:TEMP "unique-rx-pawnio-0.2.11.zip"
+    $extract = Join-Path $env:TEMP "unique-rx-pawnio-0.2.11"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $msrModulePath) | Out-Null
+    Invoke-WebRequest -Uri "https://github.com/namazso/PawnIO.Modules/releases/download/0.2.11/release_0_2_11.zip" -OutFile $archive
+    Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+    $downloadedModule = Get-ChildItem -LiteralPath $extract -Filter "IntelMSR.bin" -File -Recurse |
+        Select-Object -First 1
+    if (-not $downloadedModule) { throw "IntelMSR.bin assente dal pacchetto PawnIO 0.2.11." }
+    $downloadedHash = (Get-FileHash -LiteralPath $downloadedModule.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($downloadedHash -ne $expectedMsrSha256) { throw "Hash SHA-256 IntelMSR.bin non valido: $downloadedHash" }
+    Copy-Item -LiteralPath $downloadedModule.FullName -Destination $msrModulePath -Force
+    Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
+}
+$installedMsrHash = (Get-FileHash -LiteralPath $msrModulePath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($installedMsrHash -ne $expectedMsrSha256) { throw "IntelMSR.bin presente nel progetto ma SHA-256 non corrispondente: $installedMsrHash" }
+Write-Host "PawnIO IntelMSR 0.2.11 verificato: $installedMsrHash" -ForegroundColor Green
+
 # The release build must never silently reuse a stale dashboard bundle.
 $node = Get-Command node -ErrorAction SilentlyContinue
 $npm = Get-Command npm -ErrorAction SilentlyContinue
@@ -211,9 +233,34 @@ if ($gxx) {
     }
 }
 
-Write-Host ""
+# Produce a clean, portable folder locally as well as in GitHub Actions.
+$packageDir = Join-Path $repoRoot "release\unique-rx-windows-x64"
+if (Test-Path -LiteralPath $packageDir) {
+    Remove-Item -LiteralPath $packageDir -Recurse -Force
+}
+New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+Copy-Item -LiteralPath $exe -Destination $packageDir
+Get-ChildItem -LiteralPath (Split-Path -Parent $exe) -Filter "*.dll" -File |
+    Copy-Item -Destination $packageDir -Force
+$packageMsrDir = Join-Path $packageDir "msr"
+New-Item -ItemType Directory -Force -Path $packageMsrDir | Out-Null
+$builtMsrModule = Join-Path (Split-Path -Parent $exe) "msr\IntelMSR.bin"
+if (-not (Test-Path -LiteralPath $builtMsrModule)) {
+    throw "Il modulo IntelMSR verificato non è stato copiato accanto all'eseguibile."
+}
+Copy-Item -LiteralPath $builtMsrModule -Destination (Join-Path $packageMsrDir "IntelMSR.bin")
+Copy-Item -LiteralPath (Join-Path $engineDir "msr\PawnIO-COPYING") -Destination (Join-Path $packageMsrDir "COPYING")
+$exeHash = (Get-FileHash -LiteralPath (Join-Path $packageDir "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+$moduleHash = (Get-FileHash -LiteralPath (Join-Path $packageMsrDir "IntelMSR.bin") -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($moduleHash -ne $expectedMsrSha256) { throw "Hash del modulo MSR nel pacchetto non valido." }
+Set-Content -LiteralPath (Join-Path $packageDir "SHA256SUMS.txt") -Encoding ascii -Value @(
+    "$exeHash  unique-rx.exe",
+    "$moduleHash  msr/IntelMSR.bin"
+)
 
+Write-Host ""
 Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
 Write-Host "Miner: $exe"
+Write-Host "Pacchetto portatile: $packageDir"
 Write-Host "Dashboard: $(Join-Path $dashboardDir 'dist\index.html')"
 Write-Host "Log Stratum: $(Join-Path $repoRoot 'unique-rx-stratum.log')"
