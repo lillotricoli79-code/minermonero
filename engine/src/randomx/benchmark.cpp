@@ -157,11 +157,11 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
         std::chrono::steady_clock::now() - started).count();
     std::uint64_t total_hashes = 0;
     for (const auto lane_count : lane_hashes) total_hashes += lane_count;
-    std::cout << "UNIQUE RX · RandomX light reference\n"
+    std::cout << "UNIQUE RX · RandomX benchmark\n"
               << "Mode: " << (use_jit ? "JIT" : "interpreter") << "\n"
               << "Lanes: " << lanes << "\n"
               << "RandomX flags: 0x" << std::hex
-              << static_cast<unsigned int>(flags) << std::dec << "\n"
+              << static_cast<unsigned int>(vm_flags) << std::dec << "\n"
               << "Hashes: " << total_hashes << "\n"
               << "Elapsed: " << std::fixed << std::setprecision(3) << elapsed << " s\n"
               << "Rate: " << std::setprecision(2)
