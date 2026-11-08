@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import DataRow from "./components/DataRow";
+import MetricCard from "./components/MetricCard";
 import {
   Activity,
   ArrowUpRight,
@@ -851,55 +853,6 @@ function App() {
           )}
         </div>
       </main>
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  icon,
-  tone,
-  detail,
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-  tone: string;
-  detail: string;
-}) {
-  return (
-    <article className="metric-card">
-      <div className="metric-top">
-        <span>{label}</span>
-        <span className={`metric-icon ${tone}`}>{icon}</span>
-      </div>
-      <div className="metric-value">{value}</div>
-      <div className="metric-detail">{detail}</div>
-    </article>
-  );
-}
-
-function DataRow({
-  icon,
-  label,
-  value,
-  positive = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  positive?: boolean;
-}) {
-  return (
-    <div className="data-row">
-      <span className="data-row-label">
-        <i>{icon}</i>
-        {label}
-      </span>
-      <span className={positive ? "row-value positive" : "row-value"}>
-        {value}
-      </span>
     </div>
   );
 }
