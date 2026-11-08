@@ -338,7 +338,7 @@ namespace randomx {
             const uint8_t split[] = {0x48, 0x89, 0xc2, 0x48, 0xc1, 0xea, 0x20};
             emit(split); // mov rdx, rax; shr rdx, 32
         }
-        emit(AND_EAX_I);
+        emitByte(AND_EAX_I);
         emit32(RANDOMX_SCRATCHPAD_L3 - CacheLineSize);
         const auto prefetch = [this](uint8_t sib) {
             if (prefetchMode == 0) return;
