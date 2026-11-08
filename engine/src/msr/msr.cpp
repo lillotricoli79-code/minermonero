@@ -502,6 +502,7 @@ struct MsrManager::Impl {
 
     ~Impl() {
         restore();
+        if (active) restore();
 #ifdef _WIN32
         close_pawnio();
 #else
