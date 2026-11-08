@@ -57,7 +57,7 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
     if (!cache && (flags & RANDOMX_FLAG_LARGE_PAGES) != RANDOMX_FLAG_DEFAULT) {
         flags = static_cast<randomx_flags>(
             static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
-        cache.reset(randomx_alloc_cache(flags));
+        cache = Cache(randomx_alloc_cache(flags), CacheRelease{});
     }
     if (!cache) {
         std::cerr << "Allocazione cache RandomX non riuscita.\n";
