@@ -275,43 +275,53 @@ int main() {
             {IntegerOpcode::imul_m, 1, 2, 0, -24},
         },
     };
-    std::vector<std::array<std::uint64_t, 8>> lane_registers(programs.size());
-    std::vector<std::array<std::uint64_t, 8>> lane_scratchpads(programs.size());
-    for (std::size_t lane = 0; lane < lane_registers.size(); ++lane) {
-        for (std::size_t index = 0; index < lane_registers[lane].size(); ++index) {
-            lane_registers[lane][index] =
-                (0x123456789abcdef0ULL * (lane + 1)) ^
-                (0x9e3779b97f4a7c15ULL * (index + 1));
-            lane_scratchpads[lane][index] =
-                (0xd6e8feb86659fd93ULL * (lane + 3)) ^
-                (0xa5a3564e27f8862bULL * (index + 5));
+    for (std::size_t lane_count = 1; lane_count <= programs.size(); ++lane_count) {
+        std::vector<std::array<std::uint64_t, 8>> lane_registers(lane_count);
+        std::vector<std::array<std::uint64_t, 8>> lane_scratchpads(lane_count);
+        for (std::size_t lane = 0; lane < lane_count; ++lane) {
+            for (std::size_t index = 0; index < lane_registers[lane].size(); ++index) {
+                lane_registers[lane][index] =
+                    (0x123456789abcdef0ULL * (lane + 1)) ^
+                    (0x9e3779b97f4a7c15ULL * (index + 1));
+                lane_scratchpads[lane][index] =
+                    (0xd6e8feb86659fd93ULL * (lane + 3)) ^
+                    (0xa5a3564e27f8862bULL * (index + 5));
+            }
         }
+        lane_registers[0][0] = 0xf23456789abcdef0ULL;
+        lane_registers[0][1] = 0x8edcba9876543210ULL;
+        lane_registers[0][2] = 0;
+        lane_registers[0][3] = 0xffffffffffffffffULL;
+        if (lane_count > 1) {
+            lane_registers[1][0] = 0x8123456789abcdefULL;
+            lane_registers[1][1] = 0xfedcba9876543210ULL;
+        }
+
+        auto expected_lanes = lane_registers;
+        std::vector<IntegerProgram> selected_programs(
+            programs.begin(), programs.begin() + static_cast<std::ptrdiff_t>(lane_count));
+        for (std::size_t lane = 0; lane < lane_count; ++lane) {
+            run_scalar(selected_programs[lane], expected_lanes[lane],
+                       reinterpret_cast<const std::uint8_t*>(lane_scratchpads[lane].data()),
+                       7 * sizeof(std::uint64_t));
+        }
+
+        std::vector<LaneState> lane_states;
+        lane_states.reserve(lane_count);
+        for (std::size_t lane = 0; lane < lane_count; ++lane) {
+            lane_states.push_back({
+                lane_registers[lane].data(),
+                reinterpret_cast<const std::uint8_t*>(lane_scratchpads[lane].data()),
+                7 * sizeof(std::uint64_t),
+            });
+        }
+
+        auto multi_lane_code = compile_multi_lane_integer_programs(selected_programs);
+        ExecutableCode multi_lane_executable(multi_lane_code);
+        multi_lane_executable.entry<MultiLaneFunction>()(lane_states.data());
+        ok &= check(lane_registers == expected_lanes,
+                    "interleaved multi-lane JIT differs from scalar execution");
     }
-    lane_registers[0][0] = 0xf23456789abcdef0ULL;
-    lane_registers[0][1] = 0x8edcba9876543210ULL;
-    lane_registers[0][2] = 0;
-    lane_registers[0][3] = 0xffffffffffffffffULL;
-    lane_registers[1][0] = 0x8123456789abcdefULL;
-    lane_registers[1][1] = 0xfedcba9876543210ULL;
-    auto expected_lanes = lane_registers;
-    for (std::size_t lane = 0; lane < programs.size(); ++lane) {
-        run_scalar(programs[lane], expected_lanes[lane],
-                   reinterpret_cast<const std::uint8_t*>(lane_scratchpads[lane].data()),
-                   7 * sizeof(std::uint64_t));
-    }
-    std::vector<LaneState> lane_states;
-    for (std::size_t lane = 0; lane < programs.size(); ++lane) {
-        lane_states.push_back({
-            lane_registers[lane].data(),
-            reinterpret_cast<const std::uint8_t*>(lane_scratchpads[lane].data()),
-            7 * sizeof(std::uint64_t),
-        });
-    }
-    auto multi_lane_code = compile_multi_lane_integer_programs(programs);
-    ExecutableCode multi_lane_executable(multi_lane_code);
-    multi_lane_executable.entry<MultiLaneFunction>()(lane_states.data());
-    ok &= check(lane_registers == expected_lanes,
-                "interleaved 1–4 lane JIT differs from scalar execution");
     if (!ok) return 1;
     std::cout << "W^X x86-64 codegen, alignment, integer opcodes, CBRANCH, CFROUND and interleaved 1–4 lane code passed.\n";
     return 0;
