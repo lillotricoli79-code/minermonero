@@ -68,13 +68,15 @@ int main() {
         {"blob", std::string(76 * 2, '0')},
         {"seed_hash", std::string(64, '0')},
         {"target", "ffffffff"},
+        {"height", 2345678},
         {"algo", "rx/0"},
     };
     wire_job["blob"] = std::string(kNonceOffset * 2, '0') +
         "78563412" + std::string((76 - kNonceOffset - 4) * 2, '0');
     const auto job = parse_job(wire_job);
     ok &= check(job.id == "job-1" && job.blob.size() == 76 &&
-                    job.target == UINT64_MAX && job.nonce == 0x12345678U,
+                    job.target == UINT64_MAX && job.nonce == 0x12345678U &&
+                    job.height == 2345678,
                 "valid rx/0 job or little-endian nonce did not parse");
     ok &= check(encode_nonce_le(0x12345678U) ==
                     std::array<std::uint8_t, 4>{0x78, 0x56, 0x34, 0x12},

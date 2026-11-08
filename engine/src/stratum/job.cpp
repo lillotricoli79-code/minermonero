@@ -100,6 +100,7 @@ Job parse_job(const nlohmann::json& value) {
     const auto seed = decode_hex(seed_hex);
     std::copy(seed.begin(), seed.end(), job.seed.begin());
     job.target = parse_share_target(value.at("target").get<std::string>());
+    job.height = value.value("height", std::uint64_t{0});
     job.nonce = decode_nonce_le(job.blob.data() + kNonceOffset);
     return job;
 }

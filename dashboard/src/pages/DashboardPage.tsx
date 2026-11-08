@@ -53,6 +53,8 @@ type Status = {
   };
   uptime_seconds: number | null;
   algorithm: string | null;
+  job_id: string | null;
+  height: number | null;
   threads: number | null;
   cpu: {
     vendor: string;
@@ -97,6 +99,8 @@ const emptyStatus: Status = {
   shares: { accepted: null, rejected: null, total: null, stale: null, pending: null, expired: null, dropped: null },
   uptime_seconds: null,
   algorithm: null,
+  job_id: null,
+  height: null,
   threads: null,
   cpu: null,
   msr_active: null,
@@ -605,6 +609,16 @@ function App() {
                       icon={<Zap size={15} />}
                       label="Algoritmo"
                       value={status.algorithm || "—"}
+                    />
+                    <DataRow
+                      icon={<Activity size={15} />}
+                      label="Job attivo"
+                      value={status.job_id || "—"}
+                    />
+                    <DataRow
+                      icon={<Gauge size={15} />}
+                      label="Altezza blocco"
+                      value={status.height != null ? formatCount(status.height) : "—"}
                     />
                     <DataRow
                       icon={<LockKeyhole size={15} />}
