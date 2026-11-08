@@ -246,6 +246,7 @@ Non definire il progetto “finito” se manca uno dei criteri sopra.
 - Il lock inter-processo Linux MSR in `engine/src/msr/msr.cpp` adatta il blocco `flock` di `c0mm4nd/rxminer/src/msr.rs`, commit `5fe52dde2650c623fd0472804152a94711889dce`; licenza MIT.
 - Il modulo opzionale Windows `IntelMSR.bin` è il binario ufficiale `namazso/PawnIO.Modules` release `0.2.11`, file `IntelMSR.bin`, SHA-256 `d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f`; il sorgente del modulo è LGPL-2.1-or-later. Il binario non è incluso nel repository: il motore verifica il digest prima di caricarlo e PawnIO verifica la firma del modulo.
 - Il codice RandomX upstream resta BSD-3-Clause secondo la licenza conservata in `engine/src/randomx/upstream/LICENSE`.
+- Le allocazioni RandomX page-backed, l'allineamento Linux a 2 MiB per Transparent Huge Pages, il fault-in delle huge pages esplicite, il riuso NUMA-aware delle pagine scratchpad da 2 MiB, il prefetch JIT configurabile e il dispatch BMI2/RORX in `cpu.cpp`, `cpu.hpp` e `jit_compiler_x86.cpp`, oltre alle API THP/JIT/prefetch in `virtual_memory.c` e `.h` e all'allocatore in `allocator.cpp`, derivano da `c0mm4nd/rxminer`, commit `5fe52dde2650c623fd0472804152a94711889dce`. Le modifiche RxMiner sono MIT; il copyright e la licenza BSD-3-Clause upstream RandomX sono conservati nei file.
 
 ## 15. Documento operativo vincolante — istruzioni aggiornate dell'utente
 
@@ -258,6 +259,7 @@ Il presente documento operativo è vincolante per tutte le attività del progett
 5. **Stima del tempo ogni dieci minuti.** Durante il lavoro, fornire ogni dieci minuti un'indicazione aggiornata e realistica del tempo residuo stimato per completare il progetto. Non inventare una scadenza: se non è possibile stimarla con affidabilità, dichiararlo chiaramente e indicare le attività che determinano il tempo residuo.
 6. **Rilettura ogni tre minuti.** Rileggere il README ogni tre minuti durante il lavoro continuativo, oltre che prima di ogni intervento e prima di ogni fase significativa. La cadenza di tre minuti sostituisce la precedente indicazione di due minuti.
 7. **Applicazione in tutte le fasi.** Le regole valgono senza eccezioni durante sviluppo, integrazione dei moduli, gestione delle share, MSR, compilazione, test, correzioni, preparazione dei pacchetti e rilascio.
+8. **Ordine di assemblaggio richiesto.** Prima completare l'integrazione di tutti i moduli e del codice compatibile dei miner di riferimento. Non eseguire test, compilazioni o verifiche intermedie; solo dopo l'assemblaggio completo eseguire un'unica fase finale di build, test, verifica e correzione. Durante questa fase i workflow CI restano manuali e vanno ripristinati prima della verifica finale.
 
 ## 14. Disposizioni operative esplicite dell'utente — priorità e ritmo
 
@@ -274,4 +276,3 @@ Questa sezione integra le regole precedenti e deve essere rispettata in ogni ses
 9. **Consegna finale.** Consegnare il progetto effettivamente aggiornato, con riepilogo conciso dei moduli integrati, commit pubblicati, verifiche realmente eseguite e limitazioni residue. Non dichiarare finito ciò che non è stato effettivamente realizzato.
 
 
-- Le allocazioni RandomX page-backed, l'allineamento Linux a 2 MiB per Transparent Huge Pages, il fault-in delle huge pages esplicite, il riuso NUMA-aware delle pagine scratchpad da 2 MiB, il prefetch JIT configurabile e il dispatch BMI2/RORX in `cpu.cpp`, `cpu.hpp` e `jit_compiler_x86.cpp`, oltre alle API THP/JIT/prefetch in `virtual_memory.c` e `.h` e all'allocatore in `allocator.cpp`, derivano da `c0mm4nd/rxminer`, commit `5fe52dde2650c623fd0472804152a94711889dce`. Le modifiche RxMiner sono MIT; il copyright e la licenza BSD-3-Clause upstream RandomX sono conservati nei file.
