@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: native-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux:
     name: Linux build and tests
