@@ -7,7 +7,7 @@
 namespace unique_rx {
 
 std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
-    if (!cpu_config.value("enabled", true)) return 1;
+    if (!cpu_config.value("enabled", true)) return 0;
 
     const auto logical_threads = std::max(1U, std::thread::hardware_concurrency());
     const auto hint = std::min(cpu_config.value("max-threads-hint", 0U), 100U);
