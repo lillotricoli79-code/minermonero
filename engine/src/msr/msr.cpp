@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -227,6 +229,8 @@ struct MsrManager::Impl {
     }
 
     void apply() {
+        if (active) return;
+        originals.clear();
         initialize_pawnio();
         const WORD groups = GetActiveProcessorGroupCount();
         if (groups == 0) throw std::runtime_error("Windows reports no active processor groups");
@@ -248,6 +252,9 @@ struct MsrManager::Impl {
                 ThreadAffinity affinity(original.group, original.processor);
                 write_current_msr(kRandomXIntelMsrValue);
                 original.modified = true;
+                if (read_current_msr() != kRandomXIntelMsrValue) {
+                    throw std::runtime_error("Intel MSR 0x1A4 read-back verification failed");
+                }
             }
             active = true;
         } catch (...) {
@@ -286,6 +293,8 @@ struct MsrManager::Impl {
     std::vector<LinuxOriginal> originals;
 
     void apply() {
+        if (active) return;
+        originals.clear();
         const auto count = std::max(1U, std::thread::hardware_concurrency());
         originals.reserve(count);
         for (unsigned int cpu = 0; cpu < count; ++cpu) {
@@ -316,6 +325,13 @@ struct MsrManager::Impl {
                                             "cannot write Intel MSR 0x1A4");
                 }
                 original.modified = true;
+                std::uint64_t current_value = 0;
+                if (::pread(original.fd, &current_value, sizeof(current_value),
+                            kIntelMiscFeatureControl) !=
+                        static_cast<ssize_t>(sizeof(current_value)) ||
+                    current_value != kRandomXIntelMsrValue) {
+                    throw std::runtime_error("Intel MSR 0x1A4 read-back verification failed");
+                }
             }
             active = true;
         } catch (...) {
