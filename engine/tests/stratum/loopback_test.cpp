@@ -305,6 +305,7 @@ int main() {
                 // the three result classes. Continue servicing the miner's orderly
                 // two-second queue drain until it closes the socket.
                 std::raise(SIGINT);
+                line.clear();
                 while (read_line(client, line)) {
                     const auto submit = nlohmann::json::parse(line);
                     if (!valid_submit_message(submit)) {
@@ -330,7 +331,7 @@ int main() {
         } catch (...) {
             std::cerr << "mock pool error: unknown exception\n";
         }
-    });;
+    });
 
     std::ostringstream miner_output;
     std::ostringstream miner_errors;
