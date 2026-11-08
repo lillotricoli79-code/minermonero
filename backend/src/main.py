@@ -549,8 +549,15 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
         msr_mode = "fast"
     else:
         msr_mode = "custom"
+    explicit_threads = cpu.get("threads", 0)
+    if isinstance(explicit_threads, bool) or not isinstance(explicit_threads, int):
+        explicit_threads = 0
     thread_hint = safe_number(cpu.get("max-threads-hint"))
-    threads = round((os.cpu_count() or 1) * thread_hint / 100) if thread_hint else 0
+    threads = (
+        explicit_threads
+        if explicit_threads > 0
+        else round((os.cpu_count() or 1) * thread_hint / 100) if thread_hint else 0
+    )
     return {
         "pool": pool.get("url", ""),
         "wallet": pool.get("user", ""),
@@ -591,11 +598,12 @@ def apply_config_update(current: dict[str, Any], update: MinerConfigUpdate) -> d
     cpu = dict(result.get("cpu") or {})
     cpu["enabled"] = True
     if update.threads > 0:
-        cpu["max-threads-hint"] = max(
-            1,
-            min(100, round(100 * update.threads / max(1, os.cpu_count() or 1))),
-        )
+        # The native engine clamps this exact request to CPUs available to the process
+        # and to container quotas; do not approximate it as a percentage.
+        cpu["threads"] = update.threads
+        cpu.pop("max-threads-hint", None)
     else:
+        cpu["threads"] = 0
         cpu.pop("max-threads-hint", None)
     http = dict(result.get("http") or {})
     http.update({

@@ -1,6 +1,7 @@
 {
   "cpu": {
     "enabled": true,
+    "threads": 0,
     "max-threads-hint": 0,
     "huge-pages": false
   },
