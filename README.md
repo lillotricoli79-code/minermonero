@@ -230,6 +230,18 @@ Non definire il progetto “finito” se manca uno dei criteri sopra.
 - Il percorso AES VAES in `engine/src/randomx/upstream/src/aes_hash_vaes.cpp` deriva da `c0mm4nd/rxminer`, commit `5fe52dde2650c623fd0472804152a94711889dce`; le porzioni RxMiner sono MIT, con testo conservato in `engine/src/randomx/upstream/LICENSES/RXMINER-MIT.txt`.
 - Il codice RandomX upstream resta BSD-3-Clause secondo la licenza conservata in `engine/src/randomx/upstream/LICENSE`.
 
+## 15. Documento operativo vincolante — istruzioni aggiornate dell'utente
+
+Il presente documento operativo è vincolante per tutte le attività del progetto. Le disposizioni devono essere lette prima di ogni intervento e rispettate durante sviluppo, integrazione, test e rilascio.
+
+1. **Priorità assoluta: completare il codice effettivo dei miner di riferimento.** Procedere prima di tutto a recuperare, integrare e completare nel progetto principale il codice reale prelevato dai miner indicati dall'utente. Non sostituire questo lavoro con analisi, audit, elenchi, spiegazioni o documentazione non richiesta.
+2. **Nessuna finzione.** Non dichiarare mai di aver copiato, integrato, completato, compilato o verificato codice se l'operazione non è stata realmente eseguita. Distinguere sempre il codice effettivamente presente dalle attività ancora da svolgere e dalle verifiche non eseguite.
+3. **Niente codice inventato come sostituto.** Non creare implementazioni fittizie, segnaposto, moduli dimostrativi o codice improvvisato al posto delle implementazioni reali disponibili nei miner di riferimento. Integrare soltanto codice compatibile, adattandolo tecnicamente quando necessario e rispettando sempre licenze e attribuzioni.
+4. **Lavoro continuo e senza interruzioni superflue.** Non interrompere continuamente lo sviluppo per inviare aggiornamenti, commenti o resoconti di singoli passaggi. Procedere in modo continuativo e comunicare soltanto quando è necessario un intervento dell'utente o quando si raggiunge un risultato concreto.
+5. **Stima del tempo ogni dieci minuti.** Durante il lavoro, fornire ogni dieci minuti un'indicazione aggiornata e realistica del tempo residuo stimato per completare il progetto. Non inventare una scadenza: se non è possibile stimarla con affidabilità, dichiararlo chiaramente e indicare le attività che determinano il tempo residuo.
+6. **Rilettura ogni tre minuti.** Rileggere il README ogni tre minuti durante il lavoro continuativo, oltre che prima di ogni intervento e prima di ogni fase significativa. La cadenza di tre minuti sostituisce la precedente indicazione di due minuti.
+7. **Applicazione in tutte le fasi.** Le regole valgono senza eccezioni durante sviluppo, integrazione dei moduli, gestione delle share, MSR, compilazione, test, correzioni, preparazione dei pacchetti e rilascio.
+
 ## 14. Disposizioni operative esplicite dell'utente — priorità e ritmo
 
 Questa sezione integra le regole precedenti e deve essere rispettata in ogni sessione di lavoro.
@@ -238,7 +250,7 @@ Questa sezione integra le regole precedenti e deve essere rispettata in ogni ses
 2. **Priorità alla consegna concreta.** L'obiettivo è completare il miner richiesto nel repository principale `main`, non limitarsi a descrivere cosa andrebbe fatto, creare elenchi di attività o aggiungere documentazione al posto del codice.
 3. **Usare implementazioni sorgente reali dei miner di riferimento.** Recuperare i file e i moduli effettivi, selezionare le parti compatibili, conservarne provenienza e licenza e integrarle nel progetto. Non inventare implementazioni sostitutive quando esiste codice riutilizzabile compatibile. Non copiare codice senza licenza compatibile o senza rispettarne gli obblighi.
 4. **Nessun lavoro parallelo.** Integrare il lavoro nel progetto principale e nella sua struttura esistente. Non creare rami, repository, progetti o copie parallele salvo richiesta esplicita.
-5. **Rilettura periodica.** Rileggere questa sezione e le disposizioni pertinenti del README all'inizio del lavoro, prima di ogni nuova fase significativa e almeno ogni due minuti durante una sessione continuativa, per non perdere le istruzioni e non deviare dall'obiettivo.
+5. **Rilettura periodica obbligatoria.** Rileggere il README all'inizio di ogni intervento e poi ogni tre minuti durante il lavoro continuativo. La rilettura serve a mantenere tutte le disposizioni presenti e a impedire deviazioni, dimenticanze o ripetizione degli errori già corretti.
 6. **Rapidità senza finzioni.** Procedere con la massima rapidità ragionevole, evitando interruzioni, aggiornamenti superflui e richieste di conferma non necessarie. Non fermarsi per riferire ogni singolo passaggio: comunicare quando serve una decisione indispensabile oppure quando la consegna è pronta. Non sacrificare correttezza, compilabilità, sicurezza MSR o licenze per dichiarare un completamento anticipato.
 7. **Tempo indicativo di consegna.** L'utente richiede il massimo impegno per consegnare il progetto entro un'ora. Questo è un obiettivo di urgenza, non un'autorizzazione a dichiarare completate funzioni non implementate o non verificate. Se una verifica o una parte essenziale non è materialmente completabile nel tempo disponibile, indicare con precisione cosa è stato fatto e cosa resta.
 8. **Pubblicazione.** L'utente ha autorizzato il lavoro direttamente su `main`, inclusi i commit necessari. Non usare rami paralleli. Non eseguire force push o operazioni distruttive.
