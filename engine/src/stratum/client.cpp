@@ -11,6 +11,7 @@
 #endif
 
 #include <randomx.h>
+#include "virtual_memory.h"
 
 
 #include <algorithm>
@@ -137,6 +138,9 @@ int run_miner(const std::filesystem::path& config_path,
         auto flags = randomx_get_flags();
         const auto cpu_config = config.value("cpu", nlohmann::json::object());
         if (cpu_config.value("huge-pages", false)) flags |= RANDOMX_FLAG_LARGE_PAGES;
+        // Explicit JIT huge pages are optional and fall back to normal pages
+        // when the OS privilege/reservation is unavailable.
+        rxm_set_jit_huge_pages(cpu_config.value("jit-huge-pages", false) ? 1 : 0);
         std::uint64_t generation = 0;
         const auto pool_threads = pools.front().threads;
         auto started = Clock::now();

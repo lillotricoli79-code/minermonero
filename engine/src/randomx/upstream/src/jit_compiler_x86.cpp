@@ -224,27 +224,27 @@ namespace randomx {
 	}
 
 	JitCompilerX86::JitCompilerX86() {
-		code = (uint8_t*)allocMemoryPages(CodeSize);
+		code = (uint8_t*)allocJitMemory(CodeSize, &mappedSize);
 		if (code == nullptr)
-			throw std::runtime_error("allocMemoryPages");
+			throw std::runtime_error("allocJitMemory");
 		memcpy(code, codePrologue, prologueSize);
 		memcpy(code + epilogueOffset, codeEpilogue, epilogueSize);
 	}
 
 	JitCompilerX86::~JitCompilerX86() {
-		freePagedMemory(code, CodeSize);
+		freePagedMemory(code, mappedSize);
 	}
 
 	void JitCompilerX86::enableAll() {
-		setPagesRWX(code, CodeSize);
+		if (setPagesRWX(code, mappedSize)) throw std::runtime_error("setPagesRWX");
 	}
 
 	void JitCompilerX86::enableWriting() {
-		setPagesRW(code, CodeSize);
+		if (setPagesRW(code, mappedSize)) throw std::runtime_error("setPagesRW");
 	}
 
 	void JitCompilerX86::enableExecution() {
-		setPagesRX(code, CodeSize);
+		if (setPagesRX(code, mappedSize)) throw std::runtime_error("setPagesRX");
 	}
 
 	void JitCompilerX86::generateProgram(Program& prog, ProgramConfiguration& pcfg) {
