@@ -6,3 +6,5 @@ __pycache__/
 /config.json
 /engine/build/
 CMakeFiles/
+
+/logs/
