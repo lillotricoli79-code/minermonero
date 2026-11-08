@@ -272,16 +272,18 @@ def native_msr_available(executable_path: str | None) -> bool:
     return False
 
 def msr_override_enabled(randomx: dict[str, Any]) -> bool:
-    """Return True when the requested MSR mode requires XMRig."""
+    """Return True only for custom MSR payloads not supported by the native engine.
+
+    Automatic and fast presets are selected by the native engine for the detected
+    CPU vendor/family/model. Unsupported hardware or missing MSR permissions are
+    handled as an optional optimization by the native engine, not by switching
+    the whole miner to a different implementation.
+    """
     value = randomx.get("wrmsr")
-    if value is False:
+    if value is None or isinstance(value, bool):
         return False
-    if isinstance(value, int) and not isinstance(value, bool) and value < 0:
+    if isinstance(value, int) and value < 0:
         return False
-    if value is None:
-        return not is_intel_cpu()
-    if value is True:
-        return True
     return True
 
 
@@ -377,13 +379,6 @@ class MinerController:
             wrmsr_value is False
             or (isinstance(wrmsr_value, int) and not isinstance(wrmsr_value, bool) and wrmsr_value < 0)
         )
-        if (
-            native_path
-            and not msr_requires_xmrig
-            and msr_is_enabled
-            and not native_msr_available(native_path)
-        ):
-            msr_requires_xmrig = True
         if native_path and not msr_requires_xmrig:
             executable_path = native_path
             command = [native_path, "--mine", str(CONFIG_PATH)]

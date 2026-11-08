@@ -246,28 +246,20 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(is_local_api_connection("95.235.94.91", "127.0.0.1"))
         self.assertTrue(is_local_api_connection("127.0.0.1", "127.0.0.1"))
 
-    @patch("backend.src.main.is_intel_cpu", return_value=True)
-    def test_intel_automatic_uses_native_and_fast_uses_xmrig(self, _intel):
+    def test_native_automatic_and_fast_msr_use_cpu_specific_profiles(self):
         self.assertFalse(msr_override_enabled({}))
         self.assertFalse(msr_override_enabled({"wrmsr": None}))
-        self.assertTrue(msr_override_enabled({"wrmsr": True}))
+        self.assertFalse(msr_override_enabled({"wrmsr": True}))
+        self.assertFalse(msr_override_enabled({"wrmsr": False}))
+        self.assertFalse(msr_override_enabled({"wrmsr": -1}))
+
+    def test_custom_msr_payload_uses_compatible_external_backend(self):
         self.assertTrue(msr_override_enabled({"wrmsr": ["0x1a4:0xf"]}))
         self.assertTrue(msr_override_enabled({"wrmsr": []}))
         self.assertTrue(msr_override_enabled({"wrmsr": 0}))
         self.assertTrue(msr_override_enabled({"wrmsr": 6}))
-        self.assertFalse(msr_override_enabled({"wrmsr": False}))
-        self.assertFalse(msr_override_enabled({"wrmsr": -1}))
 
-    @patch("backend.src.main.is_intel_cpu", return_value=False)
-    def test_non_intel_automatic_msr_requires_xmrig(self, _non_intel):
-        self.assertTrue(msr_override_enabled({}))
-        self.assertTrue(msr_override_enabled({"wrmsr": None}))
-        self.assertTrue(msr_override_enabled({"wrmsr": True}))
-        self.assertFalse(msr_override_enabled({"wrmsr": False}))
-        self.assertFalse(msr_override_enabled({"wrmsr": -1}))
-
-    @patch("backend.src.main.is_intel_cpu", return_value=True)
-    def test_fast_msr_config_is_routed_to_xmrig(self, _intel):
+    def test_fast_msr_config_uses_native_automatic_profile(self):
         config = apply_config_update(
             {"http": {"port": 18088}, "pools": []},
             MinerConfigUpdate(msr_mode="fast"),
@@ -275,7 +267,7 @@ class LocalApiTests(unittest.TestCase):
 
         self.assertIs(config["randomx"]["wrmsr"], True)
         self.assertIs(config["randomx"]["rdmsr"], True)
-        self.assertTrue(msr_override_enabled(config["randomx"]))
+        self.assertFalse(msr_override_enabled(config["randomx"]))
 
 
 if __name__ == "__main__":
