@@ -9,7 +9,7 @@ find_package(OpenSSL REQUIRED)
 FetchContent_Declare(
   randomx
   GIT_REPOSITORY https://github.com/tevador/RandomX.git
-  GIT_TAG aaafe71322df6602c21a5c72937ac284724ae561
+  GIT_TAG 12f2c2ffe2108d6cf54c391fee33c8bc3646cdab
 )
 FetchContent_Declare(
   nlohmann_json
