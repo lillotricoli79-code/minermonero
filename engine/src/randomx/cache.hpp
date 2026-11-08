@@ -9,6 +9,6 @@
 namespace unique_rx {
 
 std::shared_ptr<randomx_cache> create_randomx_cache(
-    const std::array<std::uint8_t, 32>& seed, randomx_flags flags);
+    const std::array<std::uint8_t, 32>& seed, randomx_flags& flags);
 
 } // namespace unique_rx
