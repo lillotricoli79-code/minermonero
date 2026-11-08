@@ -231,27 +231,42 @@ int main() {
                 {"result", {{"id", "local-session"}, {"status", "OK"}, {"job", job}}},
             };
             line.clear();
-            if (!send_all(client, response.dump() + "\n") || !read_line(client, line)) {
+            if (!send_all(client, response.dump() + "\n")) {
                 unique_rx::platform::close_socket(client);
                 return;
             }
-            const auto submit = nlohmann::json::parse(line);
-            const bool valid_submit =
-                submit.value("jsonrpc", std::string()) == "2.0" &&
-                submit.value("id", 0ULL) > 1 &&
-                submit.value("method", std::string()) == "submit" &&
-                submit.contains("params") && submit["params"].is_object() &&
-                submit["params"].value("id", std::string()) == "local-session" &&
-                submit["params"].value("job_id", std::string()) == "local-job" &&
-                is_hex_string(submit["params"].value("nonce", std::string()), 8) &&
-                is_hex_string(submit["params"].value("result", std::string()), 64);
-            const nlohmann::json submit_response{
-                {"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                {"result", {{"status", "OK"}}},
-            };
-            const bool response_sent = valid_submit &&
-                send_all(client, submit_response.dump() + "\n");
-            server_ok.store(response_sent, std::memory_order_release);
+            bool valid_submits = true;
+            for (int index = 0; index < 2; ++index) {
+                line.clear();
+                if (!read_line(client, line)) {
+                    valid_submits = false;
+                    break;
+                }
+                const auto submit = nlohmann::json::parse(line);
+                const bool valid_submit =
+                    submit.value("jsonrpc", std::string()) == "2.0" &&
+                    submit.value("id", 0ULL) > 1 &&
+                    submit.value("method", std::string()) == "submit" &&
+                    submit.contains("params") && submit["params"].is_object() &&
+                    submit["params"].value("id", std::string()) == "local-session" &&
+                    submit["params"].value("job_id", std::string()) == "local-job" &&
+                    is_hex_string(submit["params"].value("nonce", std::string()), 8) &&
+                    is_hex_string(submit["params"].value("result", std::string()), 64);
+                if (!valid_submit) {
+                    valid_submits = false;
+                    break;
+                }
+                const nlohmann::json submit_response = index == 0
+                    ? nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                                     {"error", nlohmann::json::array({1, "Low difficulty share", nullptr})}}
+                    : nlohmann::json{{"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                                     {"result", {{"status", "OK"}}}};
+                if (!send_all(client, submit_response.dump() + "\n")) {
+                    valid_submits = false;
+                    break;
+                }
+            }
+            server_ok.store(valid_submits, std::memory_order_release);
             unique_rx::platform::close_socket(client);
         } catch (const std::exception& error) {
             std::cerr << "mock pool error: " << error.what() << '\n';
@@ -264,7 +279,7 @@ int main() {
     std::ostringstream miner_errors;
     auto* previous_output = std::cout.rdbuf(miner_output.rdbuf());
     auto* previous_error = std::cerr.rdbuf(miner_errors.rdbuf());
-    const int result = unique_rx::run_miner(config_path, 1);
+    const int result = unique_rx::run_miner(config_path, 2);
     std::cout.rdbuf(previous_output);
     std::cerr.rdbuf(previous_error);
     pool.join();
@@ -272,7 +287,7 @@ int main() {
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
         miner_errors.str().find("switching pool") == std::string::npos ||
-        miner_output.str().find("Share accepted") == std::string::npos) {
+        miner_output.str().find("Share accepted") == std::string::npos ||\n        miner_output.str().find("Share rejected") == std::string::npos) {
         std::cerr << "local Stratum failover/login/job/share acceptance test failed\n";
         return 1;
     }
