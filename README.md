@@ -137,8 +137,11 @@ I test loopback con server simulato sono utili e necessari, ma **non equivalgono
 - Non dichiarare aumenti percentuali o vantaggi senza risultati misurati.
 - Il benchmark deve poter funzionare senza collegarsi a una pool e senza inviare shares.
 
-Comando di riferimento già previsto:
-`engine/build/unique-rx --benchmark 60 2`
+Comandi di riferimento:
+- `engine/build/unique-rx --benchmark 60 2` usa i valori predefiniti: prefetch T0 (1) e JIT huge pages disattivate.
+- `engine/build/unique-rx --benchmark 60 2 "seed" "input" 0 0` disattiva il prefetch.
+- Gli ultimi due argomenti selezionano `prefetch-mode` (0 disattivato, 1 T0, 2 NTA, 3 demand load) e `jit-huge-pages` (0 off, 1 on).
+Per confronti ripetibili mantenere identici seed, input, durata e lane, cambiando una sola opzione alla volta. Non dichiarare una modalità più veloce senza misure ripetute sullo stesso hardware.
 Verificare il nome effettivo dell'eseguibile e mantenere coerenti documentazione e build.
 
 ## 9. Dashboard e backend
