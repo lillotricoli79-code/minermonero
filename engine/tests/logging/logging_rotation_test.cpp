@@ -30,6 +30,7 @@ int main() {
         std::filesystem::file_size(rotated) >= 8U * 1024U * 1024U &&
         std::filesystem::is_regular_file(path) &&
         std::filesystem::file_size(path) > 0;
+    unique_rx::logging::close_file();
     std::filesystem::remove_all(directory, error);
     if (!passed) {
         std::cerr << "bounded log rotation test failed\n";
