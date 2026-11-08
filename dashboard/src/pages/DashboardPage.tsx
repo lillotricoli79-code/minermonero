@@ -164,12 +164,19 @@ function App() {
   useEffect(() => {
     let active = true;
     const poll = async () => {
-      try {
-        const [nextStatus, nextLogs] = await Promise.all([
-          request<Status>("/status"),
-          request<{ items: LogItem[] }>(`/logs?after=${logCursor.current}`),
-        ]);
-        if (!active) return;
+      const statusRequest = request<Status>("/status");
+      const logsRequest = request<{ items: LogItem[] }>(
+        `/logs?after=${logCursor.current}`,
+      );
+      const [statusResult, logsResult] = await Promise.allSettled([
+        statusRequest,
+        logsRequest,
+      ]);
+      if (!active) return;
+
+      // A transient log endpoint failure must not erase a valid miner status.
+      if (statusResult.status === "fulfilled") {
+        const nextStatus = statusResult.value;
         setStatus(nextStatus);
         const rate = nextStatus.hashrate["10s"];
         if (rate != null && Number.isFinite(rate)) {
@@ -177,15 +184,17 @@ function App() {
             [...current, { at: Date.now(), hashrate: rate }].slice(-48),
           );
         }
-        if (nextLogs.items.length) {
-          logCursor.current = Math.max(
-            logCursor.current,
-            ...nextLogs.items.map((item) => item.id),
-          );
-          setLogs((current) => [...current, ...nextLogs.items].slice(-12));
-        }
-      } catch {
-        if (active) setStatus(emptyStatus);
+      }
+
+      // Keep telemetry and log polling independent: either endpoint can recover
+      // on its next poll without making the other one appear offline.
+      if (logsResult.status === "fulfilled" && logsResult.value.items.length) {
+        const nextLogs = logsResult.value.items;
+        logCursor.current = Math.max(
+          logCursor.current,
+          ...nextLogs.map((item) => item.id),
+        );
+        setLogs((current) => [...current, ...nextLogs].slice(-12));
       }
     };
     void poll();
