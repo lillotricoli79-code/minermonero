@@ -18,7 +18,7 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
     if (raw_dataset == nullptr && dataset_flags != RANDOMX_FLAG_DEFAULT) {
         flags = static_cast<randomx_flags>(
             static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
-        std::cerr << "RandomX large pages unavailable; using standard dataset pages.\\n";
+        std::cerr << "RandomX large pages unavailable; using standard dataset pages.\n";
         raw_dataset = randomx_alloc_dataset(RANDOMX_FLAG_DEFAULT);
     }
     if (raw_dataset == nullptr) {
