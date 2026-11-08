@@ -324,6 +324,18 @@ def native_msr_available(executable_path: str | None) -> bool:
         except (OSError, ValueError):
             cpu_ids = list(range(os.cpu_count() or 1))
 
+        # Match the CPUs the current process is actually allowed to use.
+        # In containers/cgroups, checking every online CPU can incorrectly
+        # disable MSR support when device nodes exist only for the allowed set.
+        affinity_getter = getattr(os, "sched_getaffinity", None)
+        if affinity_getter is not None:
+            try:
+                allowed_cpu_ids = affinity_getter(0)
+            except OSError:
+                allowed_cpu_ids = None
+            if allowed_cpu_ids is not None:
+                cpu_ids = [cpu for cpu in cpu_ids if cpu in allowed_cpu_ids]
+
         return bool(cpu_ids) and all(
             (device := Path("/dev/cpu") / str(cpu) / "msr").is_file()
             and os.access(device, os.R_OK | os.W_OK)

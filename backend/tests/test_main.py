@@ -16,6 +16,7 @@ from backend.src.main import (
     is_local_api_connection,
     load_config,
     msr_override_enabled,
+    native_msr_available,
     normalize_summary,
     public_config,
 )
@@ -401,6 +402,22 @@ class LocalApiTests(unittest.TestCase):
         self.assertTrue(msr_override_enabled({"wrmsr": []}))
         self.assertTrue(msr_override_enabled({"wrmsr": 0}))
         self.assertTrue(msr_override_enabled({"wrmsr": 6}))
+
+    def test_native_msr_availability_checks_only_process_allowed_cpus(self):
+        with patch("backend.src.main.Path.read_text", return_value="0-3"), patch(
+            "backend.src.main.os.sched_getaffinity", return_value={1, 3}
+        ), patch("backend.src.main.Path.is_file", return_value=True), patch(
+            "backend.src.main.os.access", return_value=True
+        ), patch("backend.src.main.os.name", "posix"):
+            self.assertTrue(native_msr_available(None))
+
+    def test_native_msr_availability_returns_false_for_empty_process_affinity(self):
+        with patch("backend.src.main.Path.read_text", return_value="0-3"), patch(
+            "backend.src.main.os.sched_getaffinity", return_value=set()
+        ), patch("backend.src.main.Path.is_file", return_value=True), patch(
+            "backend.src.main.os.access", return_value=True
+        ), patch("backend.src.main.os.name", "posix"):
+            self.assertFalse(native_msr_available(None))
 
     def test_fast_msr_config_uses_native_automatic_profile(self):
         config = apply_config_update(
