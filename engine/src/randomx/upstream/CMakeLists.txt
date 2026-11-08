@@ -231,6 +231,10 @@ install(TARGETS randomx
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+# Propagate feature availability to the parent engine project so it can
+# register hardware-gated equivalence tests without compiling VAES on unsupported toolchains.
+set(RANDOMX_VAES_ENABLED ${RANDOMX_VAES_ENABLED} PARENT_SCOPE)
+
 if(BUILD_TESTING)
   add_executable(randomx-tests
     src/tests/tests.cpp)
