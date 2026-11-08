@@ -738,18 +738,18 @@ function App() {
                           )
                         }
                       >
-                        <option value="auto">Automatico · preset XMRig</option>
+                        <option value="auto">Automatico · preset Intel nativo</option>
                         <option value="off">Disattivato</option>
-                        <option value="fast">Fast · preset XMRig</option>
+                        <option value="fast">Fast · preset Intel nativo</option>
                         {config.msr_mode === "custom" && (
                           <option value="custom">Personalizzato · preservato</option>
                         )}
                       </select>
                       <small>
-                        Automatico, Fast e Personalizzato usano XMRig finché
-                        il motore nativo non integra MSR. Richiedono accesso
-                        MSR; `rdmsr` resta attivo per ripristinare i valori
-                        originali quando il miner termina.
+                        Automatico e Fast usano il preset Intel nativo con ripristino dei
+                        registri originali. Personalizzato e CPU non Intel
+                        passano a XMRig. Richiede i privilegi necessari per
+                        accedere ai registri MSR.
                       </small>
                     </label>
                     <label className="field">
