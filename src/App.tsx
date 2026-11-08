@@ -212,8 +212,8 @@ function App() {
       await request(`/miner/${action}`, { method: "POST" });
       setNotice(
         action === "start"
-          ? "Avvio richiesto a XMRig."
-          : "Arresto richiesto a XMRig.",
+          ? "Avvio del miner richiesto."
+          : "Arresto del miner richiesto.",
       );
       setStatus(await request<Status>("/status"));
     } catch (error) {
@@ -329,7 +329,7 @@ function App() {
                     Panoramica <span>miner</span>
                   </h1>
                   <p>
-                    Telemetria XMRig in tempo reale, senza metriche simulate.
+                    Telemetria del miner in tempo reale, senza metriche simulate.
                   </p>
                 </div>
                 <div className="primary-actions">
@@ -392,7 +392,7 @@ function App() {
                   value={formatUptime(status.uptime_seconds)}
                   icon={<RefreshCw size={16} />}
                   tone="blue"
-                  detail="sessione XMRig"
+                  detail="sessione miner"
                 />
               </section>
               <section className="chart-section">
@@ -489,7 +489,7 @@ function App() {
                       </div>
                       <strong>In attesa dei campioni</strong>
                       <span>
-                        Il grafico si popola quando XMRig restituisce un
+                        Il grafico si popola quando il miner restituisce un
                         hashrate reale.
                       </span>
                     </div>
@@ -578,7 +578,7 @@ function App() {
                         ))
                     ) : (
                       <div className="log-empty">
-                        I log appariranno dopo l'avvio controllato di XMRig.
+                        I log appariranno dopo l'avvio controllato del miner.
                       </div>
                     )}
                   </div>
@@ -587,7 +587,7 @@ function App() {
               <footer className="page-footer">
                 <span>UNIQUE RX · PANNELLO LOCALE</span>
                 <span>
-                  DATI FORNITI DALL'API XMRIG <ShieldCheck size={13} />
+                  TELEMETRIA FORNITA DAL MINER <ShieldCheck size={13} />
                 </span>
               </footer>
             </>
@@ -601,7 +601,7 @@ function App() {
                   <h1>
                     Configurazione <span>miner</span>
                   </h1>
-                  <p>Un solo file nativo XMRig: config.json.</p>
+                  <p>Un solo file di configurazione: config.json.</p>
                 </div>
                 <div className="config-note">
                   <LockKeyhole size={15} /> Credenziali custodite localmente
@@ -696,7 +696,7 @@ function App() {
                           updateConfig("threads", Number(event.target.value))
                         }
                       />
-                      <small>0 usa la configurazione automatica XMRig.</small>
+                      <small>0 usa la configurazione automatica del miner.</small>
                     </label>
                     <label className="toggle-field">
                       <span>
@@ -792,7 +792,7 @@ function App() {
                         Salva in config.json
                       </button>
                       <span>
-                        Ferma XMRig prima di modificare la configurazione.
+                        Ferma il miner prima di modificare la configurazione.
                       </span>
                     </div>
                   </form>
