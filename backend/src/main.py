@@ -203,7 +203,7 @@ class MinerController:
         self.log_lock = threading.Lock()
         self.logs: deque[dict[str, Any]] = deque(maxlen=400)
         self.log_sequence = 0
-        self.shell_log = ShellLog(ROOT / "logs" / "shell.log")
+        self.shell_log = ShellLog(ROOT / "logs" / "shell" / "shell.log")
 
     def _log(self, message: str) -> None:
         with self.log_lock:
