@@ -163,13 +163,21 @@ int run_miner(const std::filesystem::path& config_path,
             const bool same_work = previous_work &&
                 previous_work->job.same_work(next_job);
             if (!have_seed || next_job.seed != active_seed) {
-                cache = create_randomx_cache(next_job.seed, flags);
-                dataset.reset();
+                // Build the next epoch resources off to the side. If cache or
+                // dataset creation fails, keep the previous seed/cache pair
+                // coherent for a later pool reconnect.
+                auto next_flags = flags;
+                auto next_cache = create_randomx_cache(next_job.seed, next_flags);
+                std::shared_ptr<randomx_dataset> next_dataset;
                 if (full_memory) {
                     std::cout << "Initializing RandomX full dataset..." << std::flush;
-                    dataset = create_randomx_dataset(cache, pool_threads, flags);
+                    next_dataset = create_randomx_dataset(
+                        next_cache, pool_threads, next_flags);
                     std::cout << " ready\n";
                 }
+                cache = std::move(next_cache);
+                dataset = std::move(next_dataset);
+                flags = next_flags;
                 active_seed = next_job.seed;
                 have_seed = true;
             }
