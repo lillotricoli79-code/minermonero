@@ -97,20 +97,34 @@ foreach ($compiler in $pathCompilers) {
     $compilerPrefix = Split-Path -Parent (Split-Path -Parent $compiler.Source)
     $mingwPrefixes += $compilerPrefix
 }
-$mingwPrefix = $mingwPrefixes |
+# Reject old bundled compilers (for example Strawberry Perl GCC 8.3):
+# this engine requires C++20 jthread and modern Winsock poll declarations.
+$mingwCandidates = @($mingwPrefixes |
     Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-    Select-Object -Unique |
-    Where-Object {
-        (Test-Path -LiteralPath (Join-Path $_ "bin\g++.exe")) -and
-        (Test-Path -LiteralPath (Join-Path $_ "include\openssl\ssl.h"))
-    } |
-    Select-Object -First 1
+    Select-Object -Unique)
+$mingwPrefix = $null
+foreach ($candidatePrefix in $mingwCandidates) {
+    $candidateGxx = Join-Path $candidatePrefix "bin\g++.exe"
+    $candidateOpenSsl = Join-Path $candidatePrefix "include\openssl\ssl.h"
+    if (-not (Test-Path -LiteralPath $candidateGxx) -or
+        -not (Test-Path -LiteralPath $candidateOpenSsl)) { continue }
+    $versionText = (& $candidateGxx -dumpfullversion -dumpversion 2>$null | Select-Object -First 1)
+    try { $compilerVersion = [version]$versionText.Trim() } catch { continue }
+    if ($compilerVersion.Major -lt 13) {
+        Write-Host "Ignoro GCC $compilerVersion in $candidatePrefix: richiesto GCC 13+." -ForegroundColor Yellow
+        continue
+    }
+    $mingwPrefix = $candidatePrefix
+    break
+}
 if (-not $mingwPrefix) {
     $compilerList = ($pathCompilers | ForEach-Object { $_.Source }) -join "; "
-    throw "Toolchain MinGW con OpenSSL non individuata. Compiler in PATH: $compilerList"
+    throw "Toolchain MinGW GCC 13+ con OpenSSL non individuata. Compiler in PATH: $compilerList"
 }
 $msysBin = Join-Path $mingwPrefix "bin"
 $env:PATH = "$msysBin$([IO.Path]::PathSeparator)$env:PATH"
+Write-Host "Compiler MinGW selezionato: $((Join-Path $msysBin 'g++.exe'))" -ForegroundColor Green
+& (Join-Path $msysBin "g++.exe") --version | Select-Object -First 1
 
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
 if (-not $cmake) { throw "CMake è obbligatorio. Installa CMake e riapri PowerShell." }
