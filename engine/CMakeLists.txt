@@ -83,7 +83,8 @@ if(BUILD_TESTING)
     nlohmann_json::nlohmann_json)
   add_test(NAME unique-rx-worker-validation COMMAND unique-rx-worker-tests)
 
-  add_executable(unique-rx-msr-tests tests/msr/msr_manager_test.cpp src/msr/msr.cpp)
+  add_executable(unique-rx-msr-tests tests/msr/msr_manager_test.cpp
+    src/msr/msr.cpp src/logging/log.cpp)
   target_compile_features(unique-rx-msr-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-msr-tests PRIVATE src)
   if(WIN32)
