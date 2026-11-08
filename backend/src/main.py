@@ -53,7 +53,7 @@ class MinerConfigUpdate(BaseModel):
     worker: str = "rig01"
     password: str | None = None
     threads: int = Field(default=0, ge=0, le=256)
-    huge_pages: bool = True
+    huge_pages: bool = False
     jit_huge_pages: bool = False
     prefetch_mode: int = Field(default=1, ge=0, le=3)
     tls: bool = False
@@ -572,9 +572,9 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
         if explicit_threads > 0
         else round((os.cpu_count() or 1) * thread_hint / 100) if thread_hint else 0
     )
-    huge_pages = cpu.get("huge-pages", True)
+    huge_pages = cpu.get("huge-pages", False)
     if not isinstance(huge_pages, bool):
-        huge_pages = True
+        huge_pages = False
     jit_huge_pages = cpu.get("jit-huge-pages", False)
     if not isinstance(jit_huge_pages, bool):
         jit_huge_pages = False
