@@ -301,10 +301,13 @@ std::string format_rpc_error(const nlohmann::json& error) {
             if (!result.empty()) result += ": ";
             result += part.get_ref<const std::string&>();
         }
-        return result.empty() ? error.dump() : result;
+        return result;
     }
-    if (error.is_object() && error.contains("message") && error["message"].is_string()) {
-        return error["message"].get<std::string>();
+    if (error.is_object()) {
+        if (error.contains("message") && error["message"].is_string()) {
+            return error["message"].get<std::string>();
+        }
+        return "unspecified error";
     }
     return error.dump();
 }
