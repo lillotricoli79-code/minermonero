@@ -194,7 +194,22 @@ function App() {
           logCursor.current,
           ...nextLogs.map((item) => item.id),
         );
-        setLogs((current) => [...current, ...nextLogs].slice(-12));
+        setLogs((current) => {
+          // Persistent history and the live in-memory stream overlap during
+          // startup. Match their second-resolution timestamp and message so
+          // the same line is not rendered twice with different IDs.
+          const seen = new Set(
+            current.map((item) => `${Math.floor(item.time)}:${item.message}`),
+          );
+          const unseen: LogItem[] = [];
+          for (const item of nextLogs) {
+            const key = `${Math.floor(item.time)}:${item.message}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unseen.push(item);
+          }
+          return [...current, ...unseen].slice(-12);
+        });
       }
     };
     void poll();
