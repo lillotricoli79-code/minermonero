@@ -1,6 +1,7 @@
 #include "stratum.hpp"
 #include "core/mining.hpp"
 #include "randomx/cache.hpp"
+#include "randomx/dataset.hpp"
 #include "platform/socket.hpp"
 #include "stratum/transport.hpp"
 
@@ -59,6 +60,7 @@ int run_miner(const std::filesystem::path& config_path,
         const auto config = nlohmann::json::parse(file);
         const auto pool = parse_pool_config(config);
         const auto randomx_config = config.value("randomx", nlohmann::json::object());
+        const bool full_memory = randomx_config.value("full-memory", true);
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
         const bool msr_explicitly_disabled =
             (wrmsr.is_boolean() && !wrmsr.get<bool>()) ||
@@ -82,6 +84,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::array<std::uint8_t, 32> active_seed{};
         bool have_seed = false;
         std::shared_ptr<randomx_cache> cache;
+        std::shared_ptr<randomx_dataset> dataset;
         const auto flags = randomx_get_flags();
         std::uint64_t generation = 0;
         using Clock = std::chrono::steady_clock;
@@ -96,11 +99,17 @@ int run_miner(const std::filesystem::path& config_path,
         const auto install_job = [&](Job next_job) {
             if (!have_seed || next_job.seed != active_seed) {
                 cache = create_randomx_cache(next_job.seed, flags);
+                dataset.reset();
+                if (full_memory) {
+                    std::cout << "Initializing RandomX full dataset..." << std::flush;
+                    dataset = create_randomx_dataset(cache, flags, pool.threads);
+                    std::cout << " ready\\n";
+                }
                 active_seed = next_job.seed;
                 have_seed = true;
             }
             auto work = std::make_shared<MiningWork>(MiningWork{
-                std::move(next_job), cache, flags, ++generation,
+                std::move(next_job), cache, dataset, flags, full_memory, ++generation,
             });
             state.set_work(std::move(work));
         };
