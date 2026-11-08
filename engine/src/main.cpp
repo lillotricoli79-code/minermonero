@@ -11,6 +11,7 @@ namespace {
 
 std::uint64_t parse_unsigned64(const char* value, std::uint64_t fallback) {
     if (value == nullptr) return fallback;
+    if (*value == '-') return 0;
     try {
         std::size_t consumed = 0;
         const auto parsed = std::stoull(value, &consumed, 10);
