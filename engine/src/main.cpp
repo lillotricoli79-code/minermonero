@@ -1,4 +1,4 @@
-#include "stratum.hpp"
+#include "stratum/stratum.hpp"
 #include "randomx/benchmark.hpp"
 
 #include <cstdint>
