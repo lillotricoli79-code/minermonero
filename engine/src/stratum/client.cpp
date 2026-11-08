@@ -170,11 +170,22 @@ int run_miner(const std::filesystem::path& config_path,
                 } else if (message.contains("id")) {
                     const auto response_id = message["id"].get<std::uint64_t>();
                     if (pending.erase(response_id) != 0) {
-                        const bool rejected = message.contains("error") && !message["error"].is_null();
-                        std::cout << (rejected ? "Share rejected: " : "Share accepted\n");
-                        if (rejected) std::cout << message["error"].dump() << '\n';
-                        if (rejected) state.rejected.fetch_add(1, std::memory_order_relaxed);
-                        else state.accepted.fetch_add(1, std::memory_order_relaxed);
+                        const bool has_error =
+                            message.contains("error") && !message["error"].is_null();
+                        const bool accepted = !has_error && message.contains("result") &&
+                            message["result"].is_object() &&
+                            message["result"].value("status", std::string()) == "OK";
+                        if (accepted) {
+                            std::cout << "Share accepted\n";
+                            state.accepted.fetch_add(1, std::memory_order_relaxed);
+                        } else {
+                            std::cout << "Share rejected: ";
+                            if (has_error) std::cout << message["error"].dump();
+                            else if (message.contains("result")) std::cout << message["result"].dump();
+                            else std::cout << "missing or invalid submit result";
+                            std::cout << '\n';
+                            state.rejected.fetch_add(1, std::memory_order_relaxed);
+                        }
                     }
                 }
             }
