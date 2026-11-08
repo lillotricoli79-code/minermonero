@@ -51,6 +51,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                  std::uint32_t worker_count, std::uint64_t maximum_hashes) {
     Vm vm;
     std::shared_ptr<const MiningWork> active_work;
+    std::vector<std::uint8_t> blob;
     std::uint64_t cursor = 0;
     try {
         while (!state.stop.load(std::memory_order_acquire)) {
@@ -63,10 +64,10 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 vm.reset(randomx_create_vm(work->flags, work->cache.get(), nullptr));
                 if (!vm) throw std::runtime_error("worker VM creation failed");
                 active_work = work;
+                blob = work->job.blob;
                 cursor = 0;
             }
 
-            auto blob = work->job.blob;
             const auto nonce64 = static_cast<std::uint64_t>(work->job.nonce) +
                 worker_id + cursor * worker_count;
             const auto nonce = static_cast<std::uint32_t>(nonce64);
