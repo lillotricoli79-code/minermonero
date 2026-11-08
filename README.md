@@ -28,23 +28,25 @@ vengono usati come sorgente del miner.
 La dashboard React/TypeScript permette di configurare pool, wallet, thread,
 TLS/fingerprint e MSR, e controlla il processo avviato dall'utente. Il backend
 ascolta esclusivamente su `127.0.0.1`; preferisce `engine/build/unique-rx` e
-legge le sue righe di telemetria `UNIQUE_RX_STATUS`. XMRig è il percorso
-richiesto per le modalità MSR automatico, Fast e personalizzato finché il
-motore nativo non implementa MSR; il motore nativo viene avviato soltanto
-quando MSR è esplicitamente disattivato. Hashrate, share e uptime restano vuoti
-finché l'API o la telemetria del miner non li forniscono.
+legge le sue righe di telemetria `UNIQUE_RX_STATUS`. Il motore nativo applica
+il preset Intel RandomX automatico con salvataggio e ripristino dei registri;
+preset personalizzati e CPU non Intel vengono instradati a XMRig. Hashrate,
+share e uptime restano vuoti finché l'API o la telemetria del miner non li
+forniscono.
 
 La configurazione del miner vive esclusivamente nel file radice `config.json`,
 nel formato nativo XMRig. Il bridge e `unique-rx` leggono questo stesso file;
 non vengono creati profili o configurazioni generate. Il file è ignorato da Git
 e viene protetto con permessi locali restrittivi.
 
-MSR Automatico lascia il preset predefinito a XMRig; Fast imposta
-`randomx.wrmsr=true` e `randomx.rdmsr=true`; Personalizzato conserva il preset
-configurato. Tutte e tre le modalità passano a XMRig finché il motore nativo
-non implementa MSR. Richiedono i privilegi necessari per accedere ai registri.
-Il motore nativo rifiuta l'avvio se MSR non è esplicitamente disattivato: non
-deve mai fingere di applicare un preset che non supporta. Su Windows il backend
+MSR Automatico usa il preset Intel RandomX nativo, con lettura dei valori
+originali, verifica dopo la scrittura e ripristino all'uscita. Fast e
+Personalizzato passano a XMRig; anche le CPU non Intel usano XMRig per il
+preset richiesto. Su Windows il motore nativo richiede il driver PawnIO
+ufficiale e il modulo IntelMSR verificato tramite
+`scripts/windows/setup-msr.ps1`; su Linux richiede accesso a
+`/dev/cpu/*/msr`. L'accesso ai registri richiede i privilegi amministrativi
+necessari. Se il ripristino fallisce, il miner registra un avviso. Su Windows il backend
 richiede un arresto tramite CTRL+BREAK e attende la chiusura normale di XMRig;
 se deve forzare la terminazione, segnala che il ripristino MSR non è garantito.
 
@@ -79,10 +81,10 @@ Il backend preferisce `engine/build/unique-rx` solo quando MSR è
 esplicitamente disattivato; per MSR automatico, Fast e personalizzato usa
 XMRig finché il supporto nativo non è implementato.
 
-**Compatibilità piattaforme:** il trasporto Stratum nativo usa attualmente
-API socket POSIX. La compilazione nativa Windows non è ancora completata;
-su Windows il percorso supportato dalla dashboard per le modalità MSR è
-XMRig. La portabilità del motore nativo resta un'attività aperta.
+**Compatibilità piattaforme:** il trasporto Stratum usa un livello socket
+separato per Winsock su Windows e POSIX su Linux. La CI compila e testa il
+motore su Windows e Linux; il percorso MSR Windows usa PawnIO, mentre Linux
+usa il driver kernel `msr`.
 
 ## Candidati da valutare
 ## Audit fonti dashboard
