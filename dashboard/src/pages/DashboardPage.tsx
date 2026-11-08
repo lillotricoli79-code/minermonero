@@ -121,7 +121,7 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    void request<{ lines: string[] }>("/logs/history?limit=200")
+    void request<{ lines: string[] }>("/logs/history?limit=400")
       .then(({ lines }) => {
         if (!active || !lines.length) return;
         const entries = lines.map((line, index): LogItem => {
@@ -704,7 +704,7 @@ function App() {
                   <div className="log-list">
                     {logs.length ? (
                       logs
-                        .slice(-200)
+                        .slice(-400)
                         .reverse()
                         .map((entry) => (
                           <div className="log-line" key={entry.id}>
