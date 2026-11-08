@@ -590,7 +590,6 @@ int run_miner(const std::filesystem::path& config_path,
             }
 
             send_ready_shares();
-            const auto now = std::chrono::steady_clock::now();
             if (now - last_sample_time >= std::chrono::seconds(1)) {
                 const auto total_hashes = state.hashes.load(std::memory_order_relaxed);
                 const auto elapsed = std::chrono::duration<double>(now - last_sample_time).count();
