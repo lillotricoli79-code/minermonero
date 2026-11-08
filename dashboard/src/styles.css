@@ -609,10 +609,11 @@ p {
   color: #a2ada6;
 }
 .log-line span {
-  overflow: hidden;
+  overflow: visible;
   color: #66746b;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-overflow: clip;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .log-empty {
   display: flex;
