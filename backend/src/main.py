@@ -391,12 +391,20 @@ class MinerController:
         self.log_sequence = 0
         self.shell_log = ShellLog(ROOT / "logs" / "shell" / "shell.log")
 
-    def _log(self, message: str) -> None:
+    def _log(self, message: str, engine: str | None = None) -> None:
+        # Keep the original miner shell line intact and identify its source.
+        # The engine field is additive, so existing dashboard/API clients remain compatible.
         with self.log_lock:
             self.log_sequence += 1
-            self.logs.append({"id": self.log_sequence, "time": time.time(), "message": message})
+            self.logs.append({
+                "id": self.log_sequence,
+                "time": time.time(),
+                "engine": engine or self.engine_kind or "dashboard",
+                "message": message,
+            })
             try:
-                self.shell_log.write(message)
+                prefix = f"[{engine}] " if engine else ""
+                self.shell_log.write(prefix + message)
             except OSError:
                 # A full or unavailable disk must not stop the miner process.
                 pass
@@ -600,7 +608,8 @@ class MinerController:
     ) -> None:
         if process.stdout:
             for line in process.stdout:
-                line = line.rstrip()
+                # Remove only the line terminator: do not trim or rewrite miner output.
+                line = line.rstrip("\r\n")
                 if line.startswith("UNIQUE_RX_STATUS "):
                     try:
                         payload = json.loads(line[len("UNIQUE_RX_STATUS "):])
@@ -611,11 +620,12 @@ class MinerController:
                             with self.lock:
                                 if self.process is process:
                                     self.native_status = payload
+                            self._log(line, engine_kind)
                         else:
-                            self._log("Schema telemetria UNIQUE RX non valido.")
+                            self._log(line, engine_kind)
                 else:
-                    self._log(line)
-        self._log(f"{engine_kind} terminato (codice {process.poll()}).")
+                    self._log(line, engine_kind)
+        self._log(f"{engine_kind} terminato (codice {process.poll()}).", engine_kind)
         # Clear only this exact process: an immediately restarted miner may
         # already have replaced self.process while this reader is unwinding.
         with self.lock:
