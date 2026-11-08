@@ -15,9 +15,15 @@ except Exception as error:
     print("[ERRORE] config.json:", error)
 PY
 else echo "[ATTENZIONE] config.json assente: copia config.example.json e configura wallet/pool."; fi
-if command -v python3 >/dev/null 2>&1; then
-  python3 --version
-  if python3 -c 'import fastapi, uvicorn'; then echo "[OK] FastAPI e Uvicorn disponibili"; else echo "[ATTENZIONE] installa requirements.txt"; fi
+PYTHON="${ROOT}/.venv/bin/python"
+if [[ ! -x "${PYTHON}" ]] && command -v python3 >/dev/null 2>&1; then PYTHON="$(command -v python3)"; fi
+if [[ -x "${PYTHON}" ]]; then
+  "${PYTHON}" --version
+  if "${PYTHON}" -c 'import fastapi, uvicorn, pydantic'; then
+    echo "[OK] FastAPI, Uvicorn e Pydantic disponibili"
+  else
+    echo "[ATTENZIONE] dipendenze mancanti: scripts/linux/start.sh le installa nella .venv"
+  fi
 else echo "[ATTENZIONE] Python 3 non trovato."; fi
 if command -v cmake >/dev/null 2>&1; then cmake --version | head -n 1; else echo "[ATTENZIONE] CMake non trovato."; fi
 MINER=""
