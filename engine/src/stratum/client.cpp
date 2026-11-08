@@ -234,7 +234,8 @@ int run_miner(const std::filesystem::path& config_path,
                     log_event("SUBMIT_RESPONSE", message);
                     std::string error_text = has_error
                         ? (message.contains("error") && !message["error"].is_null()
-                            ? message["error"].dump() : message.value("result", nlohmann::json()).dump())
+                            ? format_rpc_error(message["error"])
+                            : message.value("result", nlohmann::json()).dump())
                         : std::string();
                     std::transform(error_text.begin(), error_text.end(), error_text.begin(),
                         [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
