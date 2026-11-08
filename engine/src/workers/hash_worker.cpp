@@ -37,22 +37,25 @@ std::uint64_t complete_hash(MiningState& state,
                              const std::shared_ptr<const MiningWork>& work,
                              std::uint32_t nonce, const Hash& hash) {
     const auto count = state.hashes.fetch_add(1, std::memory_order_relaxed) + 1;
-    const auto latest_work = state.current_work();
-    if (latest_work && latest_work->generation == work->generation) {
-        if (hash_meets_target(hash, latest_work->job.target)) {
-            {
-                std::lock_guard lock(state.share_mutex);
+    // Serialize the final generation check with queue insertion. This closes
+    // the reconnect race where a worker could enqueue an old-session share
+    // immediately after the network thread had cleared the previous queue.
+    {
+        std::lock_guard lock(state.share_mutex);
+        const auto latest_work = state.current_work();
+        if (latest_work && latest_work->generation == work->generation) {
+            if (hash_meets_target(hash, latest_work->job.target)) {
                 if (state.shares.size() < kMaximumQueuedShares) {
                     state.shares.push_back({
                         latest_work->generation, latest_work->job.id, nonce, hash});
                 } else {
                     state.dropped_shares.fetch_add(1, std::memory_order_relaxed);
                 }
+                state.found.fetch_add(1, std::memory_order_relaxed);
             }
-            state.found.fetch_add(1, std::memory_order_relaxed);
+        } else if (hash_meets_target(hash, work->job.target)) {
+            state.stale_shares.fetch_add(1, std::memory_order_relaxed);
         }
-    } else if (hash_meets_target(hash, work->job.target)) {
-        state.stale_shares.fetch_add(1, std::memory_order_relaxed);
     }
     return count;
 }
