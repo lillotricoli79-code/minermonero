@@ -1,9 +1,7 @@
 #include "stratum/stratum.hpp"
+#include "platform/socket.hpp"
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <nlohmann/json.hpp>
 
 #include <atomic>
 #include <filesystem>
@@ -12,12 +10,69 @@
 #include <string>
 #include <thread>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/types.h>
+#include <sys/time.h>
+#include <unistd.h>
+#endif
+
 namespace {
 
-bool send_all(int socket, const std::string& value) {
+using Socket = unique_rx::platform::Socket;
+
+#ifdef _WIN32
+using SocketLength = int;
+#else
+using SocketLength = socklen_t;
+#endif
+
+bool set_reuse_address(Socket socket) {
+    int enabled = 1;
+#ifdef _WIN32
+    return setsockopt(socket, SOL_SOCKET, SO_REUSEADDR,
+                      reinterpret_cast<const char*>(&enabled), sizeof(enabled)) == 0;
+#else
+    return setsockopt(socket, SOL_SOCKET, SO_REUSEADDR,
+                      &enabled, sizeof(enabled)) == 0;
+#endif
+}
+
+bool set_receive_timeout(Socket socket) {
+#ifdef _WIN32
+    const DWORD timeout_ms = 15000;
+    return setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,
+                      reinterpret_cast<const char*>(&timeout_ms), sizeof(timeout_ms)) == 0;
+#else
+    const timeval timeout{15, 0};
+    return setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,
+                      &timeout, sizeof(timeout)) == 0;
+#endif
+}
+
+int bind_loopback(Socket socket, sockaddr_in& address) {
+    return ::bind(socket, reinterpret_cast<const sockaddr*>(&address),
+                  static_cast<SocketLength>(sizeof(address)));
+}
+
+int get_local_address(Socket socket, sockaddr_in& address, SocketLength& length) {
+    return getsockname(socket, reinterpret_cast<sockaddr*>(&address), &length);
+}
+
+unsigned long long process_id() {
+#ifdef _WIN32
+    return static_cast<unsigned long long>(GetCurrentProcessId());
+#else
+    return static_cast<unsigned long long>(getpid());
+#endif
+}
+
+bool send_all(Socket socket, const std::string& value) {
     std::size_t offset = 0;
     while (offset < value.size()) {
-        const auto sent = send(socket, value.data() + offset, value.size() - offset, 0);
+        const int sent = unique_rx::platform::send_bytes(
+            socket, value.data() + offset, value.size() - offset);
         if (sent <= 0) return false;
         offset += static_cast<std::size_t>(sent);
     }
@@ -36,10 +91,10 @@ bool is_hex_string(const std::string& value, std::size_t expected_size) {
     return true;
 }
 
-bool read_line(int socket, std::string& line) {
+bool read_line(Socket socket, std::string& line) {
     char character = 0;
     while (line.size() < 1024 * 1024) {
-        const auto count = recv(socket, &character, 1, 0);
+        const int count = unique_rx::platform::receive_bytes(socket, &character, 1);
         if (count != 1) return false;
         if (character == '\n') return true;
         if (character != '\r') line.push_back(character);
@@ -50,35 +105,37 @@ bool read_line(int socket, std::string& line) {
 } // namespace
 
 int main() {
-    const int listener = socket(AF_INET, SOCK_STREAM, 0);
-    if (listener < 0) return 1;
-    int reuse = 1;
-    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    unique_rx::platform::NetworkRuntime network;
+    const Socket listener = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (!unique_rx::platform::socket_valid(listener)) return 1;
+    if (!set_reuse_address(listener)) {
+        unique_rx::platform::close_socket(listener);
+        return 1;
+    }
+
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     address.sin_port = 0;
-    if (bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
-        listen(listener, 1) != 0) {
-        close(listener);
+    if (bind_loopback(listener, address) != 0 || listen(listener, 1) != 0) {
+        unique_rx::platform::close_socket(listener);
         return 1;
     }
-    socklen_t address_size = sizeof(address);
-    if (getsockname(listener, reinterpret_cast<sockaddr*>(&address), &address_size) != 0) {
-        close(listener);
+    SocketLength address_size = static_cast<SocketLength>(sizeof(address));
+    if (get_local_address(listener, address, address_size) != 0) {
+        unique_rx::platform::close_socket(listener);
         return 1;
     }
 
     std::atomic<bool> server_ok{false};
     std::thread pool([&] {
         try {
-            const int client = accept(listener, nullptr, nullptr);
-            if (client < 0) return;
-            timeval timeout{15, 0};
-            setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+            const Socket client = accept(listener, nullptr, nullptr);
+            if (!unique_rx::platform::socket_valid(client)) return;
+            set_receive_timeout(client);
             std::string line;
             if (!read_line(client, line)) {
-                close(client);
+                unique_rx::platform::close_socket(client);
                 return;
             }
             const auto login = nlohmann::json::parse(line);
@@ -94,9 +151,10 @@ int main() {
                 login["params"]["algo"].is_array() &&
                 login["params"]["algo"] == nlohmann::json::array({"rx/0"});
             if (!valid_login) {
-                close(client);
+                unique_rx::platform::close_socket(client);
                 return;
             }
+
             const nlohmann::json job{
                 {"job_id", "local-job"},
                 {"blob", std::string(76 * 2, '0')},
@@ -111,7 +169,7 @@ int main() {
             };
             line.clear();
             if (!send_all(client, response.dump() + "\n") || !read_line(client, line)) {
-                close(client);
+                unique_rx::platform::close_socket(client);
                 return;
             }
             const auto submit = nlohmann::json::parse(line);
@@ -125,14 +183,14 @@ int main() {
                 is_hex_string(submit["params"].value("nonce", std::string()), 8) &&
                 is_hex_string(submit["params"].value("result", std::string()), 64);
             server_ok.store(valid_submit, std::memory_order_release);
-            close(client);
+            unique_rx::platform::close_socket(client);
         } catch (const std::exception& error) {
             std::cerr << "mock pool error: " << error.what() << '\n';
         }
     });
 
     const auto config_path = std::filesystem::temp_directory_path() /
-        ("unique-rx-stratum-" + std::to_string(getpid()) + ".json");
+        ("unique-rx-stratum-" + std::to_string(process_id()) + ".json");
     const nlohmann::json config{
         {"pools", nlohmann::json::array({nlohmann::json{
             {"url", "127.0.0.1:" + std::to_string(ntohs(address.sin_port))},
@@ -148,7 +206,7 @@ int main() {
     }
     const int result = unique_rx::run_miner(config_path, 1);
     pool.join();
-    close(listener);
+    unique_rx::platform::close_socket(listener);
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire)) {
         std::cerr << "local Stratum login/job/share test failed\n";
