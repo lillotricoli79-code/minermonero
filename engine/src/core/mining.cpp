@@ -28,6 +28,8 @@ bool meets_target(const Hash& hash, std::uint64_t target) {
     return high < target;
 }
 
+inline constexpr std::size_t kMaximumQueuedShares = 4096;
+
 } // namespace
 
 std::shared_ptr<const MiningWork> MiningState::current_work() {
@@ -88,7 +90,11 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 meets_target(hash, work->job.target)) {
                 {
                     std::lock_guard lock(state.share_mutex);
-                    state.shares.push_back({work->generation, work->job.id, nonce, hash});
+                    if (state.shares.size() < kMaximumQueuedShares) {
+                        state.shares.push_back({work->generation, work->job.id, nonce, hash});
+                    } else {
+                        state.dropped_shares.fetch_add(1, std::memory_order_relaxed);
+                    }
                 }
                 state.found.fetch_add(1, std::memory_order_relaxed);
             }
