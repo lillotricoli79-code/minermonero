@@ -421,6 +421,15 @@ int run_miner(const std::filesystem::path& config_path,
                     state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
                     pending.clear();
                 }
+                // A share queued for the previous authenticated pool session must
+                // never leak into a different session after failover/reconnect,
+                // even if the replacement pool happens to reuse the same job id.
+                {
+                    std::lock_guard lock(state.share_mutex);
+                    state.dropped_shares.fetch_add(state.shares.size(),
+                                                   std::memory_order_relaxed);
+                    state.shares.clear();
+                }
                 const auto reconnect_uptime =
                     std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - started).count();
                 const nlohmann::json reconnect_status = {
