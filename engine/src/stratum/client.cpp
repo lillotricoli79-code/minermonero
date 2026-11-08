@@ -385,6 +385,25 @@ int run_miner(const std::filesystem::path& config_path,
                     state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
                     pending.clear();
                 }
+                const auto reconnect_uptime =
+                    std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - started).count();
+                const nlohmann::json reconnect_status = {
+                    {"state", "RICONNESSIONE"}, {"managed", true},
+                    {"error", error.what()},
+                    {"hashrate", {{"10s", nullptr}, {"60s", nullptr}, {"15m", nullptr}}},
+                    {"shares", {{"found", state.found.load()},
+                                 {"submitted", state.submitted.load()},
+                                 {"accepted", state.accepted.load()},
+                                 {"rejected", state.rejected.load()},
+                                 {"stale", state.stale_shares.load()},
+                                 {"expired", state.expired_shares.load()},
+                                 {"dropped", state.dropped_shares.load()},
+                                 {"pending", 0},
+                                 {"total", state.accepted.load() + state.rejected.load()}}},
+                    {"uptime_seconds", reconnect_uptime},
+                    {"pool", pool.host + ":" + pool.port}, {"connected", false},
+                };
+                std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\\n' << std::flush;
                 std::cerr << "Pool " << pool.host << ':' << pool.port
                           << " disconnected: " << error.what()
                           << "; switching pool and retrying in " << retry_delay.count()

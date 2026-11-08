@@ -34,7 +34,7 @@ import {
 
 type Page = "overview" | "settings";
 type Status = {
-  state: "ATTIVO" | "AVVIO" | "OFFLINE";
+  state: "ATTIVO" | "AVVIO" | "RICONNESSIONE" | "OFFLINE";
   managed: boolean;
   error: string | null;
   hashrate: {
@@ -221,9 +221,11 @@ function App() {
     ? status.managed
       ? "MINER ATTIVO"
       : "MINER RILEVATO"
-    : status.state === "AVVIO"
-      ? "AVVIO IN CORSO"
-      : "NON CONNESSO";
+    : status.state === "RICONNESSIONE"
+      ? "RICONNESSIONE POOL"
+      : status.state === "AVVIO"
+        ? "AVVIO IN CORSO"
+        : "NON CONNESSO";
 
   return (
     <div className="app-shell">
@@ -326,7 +328,7 @@ function App() {
                 <div className="primary-actions">
                   <button
                     className="button button-start"
-                    disabled={busy || active}
+                    disabled={busy || active || status.managed}
                     onClick={() => void runMiner("start")}
                   >
                     <Play size={15} fill="currentColor" />
