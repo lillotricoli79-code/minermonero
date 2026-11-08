@@ -6,26 +6,35 @@
 #include <exception>
 #include <iostream>
 #include <string>
+#include <stdexcept>
 #include <string_view>
 
 namespace {
 
 std::uint64_t parse_unsigned64(const char* value, std::uint64_t fallback) {
     if (value == nullptr) return fallback;
-    if (*value == '-') return 0;
-    try {
-        std::size_t consumed = 0;
-        const auto parsed = std::stoull(value, &consumed, 10);
-        if (value[consumed] != '\0') return 0;
-        return parsed;
-    } catch (const std::exception&) {
-        return 0;
+    if (*value == '-') {
+        throw std::invalid_argument("unsigned numeric argument cannot be negative");
     }
+    std::size_t consumed = 0;
+    std::uint64_t parsed = 0;
+    try {
+        parsed = std::stoull(value, &consumed, 10);
+    } catch (const std::exception&) {
+        throw std::invalid_argument(std::string("invalid unsigned numeric argument: ") + value);
+    }
+    if (value[consumed] != '\0') {
+        throw std::invalid_argument(std::string("invalid unsigned numeric argument: ") + value);
+    }
+    return parsed;
 }
 
 unsigned int parse_unsigned(const char* value, unsigned int fallback) {
     const auto parsed = parse_unsigned64(value, fallback);
-    return parsed <= UINT32_MAX ? static_cast<unsigned int>(parsed) : 0;
+    if (parsed > UINT32_MAX) {
+        throw std::invalid_argument(std::string("numeric argument exceeds 32-bit range: ") + value);
+    }
+    return static_cast<unsigned int>(parsed);
 }
 
 void print_usage(const char* executable) {
@@ -42,6 +51,10 @@ void print_usage(const char* executable) {
 int main(int argc, char** argv) {
     try {
         if (argc > 1 && std::string_view(argv[1]) == "--mine") {
+            if (argc > 4) {
+                print_usage(argv[0]);
+                return 2;
+            }
             const std::filesystem::path config_path = argc > 2 ? argv[2] : "config.json";
             const auto maximum_hashes = parse_unsigned64(argc > 3 ? argv[3] : nullptr, 0);
             return unique_rx::run_miner(config_path, maximum_hashes);
