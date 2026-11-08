@@ -21,14 +21,21 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_executable(unique-rx src/main.cpp src/stratum/client.cpp src/stratum/job.cpp
   src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/randomx/benchmark.cpp
-  src/core/mining.cpp src/workers/hash_worker.cpp src/stratum/transport.cpp)
+  src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp)
 target_compile_features(unique-rx PRIVATE cxx_std_20)
 target_include_directories(unique-rx PRIVATE src "${randomx_SOURCE_DIR}/src")
 target_link_libraries(unique-rx PRIVATE randomx Threads::Threads OpenSSL::SSL
   OpenSSL::Crypto nlohmann_json::nlohmann_json)
 
 if(WIN32)
-  target_link_libraries(unique-rx PRIVATE ws2_32)
+  target_link_libraries(unique-rx PRIVATE ws2_32 advapi32)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/msr/IntelMSR.bin")
+    add_custom_command(TARGET unique-rx POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:unique-rx>/msr"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/msr/IntelMSR.bin"
+        "$<TARGET_FILE_DIR:unique-rx>/msr/IntelMSR.bin")
+  endif()
 endif()
 
 if(BUILD_TESTING)
@@ -51,20 +58,20 @@ if(BUILD_TESTING)
   add_test(NAME unique-rx-worker-validation COMMAND unique-rx-worker-tests)
 
   add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/stratum/client.cpp
-    src/stratum/job.cpp src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/stratum/transport.cpp)
+    src/stratum/job.cpp src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp)
   target_compile_features(unique-rx-stratum-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-stratum-tests PRIVATE src
     "${randomx_SOURCE_DIR}/src")
   target_link_libraries(unique-rx-stratum-tests PRIVATE randomx Threads::Threads
     OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
   if(WIN32)
-    target_link_libraries(unique-rx-stratum-tests PRIVATE ws2_32)
+    target_link_libraries(unique-rx-stratum-tests PRIVATE ws2_32 advapi32)
   endif()
   add_test(NAME unique-rx-stratum-job-validation COMMAND unique-rx-stratum-tests)
 
   add_executable(unique-rx-stratum-integration-tests
     tests/stratum/loopback_test.cpp src/stratum/client.cpp src/stratum/job.cpp
-    src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp
+    src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp
     src/stratum/transport.cpp)
   target_compile_features(unique-rx-stratum-integration-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-stratum-integration-tests PRIVATE src
@@ -72,7 +79,7 @@ if(BUILD_TESTING)
   target_link_libraries(unique-rx-stratum-integration-tests PRIVATE randomx
     Threads::Threads OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
   if(WIN32)
-    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32)
+    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32 advapi32)
   endif()
   add_test(NAME unique-rx-stratum-loopback COMMAND unique-rx-stratum-integration-tests)
   set_tests_properties(unique-rx-stratum-loopback PROPERTIES TIMEOUT 45)
