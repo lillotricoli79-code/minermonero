@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -297,16 +298,19 @@ class MinerController:
             pass
 
         try:
+            popen_options: dict[str, Any] = {
+                "cwd": executable.parent,
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.STDOUT,
+                "text": True,
+                "errors": "replace",
+                "bufsize": 1,
+            }
+            if os.name == "nt":
+                # CTRL_BREAK_EVENT lets XMRig run its shutdown path and restore MSR.
+                popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
             with self.lock:
-                self.process = subprocess.Popen(
-                    command,
-                    cwd=executable.parent,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    errors="replace",
-                    bufsize=1,
-                )
+                self.process = subprocess.Popen(command, **popen_options)
                 self.engine_kind = engine_kind
                 self.native_status = None
                 process = self.process
@@ -348,13 +352,27 @@ class MinerController:
             if process is None or process.poll() is not None:
                 self.process = None
                 raise HTTPException(status_code=409, detail="Nessun miner avviato da questa dashboard")
-            process.terminate()
+            if os.name == "nt":
+                try:
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
+                except (OSError, ValueError):
+                    self._log(
+                        "CTRL_BREAK_EVENT non disponibile: arresto forzato; "
+                        "il ripristino MSR non è garantito."
+                    )
+                    process.terminate()
+            else:
+                process.terminate()
         try:
             process.wait(timeout=8)
         except subprocess.TimeoutExpired:
+            self._log(
+                "Il miner non ha chiuso entro 8 secondi: terminazione forzata; "
+                "il ripristino MSR potrebbe non essere stato eseguito."
+            )
             process.kill()
             process.wait(timeout=3)
-        self._log("Arresto miner richiesto dall'utente.")
+        self._log("Arresto miner completato.")
 
     def recent_logs(self, after: int = 0) -> list[dict[str, Any]]:
         with self.log_lock:
