@@ -521,14 +521,14 @@ class MinerController:
             else:
                 process.terminate()
         try:
-            process.wait(timeout=8)
+            process.wait(timeout=30)
         except subprocess.TimeoutExpired:
             self._log(
-                "Il miner non ha chiuso entro 8 secondi: terminazione forzata; "
+                "Il miner non ha chiuso entro 30 secondi: terminazione forzata; "
                 "il ripristino MSR potrebbe non essere stato eseguito."
             )
             process.kill()
-            process.wait(timeout=3)
+            process.wait(timeout=5)
         self._log("Arresto miner completato.")
 
     def recent_logs(self, after: int = 0) -> list[dict[str, Any]]:
