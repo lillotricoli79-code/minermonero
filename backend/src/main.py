@@ -174,6 +174,7 @@ def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "uptime_seconds": int(uptime) if uptime is not None else None,
         "algorithm": None,
         "threads": None,
+        "cpu": None,
         "msr_active": None,
         "full_memory": None,
         "pool": connection.get("pool"),
@@ -342,6 +343,7 @@ class MinerController:
                 "hashrate": {"10s": None, "60s": None, "15m": None},
                 "shares": {"accepted": 0, "rejected": 0, "total": 0},
                 "uptime_seconds": None,
+                "cpu": None,
                 "pool": None,
                 "connected": False,
             }

@@ -149,7 +149,7 @@ Deve leggere lo stato effettivo del motore/backend e mostrare almeno:
 - stato miner e pool;
 - wallet/worker configurati, senza esporre segreti;
 - algoritmo e job attivo;
-- CPU rilevata, thread e impostazioni;
+- CPU rilevata (vendor, modello, famiglia, feature, core fisici/logici, NUMA e cache L3), thread e impostazioni;
 - hashrate corrente e storico;
 - shares accepted/rejected/stale;
 - uptime, connessioni, errori e riconnessioni;

@@ -1,7 +1,10 @@
 #include "topology.hpp"
 #include "platform/affinity.hpp"
+#include "cpu.hpp"
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <cstdint>
 #ifdef __linux__
 #include "platform/linux_cpu_set.hpp"
@@ -15,6 +18,14 @@
 #include <thread>
 #include <utility>
 #include <vector>
+
+#if defined(_M_X64) || defined(__x86_64__)
+  #if defined(_MSC_VER)
+    #include <intrin.h>
+  #else
+    #include <cpuid.h>
+  #endif
+#endif
 
 #ifdef _WIN32
 #ifndef _WIN32_WINNT
@@ -275,6 +286,109 @@ std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
 }
 
 } // namespace
+
+nlohmann::json cpu_summary_json() {
+    std::string vendor = "Unknown";
+    std::string brand;
+    std::uint32_t family = 0, model = 0, stepping = 0;
+#if defined(_M_X64) || defined(__x86_64__)
+    const auto cpuid = [](int leaf, int subleaf, int info[4]) {
+    #if defined(_MSC_VER)
+        __cpuidex(info, leaf, subleaf);
+    #else
+        __cpuid_count(leaf, subleaf, info[0], info[1], info[2], info[3]);
+    #endif
+    };
+    int info[4]{};
+    cpuid(0, 0, info);
+    const int max_leaf = info[0];
+    char vendor_id[13]{};
+    std::memcpy(vendor_id + 0, &info[1], 4);
+    std::memcpy(vendor_id + 4, &info[3], 4);
+    std::memcpy(vendor_id + 8, &info[2], 4);
+    vendor = vendor_id;
+    if (vendor == "GenuineIntel") vendor = "Intel";
+    else if (vendor == "AuthenticAMD") vendor = "AMD";
+    if (max_leaf >= 1) {
+        cpuid(1, 0, info);
+        const auto eax = static_cast<std::uint32_t>(info[0]);
+        const auto base_family = (eax >> 8) & 0x0f;
+        const auto base_model = (eax >> 4) & 0x0f;
+        const auto extended_family = (eax >> 20) & 0xff;
+        const auto extended_model = (eax >> 16) & 0x0f;
+        family = base_family == 0x0f ? base_family + extended_family : base_family;
+        model = (base_family == 0x06 || base_family == 0x0f)
+            ? (extended_model << 4) | base_model : base_model;
+        stepping = eax & 0x0f;
+    }
+    int extended[4]{};
+    cpuid(0x80000000, 0, extended);
+    if (static_cast<std::uint32_t>(extended[0]) >= 0x80000004U) {
+        char brand_id[49]{};
+        for (int leaf = 0; leaf < 3; ++leaf) {
+            cpuid(0x80000002 + leaf, 0, info);
+            std::memcpy(brand_id + leaf * 16, info, 16);
+        }
+        brand = brand_id;
+        const auto first = brand.find_first_not_of(" \t\r\n");
+        const auto last = brand.find_last_not_of(" \t\r\n");
+        brand = first == std::string::npos ? std::string() : brand.substr(first, last - first + 1);
+    }
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    vendor = "ARM64";
+    brand = "ARM64 processor";
+#endif
+    const auto logical = available_logical_threads();
+    const auto physical = available_physical_cores(logical);
+    std::uint32_t numa_nodes = 0;
+#ifdef _WIN32
+    {
+        std::set<USHORT> nodes;
+        for (const auto& item : platform::available_processors()) {
+            PROCESSOR_NUMBER processor{};
+            processor.Group = item.first;
+            processor.Number = static_cast<BYTE>(item.second);
+            USHORT node = 0;
+            if (GetNumaProcessorNodeEx(&processor, &node)) nodes.insert(node);
+        }
+        numa_nodes = static_cast<std::uint32_t>(nodes.size());
+    }
+#elif defined(__linux__)
+    {
+        std::set<int> nodes;
+        for (const auto cpu_id : platform::linux_cpu::allowed_cpus()) {
+            const auto root = std::filesystem::path("/sys/devices/system/cpu") /
+                ("cpu" + std::to_string(cpu_id));
+            std::error_code ec;
+            for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
+                const auto name = entry.path().filename().string();
+                if (name.size() > 4 && name.starts_with("node") &&
+                    std::all_of(name.begin() + 4, name.end(),
+                        [](unsigned char ch) { return ch >= '0' && ch <= '9'; })) {
+                    try { nodes.insert(std::stoi(name.substr(4))); } catch (...) {}
+                    break;
+                }
+            }
+        }
+        numa_nodes = static_cast<std::uint32_t>(nodes.size());
+    }
+#endif
+    const auto l3 = available_l3_cache_bytes().value_or(0);
+    if (brand.empty()) brand = vendor;
+    return {
+        {"vendor", vendor}, {"brand", brand}, {"family", family},
+        {"model", model}, {"stepping", stepping},
+        {"logical_threads", logical}, {"physical_cores", physical},
+        {"numa_nodes", numa_nodes}, {"l3_cache_bytes", l3},
+        {"features", {
+            {"aes", randomx::cpu.hasAes()},
+            {"ssse3", randomx::cpu.hasSsse3()},
+            {"avx2", randomx::cpu.hasAvx2()},
+            {"vaes", randomx::cpu.hasVaes()},
+            {"bmi2", randomx::cpu.hasBmi2()}
+        }}
+    };
+}
 
 std::uint32_t recommended_cpu_threads(std::uint32_t logical_threads,
                                      std::uint32_t physical_cores,

@@ -54,6 +54,18 @@ type Status = {
   uptime_seconds: number | null;
   algorithm: string | null;
   threads: number | null;
+  cpu: {
+    vendor: string;
+    brand: string;
+    family: number;
+    model: number;
+    stepping: number;
+    logical_threads: number;
+    physical_cores: number;
+    numa_nodes: number;
+    l3_cache_bytes: number;
+    features: { aes: boolean; ssse3: boolean; avx2: boolean; vaes: boolean; bmi2: boolean };
+  } | null;
   msr_active: boolean | null;
   full_memory: boolean | null;
   pool: string | null;
@@ -83,6 +95,7 @@ const emptyStatus: Status = {
   uptime_seconds: null,
   algorithm: null,
   threads: null,
+  cpu: null,
   msr_active: null,
   full_memory: null,
   pool: null,
@@ -559,6 +572,26 @@ function App() {
                               ? "Automatico"
                               : "—"
                       }
+                    />
+                    <DataRow
+                      icon={<Cpu size={15} />}
+                      label="Processore"
+                      value={status.cpu?.brand || status.cpu?.vendor || "Non rilevato"}
+                    />
+                    <DataRow
+                      icon={<Cpu size={15} />}
+                      label="Core fisici / logici"
+                      value={status.cpu ? `${status.cpu.physical_cores} / ${status.cpu.logical_threads}` : "—"}
+                    />
+                    <DataRow
+                      icon={<Cpu size={15} />}
+                      label="Feature CPU"
+                      value={status.cpu ? Object.entries(status.cpu.features).filter(([, enabled]) => enabled).map(([name]) => name.toUpperCase()).join(" · ") || "Base" : "—"}
+                    />
+                    <DataRow
+                      icon={<Cpu size={15} />}
+                      label="NUMA / cache L3"
+                      value={status.cpu ? `${status.cpu.numa_nodes} nodi · ${Math.round(status.cpu.l3_cache_bytes / 1048576)} MB` : "—"}
                     />
                     <DataRow
                       icon={<Zap size={15} />}

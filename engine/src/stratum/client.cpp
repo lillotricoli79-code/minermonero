@@ -1,5 +1,6 @@
 #include "stratum.hpp"
 #include "core/mining.hpp"
+#include "cpu/topology.hpp"
 #include "randomx/cache.hpp"
 #include "randomx/dataset.hpp"
 #include "msr/msr.hpp"
@@ -147,6 +148,7 @@ int run_miner(const std::filesystem::path& config_path,
         rxm_set_prefetch_mode(prefetch_mode);
         std::uint64_t generation = 0;
         const auto pool_threads = pools.front().threads;
+        const auto cpu_summary = cpu_summary_json();
         // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
         rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
@@ -371,7 +373,7 @@ int run_miner(const std::filesystem::path& config_path,
                                          {"pending", pending.size()},
                                          {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
                             {"uptime_seconds", uptime},
-                            {"algorithm", "rx/0"}, {"threads", pool_threads},
+                            {"algorithm", "rx/0"}, {"threads", pool_threads}, {"cpu", cpu_summary}, {"cpu", cpu_summary},
                             {"msr_active", msr.active()}, {"full_memory", full_memory},
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},
                         };
