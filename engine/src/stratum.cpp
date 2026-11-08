@@ -17,7 +17,10 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
+#include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <deque>
 #include <fstream>
