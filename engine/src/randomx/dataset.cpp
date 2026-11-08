@@ -1,4 +1,5 @@
 #include "dataset.hpp"
+#include "platform/affinity.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -41,7 +42,11 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
     unsigned long start_item = 0;
     for (std::uint32_t worker = 0; worker < worker_count; ++worker) {
         const unsigned long count = base_items + (worker < remainder ? 1UL : 0UL);
-        workers.emplace_back([dataset, cache, start_item, count] {
+        workers.emplace_back([dataset, cache, start_item, count, worker] {
+            // First-touch dataset pages from the same interleaved physical-core
+            // order used by the mining workers. This spreads initialization
+            // traffic across visible NUMA nodes when the OS permits pinning.
+            (void)platform::pin_current_thread(worker);
             randomx_init_dataset(dataset.get(), cache.get(), start_item, count);
         });
         start_item += count;
