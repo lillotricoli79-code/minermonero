@@ -185,15 +185,13 @@ struct MsrManager::Impl {
     void initialize_pawnio() {
         if (handle != nullptr) return;
         const auto dll_path = pawnio_library_path();
-        if (dll_path.empty()) {
-            throw std::runtime_error(
-                "PawnIO is not installed. Install the official signed PawnIO driver first.");
-        }
-        library = LoadLibraryW(dll_path.c_str());
+        library = dll_path.empty()
+            ? LoadLibraryW(L"PawnIOLib.dll")
+            : LoadLibraryW(dll_path.c_str());
         if (library == nullptr) {
-            throw std::system_error(
-                static_cast<int>(GetLastError()), std::system_category(),
-                "cannot load PawnIOLib.dll");
+            throw std::runtime_error(
+                "PawnIO is not installed or PawnIOLib.dll cannot be loaded. "
+                "Install the official signed PawnIO driver first.");
         }
         open = reinterpret_cast<PawnioOpen>(GetProcAddress(library, "pawnio_open"));
         load = reinterpret_cast<PawnioLoad>(GetProcAddress(library, "pawnio_load"));
