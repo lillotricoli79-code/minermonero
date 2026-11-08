@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -49,18 +50,19 @@ public:
         for (auto* address = addresses; address != nullptr; address = address->ai_next) {
             socket_ = ::socket(address->ai_family, address->ai_socktype, address->ai_protocol);
             if (!platform::socket_valid(socket_)) continue;
-            if (platform::connect_socket(socket_, address->ai_addr,
-                                         static_cast<int>(address->ai_addrlen)) == 0) break;
+            if (platform::connect_with_timeout(socket_, address->ai_addr,
+                                                static_cast<int>(address->ai_addrlen), 10000)) {
+                break;
+            }
             platform::close_socket(socket_);
             socket_ = platform::kInvalidSocket;
         }
         freeaddrinfo(addresses);
-        if (!platform::socket_valid(socket_)) throw std::runtime_error("unable to connect to pool");
+        if (!platform::socket_valid(socket_)) {
+            throw std::runtime_error("unable to connect to pool within 10 seconds");
+        }
 
         if (config.tls) connect_tls(config);
-        if (!platform::set_nonblocking(socket_)) {
-            throw std::runtime_error("unable to set nonblocking pool socket");
-        }
     }
 
     void send_json(const nlohmann::json& value) {
@@ -175,7 +177,21 @@ private:
         SSL_set_tlsext_host_name(ssl_, config.host.c_str());
         if (config.tls_fingerprint.empty()) SSL_set1_host(ssl_, config.host.c_str());
         SSL_set_fd(ssl_, static_cast<int>(socket_));
-        if (SSL_connect(ssl_) != 1) throw std::runtime_error("TLS handshake with pool failed");
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (true) {
+            if (SSL_connect(ssl_) == 1) break;
+            const int error = SSL_get_error(ssl_, -1);
+            if (error != SSL_ERROR_WANT_READ && error != SSL_ERROR_WANT_WRITE) {
+                throw std::runtime_error("TLS handshake with pool failed");
+            }
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= deadline) throw std::runtime_error("TLS handshake timed out");
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - now).count();
+            const auto event = error == SSL_ERROR_WANT_READ
+                ? platform::kReadEvent : platform::kWriteEvent;
+            wait_for(event, static_cast<int>(remaining));
+        }
         if (!config.tls_fingerprint.empty()) verify_fingerprint(config.tls_fingerprint);
     }
 
