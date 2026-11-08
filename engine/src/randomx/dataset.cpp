@@ -1,4 +1,5 @@
 #include "dataset.hpp"
+#include "logging/log.hpp"
 #include "platform/affinity.hpp"
 
 #include <algorithm>
@@ -20,7 +21,7 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
     if (raw_dataset == nullptr && dataset_flags != RANDOMX_FLAG_DEFAULT) {
         flags = static_cast<randomx_flags>(
             static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
-        std::cerr << "RandomX large pages unavailable; using standard dataset pages.\n";
+        logging::warning("memory", "large pages unavailable; using standard dataset pages");
         raw_dataset = randomx_alloc_dataset(RANDOMX_FLAG_DEFAULT);
     }
     if (raw_dataset == nullptr) {
@@ -33,6 +34,7 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
     const unsigned long item_count = randomx_dataset_item_count();
     if (item_count == 0) throw std::runtime_error("RandomX dataset has no items");
 
+    logging::info("memory", "allocating full RandomX dataset");
     const auto worker_count = std::max(
         1U, std::min(initialization_threads, static_cast<std::uint32_t>(item_count)));
 
@@ -62,6 +64,7 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
         });
     }
     for (auto& worker : workers) worker.join();
+    logging::info("memory", "full RandomX dataset initialized");
 
     return dataset;
 }
