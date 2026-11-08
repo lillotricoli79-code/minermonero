@@ -217,9 +217,12 @@ PoolConfig parse_pool_config(const nlohmann::json& config) {
 
 
 
-// Protocol helpers ported from RxMiner (MIT) and NyxRX (MIT).
-// Keep JSON-RPC wire construction in one C++ implementation used by the
-// existing RandomX engine; no Rust runtime or second miner process is involved.
+// C++ adaptations of upstream Stratum protocol behavior:
+// - RxMiner src/stratum.rs at 5fe52dde2650c623fd0472804152a94711889dce (MIT)
+// - NyxRX crates/own-randomx-miner/src/stratum/protocol.rs at
+//   d543ed59585596b917ac53cc3f60b91da1e9bb88 (MIT)
+// The wire protocol is implemented natively in this single C++ engine;
+// no Rust runtime or second miner process is involved.
 nlohmann::json make_login_request(std::uint64_t id, const PoolConfig& pool,
                                   std::string_view agent) {
     nlohmann::json params = {
