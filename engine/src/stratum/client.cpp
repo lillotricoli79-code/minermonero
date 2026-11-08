@@ -225,7 +225,8 @@ int run_miner(const std::filesystem::path& config_path,
                             state.shares.pop_front();
                         }
                     }
-                    for (const auto& share : ready) {
+                    for (auto it = ready.begin(); it != ready.end(); ++it) {
+                        const auto& share = *it;
                         const auto work = state.current_work();
                         if (!work || work->generation != share.generation || session_id.empty()) {
                             state.stale_shares.fetch_add(1, std::memory_order_relaxed);
@@ -234,11 +235,24 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto submit_id = next_id++;
                         std::array<std::uint8_t, 4> nonce_bytes{};
                         std::memcpy(nonce_bytes.data(), &share.nonce, nonce_bytes.size());
-                        transport.send_json({{"id", submit_id}, {"jsonrpc", "2.0"},
-                            {"method", "submit"}, {"params", {{"id", session_id},
-                            {"job_id", share.job_id},
-                            {"nonce", hex_encode(nonce_bytes.data(), nonce_bytes.size())},
-                            {"result", hex_encode(share.hash.data(), share.hash.size())}}}});
+                        try {
+                            transport.send_json({{"id", submit_id}, {"jsonrpc", "2.0"},
+                                {"method", "submit"}, {"params", {{"id", session_id},
+                                {"job_id", share.job_id},
+                                {"nonce", hex_encode(nonce_bytes.data(), nonce_bytes.size())},
+                                {"result", hex_encode(share.hash.data(), share.hash.size())}}}});
+                        } catch (...) {
+                            // The current write may have been partially transmitted,
+                            // so account it as dropped. Preserve later unsent shares;
+                            // after reconnect they will be revalidated against the new job.
+                            state.dropped_shares.fetch_add(1, std::memory_order_relaxed);
+                            std::lock_guard lock(state.share_mutex);
+                            for (auto rest = ready.end(); rest != it + 1;) {
+                                --rest;
+                                state.shares.push_front(std::move(*rest));
+                            }
+                            throw;
+                        }
                         pending.emplace(submit_id, Clock::now());
                         state.submitted.fetch_add(1, std::memory_order_relaxed);
                     }
