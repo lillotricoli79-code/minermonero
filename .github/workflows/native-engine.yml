@@ -75,9 +75,24 @@ jobs:
       - name: Run native tests
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Upload Windows miner executable
+      - name: Bundle OpenSSL runtime DLLs
+        shell: pwsh
+        run: |
+          $opensslBin = Join-Path $env:OPENSSL_ROOT_DIR "bin"
+          $dlls = @(Get-ChildItem -Path $opensslBin -File | Where-Object {
+            $_.Name -match '^lib(ssl|crypto).*\\.dll
+          })
+          if ($dlls.Count -lt 2) {
+            throw "OpenSSL runtime DLLs were not found in $opensslBin"
+          }
+          Copy-Item -LiteralPath $dlls.FullName -Destination "build/Release" -Force
+
+      - name: Upload Windows miner executable and runtime
         uses: actions/upload-artifact@v4
         with:
           name: unique-rx-windows-x64
-          path: build/Release/unique-rx.exe
+          path: |
+            build/Release/unique-rx.exe
+            build/Release/libssl*.dll
+            build/Release/libcrypto*.dll
           if-no-files-found: error
