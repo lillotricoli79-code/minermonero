@@ -173,15 +173,13 @@ if ($gxx) {
     while ($queue.Count -gt 0) {
         $current = $queue.Dequeue()
         if (-not $seen.Add($current)) { continue }
-        $dependencies = @(& $objdump.Source -p $current 2>$null |
-            Select-String -Pattern '^\s*DLL Name:\s*(.+)
-Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
-Write-Host "Miner: $exe"
-Write-Host "Dashboard: $(Join-Path $dashboardDir 'dist\index.html')"
-Write-Host "Log Stratum: $(Join-Path $repoRoot 'unique-rx-stratum.log')"
-Write-Host "Il mining non viene avviato dalla build."
- |
-            ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() })
+        $rawDependencies = & $objdump.Source -p $current 2>$null
+        $dependencies = @()
+        foreach ($dependencyLine in $rawDependencies) {
+            if ($dependencyLine -match 'DLL Name:\s*(\S+)') {
+                $dependencies += $Matches[1]
+            }
+        }
         foreach ($dependency in $dependencies) {
             if ($dependency -match '^(api-ms-win-|ext-ms-win-)' -or
                 $systemDlls -contains $dependency.ToLowerInvariant()) { continue }
@@ -214,8 +212,8 @@ Write-Host "Il mining non viene avviato dalla build."
 }
 
 Write-Host ""
+
 Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
 Write-Host "Miner: $exe"
 Write-Host "Dashboard: $(Join-Path $dashboardDir 'dist\index.html')"
 Write-Host "Log Stratum: $(Join-Path $repoRoot 'unique-rx-stratum.log')"
-Write-Host "Il mining non viene avviato dalla build."
