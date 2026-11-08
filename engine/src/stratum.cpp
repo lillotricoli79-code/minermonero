@@ -467,12 +467,14 @@ int run_miner(const std::filesystem::path& config_path,
         const auto pool = parse_pool_config(config);
         const auto randomx_config = config.value("randomx", nlohmann::json::object());
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
-        const bool msr_requested = wrmsr.is_boolean() ? wrmsr.get<bool>() :
-            (wrmsr.is_number_integer() ? wrmsr.get<int>() >= 0 :
-             (wrmsr.is_array() && !wrmsr.empty()));
-        if (msr_requested) {
+        const bool msr_explicitly_disabled =
+            (wrmsr.is_boolean() && !wrmsr.get<bool>()) ||
+            (wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() < 0);
+        if (!msr_explicitly_disabled) {
             throw std::runtime_error(
-                "MSR preset is not yet supported by the native engine; use the XMRig controller");
+                "Native engine MSR is not implemented. Set randomx.wrmsr to false "
+                "only if you explicitly accept mining without MSR, or use XMRig "
+                "for automatic, Fast or custom MSR presets.");
         }
 
         Transport transport;
