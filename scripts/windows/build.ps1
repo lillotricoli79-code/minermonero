@@ -89,17 +89,28 @@ if ($env:RUNNER_TEMP) {
     $mingwPrefixes += (Join-Path $env:RUNNER_TEMP "setup-msys2\mingw64")
 }
 $mingwPrefixes += @("C:\msys64\mingw64", "C:\mingw64")
+
+# setup-msys2 can expose its compiler through PATH without using a fixed install
+# directory. Ignore unrelated preinstalled MinGW prefixes without OpenSSL.
+$pathCompilers = @(Get-Command g++ -All -ErrorAction SilentlyContinue)
+foreach ($compiler in $pathCompilers) {
+    $compilerPrefix = Split-Path -Parent (Split-Path -Parent $compiler.Source)
+    $mingwPrefixes += $compilerPrefix
+}
 $mingwPrefix = $mingwPrefixes |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
     Select-Object -Unique |
     Where-Object {
         (Test-Path -LiteralPath (Join-Path $_ "bin\g++.exe")) -and
         (Test-Path -LiteralPath (Join-Path $_ "include\openssl\ssl.h"))
     } |
     Select-Object -First 1
-if ($mingwPrefix) {
-    $msysBin = Join-Path $mingwPrefix "bin"
-    $env:PATH = "$msysBin$([IO.Path]::PathSeparator)$env:PATH"
+if (-not $mingwPrefix) {
+    $compilerList = ($pathCompilers | ForEach-Object { $_.Source }) -join "; "
+    throw "Toolchain MinGW con OpenSSL non individuata. Compiler in PATH: $compilerList"
 }
+$msysBin = Join-Path $mingwPrefix "bin"
+$env:PATH = "$msysBin$([IO.Path]::PathSeparator)$env:PATH"
 
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
 if (-not $cmake) { throw "CMake è obbligatorio. Installa CMake e riapri PowerShell." }
