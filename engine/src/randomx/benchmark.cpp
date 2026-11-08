@@ -108,7 +108,7 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
                 try {
                     if (!platform::pin_current_thread(lane)) {
                         std::cerr << "Benchmark lane " << lane
-                                  << ": affinity unavailable; continuing without pinning\\n";
+                                  << ": affinity unavailable; continuing without pinning\n";
                     }
                     std::string input(payload);
                     const auto nonce_offset = input.size();
