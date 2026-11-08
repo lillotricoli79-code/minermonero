@@ -68,6 +68,7 @@ if(BUILD_TESTING)
     target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32)
   endif()
   add_test(NAME unique-rx-stratum-loopback COMMAND unique-rx-stratum-integration-tests)
+  set_tests_properties(unique-rx-stratum-loopback PROPERTIES TIMEOUT 45)
 
   if(TARGET randomx-tests)
     add_test(NAME randomx-upstream-consensus COMMAND randomx-tests)
