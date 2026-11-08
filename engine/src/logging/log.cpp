@@ -24,6 +24,7 @@ namespace unique_rx::logging {
 namespace {
 std::mutex output_mutex;
 std::ofstream log_file;
+std::filesystem::path log_path;
 
 bool color_output() {
 #ifdef _WIN32
@@ -37,6 +38,44 @@ bool color_output() {
 #else
     return ::isatty(STDOUT_FILENO) != 0;
 #endif
+}
+
+void rotate_log_if_needed() {
+    constexpr std::uintmax_t maximum_log_bytes = 8U * 1024U * 1024U;
+    constexpr int retained_rotations = 3;
+    if (log_path.empty()) return;
+    std::error_code error;
+    if (!std::filesystem::exists(log_path, error) || error) return;
+    const auto size = std::filesystem::file_size(log_path, error);
+    if (error || size < maximum_log_bytes) return;
+
+    if (log_file.is_open()) {
+        log_file.flush();
+        log_file.close();
+    }
+    const auto rotated = [&](int index) {
+        return std::filesystem::path(log_path.string() + "." + std::to_string(index));
+    };
+    std::filesystem::remove(rotated(retained_rotations), error);
+    error.clear();
+    for (int index = retained_rotations - 1; index >= 1; --index) {
+        const auto source = rotated(index);
+        if (std::filesystem::exists(source, error) && !error) {
+            std::filesystem::rename(source, rotated(index + 1), error);
+            if (error) break;
+        }
+        error.clear();
+    }
+    if (!error) std::filesystem::rename(log_path, rotated(1), error);
+    if (error) {
+        std::cerr << "[WARN] log rotation skipped for " << log_path.string()
+                  << ": " << error.message() << '\n';
+    }
+    log_file.clear();
+    log_file.open(log_path, std::ios::app);
+    if (!log_file) {
+        std::cerr << "[ERROR] cannot reopen miner log file: " << log_path.string() << '\n';
+    }
 }
 
 void write(std::string_view level, std::string_view category,
@@ -55,6 +94,7 @@ void write(std::string_view level, std::string_view category,
          << std::left << std::setw(5) << category << ' '
          << message;
     std::lock_guard lock(output_mutex);
+    rotate_log_if_needed();
     const char* color = level == "ERROR" ? "\x1b[31;1m" :
         level == "WARN" ? "\x1b[33;1m" :
         category == "speed" ? "\x1b[32;1m" :
@@ -68,8 +108,6 @@ void write(std::string_view level, std::string_view category,
 }
 
 void set_file(const std::filesystem::path& path) {
-    constexpr std::uintmax_t maximum_log_bytes = 8U * 1024U * 1024U;
-    constexpr int retained_rotations = 3;
     std::lock_guard lock(output_mutex);
     std::error_code error;
     if (!path.parent_path().empty()) {
@@ -80,32 +118,11 @@ void set_file(const std::filesystem::path& path) {
             return;
         }
     }
-    if (std::filesystem::exists(path, error) && !error) {
-        const auto size = std::filesystem::file_size(path, error);
-        if (!error && size >= maximum_log_bytes) {
-            const auto rotated = [&](int index) {
-                return std::filesystem::path(path.string() + "." + std::to_string(index));
-            };
-            std::filesystem::remove(rotated(retained_rotations), error);
-            error.clear();
-            for (int index = retained_rotations - 1; index >= 1; --index) {
-                const auto source = rotated(index);
-                if (std::filesystem::exists(source, error) && !error) {
-                    std::filesystem::rename(source, rotated(index + 1), error);
-                    if (error) break;
-                }
-                error.clear();
-            }
-            if (!error) std::filesystem::rename(path, rotated(1), error);
-            if (error) {
-                std::cerr << "[WARN] log rotation skipped for " << path.string()
-                          << ": " << error.message() << '\n';
-            }
-        }
-    }
     log_file.close();
     log_file.clear();
-    log_file.open(path, std::ios::app);
+    log_path = path;
+    rotate_log_if_needed();
+    if (!log_file.is_open()) log_file.open(path, std::ios::app);
     if (!log_file) {
         std::cerr << "[ERROR] cannot open miner log file: " << path.string() << '\n';
     }
