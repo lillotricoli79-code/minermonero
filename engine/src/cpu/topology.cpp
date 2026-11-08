@@ -30,6 +30,8 @@ namespace {
 std::optional<std::uint32_t> parse_quota(const std::string& quota_text,
                                          const std::string& period_text) {
     try {
+        if (quota_text.empty() || quota_text.front() == '-' ||
+            period_text.empty() || period_text.front() == '-') return std::nullopt;
         std::size_t q_used = 0;
         std::size_t p_used = 0;
         const auto quota = std::stoull(quota_text, &q_used, 10);
@@ -78,8 +80,16 @@ std::optional<std::uint32_t> available_cgroup_cpu_quota() {
         const auto suffix = relative.substr(relative.starts_with('/') ? 1 : 0);
         if (controllers.empty()) {
             starts.emplace_back(std::filesystem::path("/sys/fs/cgroup") / suffix);
-        } else if (controllers.find("cpu") != std::string::npos) {
-            starts.emplace_back(std::filesystem::path("/sys/fs/cgroup/cpu") / suffix);
+        } else {
+            std::stringstream controller_list(controllers);
+            std::string controller;
+            bool has_cpu = false;
+            while (std::getline(controller_list, controller, ',')) {
+                if (controller == "cpu") has_cpu = true;
+            }
+            if (has_cpu) {
+                starts.emplace_back(std::filesystem::path("/sys/fs/cgroup/cpu") / suffix);
+            }
         }
     }
 
@@ -88,7 +98,8 @@ std::optional<std::uint32_t> available_cgroup_cpu_quota() {
         auto current = start;
         for (;;) {
             if (const auto value = quota_in_directory(current)) {
-                best = best ? std::min(*best, *value) : value;
+                if (best) best = std::min(*best, *value);
+                else best = *value;
             }
             if (current == current.root_path()) break;
             const auto parent = current.parent_path();
