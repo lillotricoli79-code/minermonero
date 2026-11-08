@@ -33,7 +33,7 @@ DEFAULTS: dict[str, Any] = {
     "autosave": True,
     "background": False,
     "colors": True,
-    "cpu": {"enabled": True, "huge-pages": True, "jit-huge-pages": False, "prefetch-mode": 1, "priority": 2},
+    "cpu": {"enabled": True, "huge-pages": False, "jit-huge-pages": False, "prefetch-mode": 1, "priority": 2},
     "cuda": False,
     "opencl": False,
     "http": {
