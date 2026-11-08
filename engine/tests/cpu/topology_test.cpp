@@ -29,6 +29,17 @@ int main() {
     expect(limit_cpu_threads_by_quota(8, 800000, 100000), 8, "quota above request");
     expect(limit_cpu_threads_by_quota(8, 0, 100000), 8, "unlimited quota");
     expect(limit_cpu_threads_by_quota(8, 100000, 0), 8, "invalid quota period");
-    std::cout << "CPU topology thread-selection tests passed.\n";
+
+    const auto cpu = unique_rx::cpu_summary_json();
+    if (!cpu.is_object() || cpu.value("vendor", std::string()).empty() ||
+        cpu.value("brand", std::string()).empty() ||
+        cpu.value("logical_threads", 0U) == 0 ||
+        cpu.value("physical_cores", 0U) == 0 ||
+        cpu.value("physical_cores", 0U) > cpu.value("logical_threads", 0U) ||
+        !cpu.contains("features") || !cpu["features"].is_object()) {
+        std::cerr << "CPU identity/topology/feature summary is incomplete.\n";
+        return 1;
+    }
+    std::cout << "CPU topology and hardware-summary tests passed.\n";
     return 0;
 }
