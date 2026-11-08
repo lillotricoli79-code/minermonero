@@ -1,0 +1,3 @@
+[submodule "engine/src/randomx/upstream"]
+	path = engine/src/randomx/upstream
+	url = https://github.com/tevador/RandomX.git
