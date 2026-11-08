@@ -70,19 +70,33 @@ if (-not $ctest) { throw "CTest non trovato: reinstalla CMake con i componenti d
 
 $gxx = Get-Command g++ -ErrorAction SilentlyContinue
 $ninja = Get-Command ninja -ErrorAction SilentlyContinue
+$mingwMake = Get-Command mingw32-make -ErrorAction SilentlyContinue
 
-if ($gxx -and $ninja) {
+if ($gxx) {
     $compilerBin = Split-Path -Parent $gxx.Source
     $mingwPrefix = Split-Path -Parent $compilerBin
-    $buildDir = Join-Path $engineDir "build-mingw"
+    $opensslHeader = Join-Path $mingwPrefix "include\openssl\ssl.h"
+    if (-not (Test-Path -LiteralPath $opensslHeader)) {
+        throw "OpenSSL MinGW non trovato in $mingwPrefix. Installa mingw-w64-x86_64-openssl."
+    }
 
-    Write-Host "Toolchain: MinGW-w64 + Ninja."
+    if ($ninja) {
+        $generator = "Ninja"
+        $buildDir = Join-Path $engineDir "build-mingw-ninja"
+    } elseif ($mingwMake) {
+        $generator = "MinGW Makefiles"
+        $buildDir = Join-Path $engineDir "build-mingw-make"
+    } else {
+        throw "Toolchain MinGW rilevata ma manca Ninja o mingw32-make. Installa mingw-w64-x86_64-ninja oppure mingw-w64-x86_64-make."
+    }
+
+    Write-Host "Toolchain: MinGW-w64 + $generator."
     $configureArgs = @(
-        "-S", $engineDir, "-B", $buildDir, "-G", "Ninja",
+        "-S", $engineDir, "-B", $buildDir, "-G", $generator,
         "-DCMAKE_BUILD_TYPE=Release",
         "-DBUILD_TESTING=ON",
-        "-DCMAKE_C_COMPILER=gcc",
-        "-DCMAKE_CXX_COMPILER=g++",
+        "-DCMAKE_C_COMPILER=$($gxx.Source -replace 'g\+\+(.exe)?$','gcc$1')",
+        "-DCMAKE_CXX_COMPILER=$($gxx.Source)",
         "-DCMAKE_PREFIX_PATH=$mingwPrefix",
         "-DOPENSSL_ROOT_DIR=$mingwPrefix"
     )
@@ -92,7 +106,7 @@ if ($gxx -and $ninja) {
 else {
     $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
     if ([string]::IsNullOrWhiteSpace($vcpkgRoot)) {
-        throw "Toolchain non disponibile. Installa MSYS2 MinGW-w64 GCC + Ninja + OpenSSL oppure vcpkg e configura VCPKG_INSTALLATION_ROOT."
+        throw "Toolchain non disponibile. Installa MSYS2 MinGW-w64 GCC + OpenSSL + Ninja, oppure Visual Studio 2022 con vcpkg e configura VCPKG_INSTALLATION_ROOT."
     }
     $toolchain = Join-Path $vcpkgRoot "scripts\buildsystems\vcpkg.cmake"
     if (-not (Test-Path $toolchain)) { throw "Toolchain vcpkg non trovata: $toolchain" }
