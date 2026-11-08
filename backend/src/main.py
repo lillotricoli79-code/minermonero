@@ -459,10 +459,18 @@ class MinerController:
                 # CTRL_BREAK_EVENT lets XMRig run its shutdown path and restore MSR.
                 popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
             with self.lock:
-                self.process = subprocess.Popen(command, **popen_options)
+                # Recheck while holding the same lock used to publish the
+                # process. Two simultaneous API start requests must never
+                # launch two miners and orphan the first child process.
+                if self.process is not None and self.process.poll() is None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Un miner è già gestito da questa dashboard",
+                    )
+                process = subprocess.Popen(command, **popen_options)
+                self.process = process
                 self.engine_kind = engine_kind
                 self.native_status = None
-                process = self.process
             if engine_kind == "xmrig" and msr_requires_xmrig:
                 mode = public_config(config)["msr_mode"]
                 self._log(
