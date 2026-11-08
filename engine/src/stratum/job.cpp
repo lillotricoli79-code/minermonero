@@ -195,6 +195,13 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
         entry.worker = pool.value("rig-id", std::string("rig01"));
         entry.tls = pool.value("tls", false);
         entry.keepalive = pool.value("keepalive", false);
+        std::string normalized_host = entry.host;
+        std::transform(normalized_host.begin(), normalized_host.end(), normalized_host.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        // XMRig Pool::Pool detects NiceHash from either the explicit option
+        // or the nicehash.com host suffix; preserve that behavior in C++.
+        entry.nicehash = pool.value("nicehash", false) ||
+            normalized_host.find("nicehash.com") != std::string::npos;
         entry.threads = cpu_threads;
         entry.tls_fingerprint = normalize_fingerprint(
             pool.value("tls-fingerprint", std::string()));
