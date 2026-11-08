@@ -104,6 +104,9 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         }
     } catch (const std::exception& error) {
         state.report_worker_error(error.what());
+    } catch (...) {
+        // Keep an unexpected worker exception from terminating the whole process.
+        state.report_worker_error("worker failed with an unknown exception");
     }
 }
 
