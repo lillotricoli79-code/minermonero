@@ -142,6 +142,7 @@ class LocalApiTests(unittest.TestCase):
         self.assertTrue(msr_override_enabled({"wrmsr": None}))
         self.assertTrue(msr_override_enabled({"wrmsr": True}))
         self.assertTrue(msr_override_enabled({"wrmsr": ["0x1a4:0xf"]}))
+        self.assertTrue(msr_override_enabled({"wrmsr": []}))
         self.assertTrue(msr_override_enabled({"wrmsr": 0}))
         self.assertTrue(msr_override_enabled({"wrmsr": 6}))
         self.assertFalse(msr_override_enabled({"wrmsr": False}))
