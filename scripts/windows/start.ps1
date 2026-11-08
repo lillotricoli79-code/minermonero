@@ -38,6 +38,20 @@ finally {
         Remove-Item -LiteralPath $configTemp -Force
     }
 }
+
+# The downloadable portable package contains the native miner but not the
+# Python dashboard/backend. In that layout, launch the native engine directly.
+$backendMain = Join-Path $repoRoot "backend\src\main.py"
+if (-not (Test-Path -LiteralPath $backendMain)) {
+    $minerExe = Join-Path $repoRoot "unique-rx.exe"
+    if (-not (Test-Path -LiteralPath $minerExe)) {
+        throw "Backend e unique-rx.exe non trovati: pacchetto incompleto."
+    }
+    Write-Host "MSR abilitato. Avvio miner nativo in modalità portatile..."
+    & $minerExe --mine $configPath
+    exit $LASTEXITCODE
+}
+
 $venvDir = Join-Path $repoRoot ".venv"
 $pythonExe = Join-Path $venvDir "Scripts\python.exe"
 $requirements = Join-Path $repoRoot "requirements.txt"
