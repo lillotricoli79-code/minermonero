@@ -61,6 +61,24 @@ int get_local_address(Socket socket, sockaddr_in& address, SocketLength& length)
     return getsockname(socket, reinterpret_cast<sockaddr*>(&address), &length);
 }
 
+unsigned short reserve_closed_port() {
+    const Socket probe = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (!unique_rx::platform::socket_valid(probe)) return 0;
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = 0;
+    SocketLength length = static_cast<SocketLength>(sizeof(address));
+    if (bind_loopback(probe, address) != 0 ||
+        get_local_address(probe, address, length) != 0) {
+        unique_rx::platform::close_socket(probe);
+        return 0;
+    }
+    const auto port = ntohs(address.sin_port);
+    unique_rx::platform::close_socket(probe);
+    return port;
+}
+
 unsigned long long process_id() {
 #ifdef _WIN32
     return static_cast<unsigned long long>(GetCurrentProcessId());
@@ -196,14 +214,27 @@ int main() {
         }
     });
 
+    const auto closed_port = reserve_closed_port();
+    if (closed_port == 0) {
+        pool.join();
+        unique_rx::platform::close_socket(listener);
+        return 1;
+    }
     const auto config_path = std::filesystem::temp_directory_path() /
         ("unique-rx-stratum-" + std::to_string(process_id()) + ".json");
     const nlohmann::json config{
-        {"pools", nlohmann::json::array({nlohmann::json{
-            {"url", "127.0.0.1:" + std::to_string(ntohs(address.sin_port))},
-            {"user", "loopback-test-wallet"}, {"pass", "x"},
-            {"rig-id", "test"}, {"tls", false},
-        }})},
+        {"pools", nlohmann::json::array({
+            nlohmann::json{
+                {"url", "127.0.0.1:" + std::to_string(closed_port)},
+                {"user", "unavailable-pool-wallet"}, {"pass", "x"},
+                {"enabled", true}, {"tls", false},
+            },
+            nlohmann::json{
+                {"url", "127.0.0.1:" + std::to_string(ntohs(address.sin_port))},
+                {"user", "loopback-test-wallet"}, {"pass", "x"},
+                {"rig-id", "test"}, {"enabled", true}, {"tls", false},
+            },
+        })},
         {"cpu", {{"enabled", true}, {"max-threads-hint", 1}}},
         {"randomx", {{"wrmsr", false}, {"full-memory", false}}},
     };
@@ -219,8 +250,9 @@ int main() {
     unique_rx::platform::close_socket(listener);
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
+        miner_output.str().find("switching pool") == std::string::npos ||
         miner_output.str().find("Share accepted") == std::string::npos) {
-        std::cerr << "local Stratum login/job/share acceptance test failed\n";
+        std::cerr << "local Stratum failover/login/job/share acceptance test failed\n";
         return 1;
     }
     std::cout << "Local Stratum login, RandomX job and share submit passed.\n";
