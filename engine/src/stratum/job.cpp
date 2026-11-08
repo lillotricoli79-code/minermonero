@@ -205,4 +205,68 @@ PoolConfig parse_pool_config(const nlohmann::json& config) {
     return std::move(pools.front());
 }
 
+
+
+// Protocol helpers ported from RxMiner (MIT) and NyxRX (MIT).
+// Keep JSON-RPC wire construction in one C++ implementation used by the
+// existing RandomX engine; no Rust runtime or second miner process is involved.
+nlohmann::json make_login_request(std::uint64_t id, const PoolConfig& pool,
+                                  std::string_view agent) {
+    nlohmann::json params = {
+        {"login", pool.wallet},
+        {"pass", pool.password},
+        {"agent", std::string(agent)},
+        {"algo", nlohmann::json::array({"rx/0"})}
+    };
+    if (!pool.worker.empty()) params["rigid"] = pool.worker;
+    return {{"id", id}, {"jsonrpc", "2.0"}, {"method", "login"},
+            {"params", std::move(params)}};
+}
+
+nlohmann::json make_submit_request(std::uint64_t id, std::string_view session_id,
+                                   std::string_view job_id, std::string_view nonce_hex,
+                                   std::string_view result_hex) {
+    return {{"id", id}, {"jsonrpc", "2.0"}, {"method", "submit"},
+            {"params", {{"id", std::string(session_id)},
+                        {"job_id", std::string(job_id)},
+                        {"nonce", std::string(nonce_hex)},
+                        {"result", std::string(result_hex)}}}};
+}
+
+nlohmann::json make_keepalive_request(std::uint64_t id, std::string_view session_id) {
+    return {{"id", id}, {"jsonrpc", "2.0"}, {"method", "keepalived"},
+            {"params", {{"id", std::string(session_id)}}}};
+}
+
+bool is_job_notification(const nlohmann::json& message) noexcept {
+    return message.is_object() && message.value("method", std::string()) == "job";
+}
+
+std::string validate_login_response(const nlohmann::json& message) {
+    if (!message.is_object()) {
+        throw std::invalid_argument("pool login response is not an object");
+    }
+    if (message.contains("error") && !message["error"].is_null()) {
+        throw std::runtime_error("pool rejected login: " + message["error"].dump());
+    }
+    if (!message.contains("result") || !message["result"].is_object()) {
+        throw std::runtime_error("pool login response has no result object");
+    }
+    const auto& result = message["result"];
+    if (result.contains("status") && result["status"].is_string()) {
+        std::string status = result["status"].get<std::string>();
+        std::transform(status.begin(), status.end(), status.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (status != "ok") {
+            throw std::runtime_error("pool returned unsuccessful login status: " + status);
+        }
+    }
+    if (!result.contains("id") || !result["id"].is_string() ||
+        result["id"].get_ref<const std::string&>().empty() ||
+        !result.contains("job") || !result["job"].is_object()) {
+        throw std::runtime_error("pool login response is missing session id or initial job");
+    }
+    return result["id"].get<std::string>();
+}
+
 } // namespace unique_rx
