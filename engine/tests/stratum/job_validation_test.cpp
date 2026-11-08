@@ -70,6 +70,7 @@ int main() {
         {"target", "ffffffff"},
         {"height", 2345678},
         {"algo", "rx/0"},
+        {"nicehash", false},
     };
     wire_job["blob"] = std::string(kNonceOffset * 2, '0') +
         "78563412" + std::string((76 - kNonceOffset - 4) * 2, '0');
@@ -78,6 +79,27 @@ int main() {
                     job.target == UINT64_MAX && job.nonce == 0x12345678U &&
                     job.height == std::optional<std::uint64_t>{2345678},
                 "valid rx/0 job or little-endian nonce did not parse");
+    auto nicehash_job = wire_job;
+    nicehash_job["nicehash"] = true;
+    nicehash_job["blob"] = std::string(kNonceOffset * 2, '0') +
+        "000000ab" + std::string((76 - kNonceOffset - 4) * 2, '0');
+    const auto parsed_nicehash = parse_job(nicehash_job);
+    ok &= check(parsed_nicehash.nonce == 0 &&
+                    parsed_nicehash.nonce_fixed == 0xab000000U &&
+                    parsed_nicehash.nonce_mask == 0x00ffffffU &&
+                    nonce_at_offset(parsed_nicehash, 0x00ffffffULL) == 0xabffffffU &&
+                    nonce_at_offset(parsed_nicehash, 0x01000000ULL) == 0xab000000U,
+                "NiceHash nonce allocation did not preserve the pool prefix or wrap its 24-bit counter");
+    auto inferred_nicehash = nicehash_job;
+    inferred_nicehash.erase("nicehash");
+    ok &= check(parse_job(inferred_nicehash).nonce_fixed == 0xab000000U,
+                "non-zero pool nonce prefix was not detected when NiceHash metadata was absent");
+    auto ordinary_nonce_job = wire_job;
+    ordinary_nonce_job.erase("nicehash");
+    ok &= check(parse_job(ordinary_nonce_job).nonce == 0x12345678U &&
+                    parse_job(ordinary_nonce_job).nonce_mask == UINT32_MAX,
+                "ordinary explicit 32-bit nonce range changed unexpectedly");
+
     auto job_without_height = wire_job;
     job_without_height.erase("height");
     ok &= check(!parse_job(job_without_height).height.has_value(),

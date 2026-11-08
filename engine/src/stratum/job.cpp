@@ -114,7 +114,14 @@ Job parse_job(const nlohmann::json& value) {
             throw std::invalid_argument("job height must be a non-negative integer");
         }
     }
-    job.nonce = decode_nonce_le(job.blob.data() + kNonceOffset);
+    const auto initial_nonce = decode_nonce_le(job.blob.data() + kNonceOffset);
+    // Match NyxRX's pool-job handling: explicit nicehash metadata wins;
+    // otherwise a non-zero initial nonce signals a pool-reserved prefix.
+    const bool nicehash = value.contains("nicehash")
+        ? value.at("nicehash").get<bool>() : initial_nonce != 0;
+    job.nonce_mask = nicehash ? 0x00ffffffU : UINT32_MAX;
+    job.nonce_fixed = initial_nonce & ~job.nonce_mask;
+    job.nonce = initial_nonce & job.nonce_mask;
     return job;
 }
 

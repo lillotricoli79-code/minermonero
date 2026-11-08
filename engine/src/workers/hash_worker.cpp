@@ -211,7 +211,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 exhausted_generation = work->generation;
                 continue;
             }
-            const auto nonce = nonce_at_offset(work->job.nonce, nonce_offset);
+            const auto nonce = nonce_at_offset(work->job, nonce_offset);
             write_nonce(blob, nonce);
 
             if (!pipeline_active) {

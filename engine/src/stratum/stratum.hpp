@@ -47,6 +47,9 @@ struct Job {
     std::uint64_t target = 0;
     std::optional<std::uint64_t> height;
     std::uint32_t nonce = 0;
+    // NiceHash reserves the high nonce byte for the pool connection prefix.
+    std::uint32_t nonce_mask = UINT32_MAX;
+    std::uint32_t nonce_fixed = 0;
 
     // Target-only updates keep the same nonce work; adapted from RxMiner (MIT).
     bool same_work(const Job& other) const {
@@ -65,6 +68,14 @@ struct PoolConfig {
     bool tls = false;
     bool keepalive = false;
 };
+
+// Allocate a nonce within the pool-provided nonce range. NiceHash jobs keep
+// the server-assigned high byte fixed and wrap only the low 24-bit counter.
+inline std::uint32_t nonce_at_offset(const Job& job,
+                                     std::uint64_t offset) noexcept {
+    return job.nonce_fixed |
+        ((job.nonce + static_cast<std::uint32_t>(offset)) & job.nonce_mask);
+}
 
 std::vector<std::uint8_t> decode_hex(std::string_view value);
 std::uint64_t parse_share_target(std::string_view value);

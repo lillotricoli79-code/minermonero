@@ -278,5 +278,4 @@ Questa sezione integra le regole precedenti e deve essere rispettata in ogni ses
 7. **Tempo indicativo di consegna.** L'utente richiede il massimo impegno per consegnare il progetto entro un'ora. Questo è un obiettivo di urgenza, non un'autorizzazione a dichiarare completate funzioni non implementate o non verificate. Se una verifica o una parte essenziale non è materialmente completabile nel tempo disponibile, indicare con precisione cosa è stato fatto e cosa resta.
 8. **Pubblicazione.** L'utente ha autorizzato il lavoro direttamente su `main`, inclusi i commit necessari. Non usare rami paralleli. Non eseguire force push o operazioni distruttive.
 9. **Consegna finale.** Consegnare il progetto effettivamente aggiornato, con riepilogo conciso dei moduli integrati, commit pubblicati, verifiche realmente eseguite e limitazioni residue. Non dichiarare finito ciò che non è stato effettivamente realizzato.
-
-
+- The optional NiceHash nonce-prefix handling in `engine/src/stratum/job.cpp` and `engine/src/stratum/stratum.hpp` adapts the pool-job nonce mask/fixed-prefix behavior from `MaleficentAd1803/nyxrx`, `crates/own-randomx-miner/src/job.rs` (MIT; see `LICENSES/NYXRX-MIT.txt`). The implementation preserves the pool's high nonce byte and allocates only within the low 24-bit counter when NiceHash mode is indicated.
