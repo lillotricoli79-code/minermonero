@@ -320,10 +320,15 @@ int run_miner(const std::filesystem::path& config_path,
                                 throw std::runtime_error("pool rejected login: " + message["error"].dump());
                             }
                             const auto& result = message.at("result");
-                            if (result.value("status", std::string()) != "OK") {
-                                throw std::runtime_error("pool login status is not OK");
+                            if (!result.is_object() || !result.contains("id") ||
+                                !result.contains("job")) {
+                                throw std::runtime_error(
+                                    "pool login response is missing session id or job");
                             }
                             session_id = result.at("id").get<std::string>();
+                            if (session_id.empty()) {
+                                throw std::runtime_error("pool login returned an empty session id");
+                            }
                             log_event("LOGIN_ACCEPTED", {{"session_id", session_id},
                                 {"job_id", result.at("job").value("job_id", std::string())}});
                             if (pool.keepalive) {
