@@ -170,6 +170,10 @@ def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
             "pending": None,
         },
         "uptime_seconds": int(uptime) if uptime is not None else None,
+        "algorithm": None,
+        "threads": None,
+        "msr_active": None,
+        "full_memory": None,
         "pool": connection.get("pool"),
         "connected": connection.get("connected"),
     }

@@ -50,6 +50,10 @@ type Status = {
     pending: number | null;
   };
   uptime_seconds: number | null;
+  algorithm: string | null;
+  threads: number | null;
+  msr_active: boolean | null;
+  full_memory: boolean | null;
   pool: string | null;
   connected: boolean | null;
 };
@@ -75,6 +79,10 @@ const emptyStatus: Status = {
   hashrate: { "10s": null, "60s": null, "15m": null },
   shares: { accepted: null, rejected: null, total: null, stale: null, pending: null },
   uptime_seconds: null,
+  algorithm: null,
+  threads: null,
+  msr_active: null,
+  full_memory: null,
   pool: null,
   connected: null,
 };
@@ -539,12 +547,41 @@ function App() {
                     />
                     <DataRow
                       icon={<Cpu size={15} />}
-                      label="Thread richiesti"
+                      label="Thread motore"
                       value={
-                        config?.threads
-                          ? String(config.threads)
-                          : config
-                            ? "Automatico"
+                        status.threads != null
+                          ? String(status.threads)
+                          : config?.threads
+                            ? String(config.threads)
+                            : config
+                              ? "Automatico"
+                              : "—"
+                      }
+                    />
+                    <DataRow
+                      icon={<Zap size={15} />}
+                      label="Algoritmo"
+                      value={status.algorithm || "—"}
+                    />
+                    <DataRow
+                      icon={<LockKeyhole size={15} />}
+                      label="Ottimizzazione MSR"
+                      value={
+                        status.msr_active === true
+                          ? "Attiva"
+                          : status.msr_active === false
+                            ? "Non attiva"
+                            : "Non disponibile"
+                      }
+                    />
+                    <DataRow
+                      icon={<LockKeyhole size={15} />}
+                      label="Dataset RandomX"
+                      value={
+                        status.full_memory === true
+                          ? "Completo"
+                          : status.full_memory === false
+                            ? "Light"
                             : "—"
                       }
                     />

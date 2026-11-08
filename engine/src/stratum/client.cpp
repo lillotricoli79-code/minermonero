@@ -337,6 +337,8 @@ int run_miner(const std::filesystem::path& config_path,
                                          {"pending", pending.size()},
                                          {"total", state.accepted.load() + state.rejected.load()}}},
                             {"uptime_seconds", uptime},
+                            {"algorithm", "rx/0"}, {"threads", pool_threads},
+                            {"msr_active", msr.active()}, {"full_memory", full_memory},
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},
                         };
                         std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
@@ -401,6 +403,8 @@ int run_miner(const std::filesystem::path& config_path,
                                  {"pending", 0},
                                  {"total", state.accepted.load() + state.rejected.load()}}},
                     {"uptime_seconds", reconnect_uptime},
+                    {"algorithm", "rx/0"}, {"threads", pool_threads},
+                    {"msr_active", msr.active()}, {"full_memory", full_memory},
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
                 };
                 std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
