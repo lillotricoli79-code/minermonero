@@ -92,13 +92,22 @@ bool test_mock_msr_transactions() {
     backend.mutate_unmasked_after_write = true;
     apply_registers(cpus, writes, snapshots, read, write, log);
     backend.mutate_unmasked_after_write = false;
-    auto expected_with_external_bits = initial;
-    for (auto& [key, value] : expected_with_external_bits) value = value ^ 0x40000000ULL;
-    ok &= check(backend.registers == expected_with_external_bits,
+    const std::map<std::pair<std::size_t, std::uint64_t>, std::uint64_t>
+        expected_after_apply{
+            {{0, 0x10}, 0xa5a50005ULL ^ 0x40000000ULL},
+            {{0, 0x11}, 0x98123432ULL ^ 0x40000000ULL},
+            {{1, 0x10}, 0x5a5a0005ULL ^ 0x40000000ULL},
+            {{1, 0x11}, 0xab123401ULL ^ 0x40000000ULL},
+        };
+    ok &= check(backend.registers == expected_after_apply,
                 "masked MSR write did not preserve unrelated concurrent register bits");
     ok &= check(!restore_registers(snapshots, read, write, log),
                 "masked restore failed after unrelated register bits changed");
-    ok &= check(backend.registers == expected_with_external_bits,
+    auto expected_after_external_restore = initial;
+    for (auto& entry : expected_after_external_restore) {
+        entry.second ^= 0x40000000ULL;
+    }
+    ok &= check(backend.registers == expected_after_external_restore,
                 "masked restore overwrote unrelated concurrent register bits");
 
     backend.registers = initial;
