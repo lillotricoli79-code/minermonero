@@ -90,6 +90,10 @@ int run_miner(const std::filesystem::path& config_path,
     // Match RxMiner's 8192-entry pending-submit backpressure ceiling.
     constexpr std::size_t kMaximumPendingShares = 8192;
 
+    // Open the persistent engine log before CPU/MSR initialization so early
+    // hardware and configuration diagnostics are recorded as well.
+    logging::set_file(config_path.parent_path() / "unique-rx-stratum.log");
+
     try {
         std::ifstream file(config_path);
         if (!file) throw std::runtime_error("cannot open config.json");
@@ -154,7 +158,6 @@ int run_miner(const std::filesystem::path& config_path,
         // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
         rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
-        logging::set_file(config_path.parent_path() / "unique-rx-stratum.log");
         logging::info("miner", "UniqueRX C++ RandomX V1 miner starting");
         const auto cpu_features = cpu_summary.value("features", nlohmann::json::object());
         std::string cpu_line = cpu_summary.value("brand", std::string("Unknown CPU")) +
@@ -580,10 +583,10 @@ int run_miner(const std::filesystem::path& config_path,
         }
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "UNIQUE RX mining error: " << error.what() << '\n';
+        logging::error("miner", std::string("mining error: ") + error.what());
         return 1;
     } catch (...) {
-        std::cerr << "UNIQUE RX mining error: unknown exception\n";
+        logging::error("miner", "mining error: unknown exception");
         return 1;
     }
 }
