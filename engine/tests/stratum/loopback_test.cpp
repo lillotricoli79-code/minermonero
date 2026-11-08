@@ -348,11 +348,11 @@ int main() {
     unique_rx::platform::close_socket(listener);
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
-        miner_errors.str().find("switching pool") == std::string::npos ||
-        miner_errors.str().find("disconnected") == std::string::npos ||
-        miner_output.str().find("Share accepted") == std::string::npos ||
-        miner_output.str().find("Share rejected") == std::string::npos ||
-        miner_output.str().find("Share stale") == std::string::npos) {
+        miner_output.str().find("switching pool") == std::string::npos ||
+        miner_output.str().find("disconnected") == std::string::npos ||
+        miner_output.str().find("share accepted") == std::string::npos ||
+        miner_output.str().find("share rejected") == std::string::npos ||
+        miner_output.str().find("stale share") == std::string::npos) {
         std::cerr << "local Stratum reconnect/login/job/share acceptance test failed"
                   << " result=" << result
                   << " server_ok=" << server_ok.load(std::memory_order_acquire)
