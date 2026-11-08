@@ -373,12 +373,6 @@ class MinerController:
             (path for path in native_candidates if path and Path(path).is_file()),
             None,
         )
-        randomx_config = config.get("randomx") or {}
-        wrmsr_value = randomx_config.get("wrmsr")
-        msr_is_enabled = not (
-            wrmsr_value is False
-            or (isinstance(wrmsr_value, int) and not isinstance(wrmsr_value, bool) and wrmsr_value < 0)
-        )
         if native_path and not msr_requires_xmrig:
             executable_path = native_path
             command = [native_path, "--mine", str(CONFIG_PATH)]
