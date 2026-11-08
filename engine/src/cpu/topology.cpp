@@ -95,17 +95,25 @@ std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
 
 } // namespace
 
+std::uint32_t recommended_cpu_threads(std::uint32_t logical_threads,
+                                     std::uint32_t physical_cores,
+                                     std::uint32_t max_threads_hint) {
+    logical_threads = std::max(1U, logical_threads);
+    physical_cores = std::clamp(physical_cores, 1U, logical_threads);
+    const auto hint = std::min(max_threads_hint, 100U);
+    if (hint == 0) return physical_cores;
+    return std::clamp(static_cast<std::uint32_t>(
+        std::lround(logical_threads * (hint / 100.0))), 1U, logical_threads);
+}
+
 std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
     if (!cpu_config.value("enabled", true)) return 0;
 
     const auto logical_threads = available_logical_threads();
     const auto physical_cores = available_physical_cores(logical_threads);
-    const auto hint = std::min(cpu_config.value("max-threads-hint", 0U), 100U);
-    if (hint == 0) return std::max(1U, physical_cores);
-
-    return std::clamp(static_cast<std::uint32_t>(
-        std::lround(logical_threads * (hint / 100.0))),
-        1U, logical_threads);
+    return recommended_cpu_threads(
+        logical_threads, physical_cores,
+        cpu_config.value("max-threads-hint", 0U));
 }
 
 } // namespace unique_rx

@@ -35,6 +35,12 @@ if(WIN32)
 endif()
 
 if(BUILD_TESTING)
+  add_executable(unique-rx-cpu-topology-tests tests/cpu/topology_test.cpp src/cpu/topology.cpp)
+  target_compile_features(unique-rx-cpu-topology-tests PRIVATE cxx_std_20)
+  target_include_directories(unique-rx-cpu-topology-tests PRIVATE src)
+  target_link_libraries(unique-rx-cpu-topology-tests PRIVATE nlohmann_json::nlohmann_json)
+  add_test(NAME unique-rx-cpu-topology COMMAND unique-rx-cpu-topology-tests)
+
   add_executable(unique-rx-jit-tests tests/randomx/jit_codegen_test.cpp)
   target_compile_features(unique-rx-jit-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-jit-tests PRIVATE src "${randomx_SOURCE_DIR}/src")
