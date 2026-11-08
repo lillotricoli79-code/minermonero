@@ -89,6 +89,7 @@ Requisiti:
 - se MSR non è disponibile o fallisce, continuare il mining senza MSR.
 
 Non applicare preset Intel o AMD in modo indiscriminato. Il preset deve dipendere dalla famiglia/modello effettivo. Il backup/restore deve essere testabile con backend simulato; i test automatici non devono scrivere registri hardware reali.
+Il percorso comune `engine/src/msr/transaction.hpp` è usato dai backend Linux e Windows. Il test simulato verifica maschere, snapshot, read-back, rollback dopo errore parziale e nuovo tentativo di restore; non esegue scritture MSR hardware.
 
 ## 7. Pool, Stratum e shares
 
@@ -191,6 +192,7 @@ Copertura minima:
 - rilevamento CPU e fallback;
 - thread limitati da affinity/cgroup;
 - MSR: CPU non supportata, permessi negati, errore parziale, rollback e restore con backend simulato;
+  - Stato della copertura automatica: preset CPU non supportati e transazioni simulate (maschere, snapshot, errore di scrittura, rollback e retry restore) sono coperti; permessi/driver e hardware reali non sono verificati dalla CI.
 - configurazione e API backend;
 - dashboard e collegamento ai dati backend;
 - build nativa Linux e Windows.

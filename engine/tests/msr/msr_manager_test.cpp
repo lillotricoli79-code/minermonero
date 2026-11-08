@@ -12,12 +12,15 @@ namespace {
 struct MockMsrBackend {
     std::map<std::pair<std::size_t, std::uint64_t>, std::uint64_t> registers;
     std::size_t writes = 0;
+    std::size_t reads = 0;
     std::size_t fail_write_at = 0;
+    std::size_t corrupt_read_at = 0;
 
-    std::uint64_t read(std::size_t cpu, std::uint64_t reg) const {
+    std::uint64_t read(std::size_t cpu, std::uint64_t reg) {
+        ++reads;
         const auto found = registers.find({cpu, reg});
         if (found == registers.end()) throw std::runtime_error("mock MSR is not initialized");
-        return found->second;
+        return reads == corrupt_read_at ? found->second ^ 1ULL : found->second;
     }
 
     void write(std::size_t cpu, std::uint64_t reg, std::uint64_t value) {
@@ -86,6 +89,21 @@ bool test_mock_msr_transactions() {
                 "partial mock MSR apply did not roll back all prior writes");
 
     backend.writes = 0;
+    backend.reads = 0;
+    backend.corrupt_read_at = 5;
+    bool readback_failed = false;
+    try {
+        apply_registers(cpus, writes, snapshots, read, write, log);
+    } catch (const std::exception&) {
+        readback_failed = true;
+    }
+    backend.corrupt_read_at = 0;
+    ok &= check(readback_failed, "injected MSR read-back mismatch was not detected");
+    ok &= check(backend.registers == initial,
+                "read-back mismatch did not roll back the simulated MSR write");
+
+    backend.writes = 0;
+    backend.reads = 0;
     apply_registers(cpus, writes, snapshots, read, write, log);
     backend.fail_write_at = backend.writes + 1;
     ok &= check(restore_registers(snapshots, read, write, log),
