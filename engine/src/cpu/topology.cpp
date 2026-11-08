@@ -117,8 +117,6 @@ std::optional<std::uint32_t> available_cgroup_cpu_quota() {
 }
 #endif
 
-#ifdef __linux__
-
 
 std::uint32_t available_logical_threads() {
 #ifdef _WIN32
