@@ -1,6 +1,7 @@
 #include "logging/log.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <ctime>
 #include <fstream>
 #include <filesystem>
