@@ -48,7 +48,7 @@ try {
         Write-Warning "Install the official signed PawnIO driver from https://pawnio.eu/ before enabling native MSR."
     }
 
-    Write-Host "Rebuild the native miner. CMake will copy the verified module beside unique-rx.exe."
+    Write-Host "Run scripts/windows/build.ps1 again to reconfigure CMake and copy the verified module beside unique-rx.exe."
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) {
