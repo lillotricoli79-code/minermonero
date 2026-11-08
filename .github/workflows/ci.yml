@@ -9,9 +9,11 @@ on:
 permissions:
   contents: read
 
+# Do not cancel a Windows native build just because another commit is pushed
+# while vcpkg is compiling OpenSSL.
 concurrency:
   group: native-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   linux:
@@ -91,6 +93,16 @@ jobs:
         run: |
           npm ci --prefix dashboard
           npm run build --prefix dashboard
+
+      - name: Cache vcpkg OpenSSL installation
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.VCPKG_INSTALLATION_ROOT }}\installed
+            ${{ env.VCPKG_INSTALLATION_ROOT }}\downloads
+          key: vcpkg-${{ runner.os }}-openssl-x64-${{ hashFiles('engine/CMakeLists.txt') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-openssl-x64-
 
       - name: Install OpenSSL
         shell: pwsh
