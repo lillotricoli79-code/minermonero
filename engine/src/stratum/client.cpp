@@ -331,7 +331,7 @@ int run_miner(const std::filesystem::path& config_path,
                     }
                 }
 
-                if (state.stop.load(std::memory_order_acquire)) {
+                if (state.stop.load(std::memory_order_acquire) || g_stop_requested) {
                     send_ready_shares();
                     const auto drain_deadline = Clock::now() + std::chrono::milliseconds(250);
                     while (!pending.empty() && Clock::now() < drain_deadline) {
@@ -342,7 +342,7 @@ int run_miner(const std::filesystem::path& config_path,
                     break;
                 }
             } catch (const std::exception& error) {
-                if (state.stop.load(std::memory_order_acquire)) break;
+                if (state.stop.load(std::memory_order_acquire) || g_stop_requested) break;
                 state.set_work(nullptr);
                 if (!pending.empty()) {
                     state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
