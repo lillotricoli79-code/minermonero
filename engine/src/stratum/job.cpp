@@ -2,6 +2,7 @@
 #include "cpu/topology.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <cstdint>
 #include <cstring>
@@ -135,11 +136,26 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
             entry.host = address.substr(0, separator);
             entry.port = address.substr(separator + 1);
         }
+        if (entry.host.empty() || entry.host.find_first_of(" \t\r\n") != std::string::npos) {
+            throw std::invalid_argument("pool host is empty or contains whitespace");
+        }
+        unsigned int port_number = 0;
+        const auto port_parse = std::from_chars(
+            entry.port.data(), entry.port.data() + entry.port.size(), port_number);
+        if (entry.port.empty() || port_parse.ec != std::errc{} ||
+            port_parse.ptr != entry.port.data() + entry.port.size() ||
+            port_number == 0 || port_number > 65535) {
+            throw std::invalid_argument("pool port must be an integer between 1 and 65535");
+        }
         entry.wallet = pool.at("user").get<std::string>();
-        if (entry.wallet.empty()) {
-            throw std::invalid_argument("pool wallet/login cannot be empty");
+        if (entry.wallet.empty() ||
+            entry.wallet.find_first_of("\r\n") != std::string::npos) {
+            throw std::invalid_argument("pool wallet/login cannot be empty or contain newlines");
         }
         entry.password = pool.value("pass", std::string("x"));
+        if (entry.password.find_first_of("\r\n") != std::string::npos) {
+            throw std::invalid_argument("pool password cannot contain newlines");
+        }
         entry.worker = pool.value("rig-id", std::string("rig01"));
         entry.tls = pool.value("tls", false);
         entry.keepalive = pool.value("keepalive", false);
