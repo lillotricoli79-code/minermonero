@@ -85,6 +85,23 @@ inline bool wait_socket(Socket socket, short events, int timeout_ms) {
     }
     return false;
 }
+inline int pending_socket_error(Socket socket) {
+    int error = 0;
+    int length = sizeof(error);
+    if (getsockopt(socket, SOL_SOCKET, SO_ERROR,
+                   reinterpret_cast<char*>(&error), &length) == SOCKET_ERROR) {
+        return socket_error();
+    }
+    return error;
+}
+inline bool connect_with_timeout(Socket socket, const sockaddr* address,
+                                 int length, int timeout_ms) {
+    if (!set_nonblocking(socket)) return false;
+    if (connect_socket(socket, address, length) == 0) return true;
+    if (!socket_would_block(socket_error())) return false;
+    if (!wait_socket(socket, kWriteEvent, timeout_ms)) return false;
+    return pending_socket_error(socket) == 0;
+}
 inline std::string address_error(int error) {
     const char* message = gai_strerrorA(error);
     return message != nullptr ? message : "address lookup failed";
@@ -141,6 +158,31 @@ inline bool wait_socket(Socket socket, short events, int timeout_ms) {
         throw std::runtime_error("pool socket disconnected");
     }
     return false;
+}
+inline int pending_socket_error(Socket socket) {
+#ifdef _WIN32
+    int error = 0;
+    int length = sizeof(error);
+    if (getsockopt(socket, SOL_SOCKET, SO_ERROR,
+                   reinterpret_cast<char*>(&error), &length) == SOCKET_ERROR) {
+        return socket_error();
+    }
+#else
+    int error = 0;
+    socklen_t length = sizeof(error);
+    if (getsockopt(socket, SOL_SOCKET, SO_ERROR, &error, &length) < 0) {
+        return socket_error();
+    }
+#endif
+    return error;
+}
+inline bool connect_with_timeout(Socket socket, const sockaddr* address,
+                                 int length, int timeout_ms) {
+    if (!set_nonblocking(socket)) return false;
+    if (connect_socket(socket, address, length) == 0) return true;
+    if (!socket_would_block(socket_error())) return false;
+    if (!wait_socket(socket, kWriteEvent, timeout_ms)) return false;
+    return pending_socket_error(socket) == 0;
 }
 inline std::string address_error(int error) {
     const char* message = gai_strerror(error);
