@@ -175,7 +175,9 @@ private:
     void connect_tls(const PoolConfig& config) {
         context_ = SSL_CTX_new(TLS_client_method());
         if (context_ == nullptr) throw std::runtime_error("TLS context creation failed");
-        SSL_CTX_set_min_proto_version(context_, TLS1_2_VERSION);
+        if (SSL_CTX_set_min_proto_version(context_, TLS1_2_VERSION) != 1) {
+            throw std::runtime_error("cannot enforce TLS 1.2 or newer");
+        }
         if (config.tls_fingerprint.empty()) {
             SSL_CTX_set_verify(context_, SSL_VERIFY_PEER, nullptr);
             if (SSL_CTX_set_default_verify_paths(context_) != 1) {
@@ -186,9 +188,16 @@ private:
         }
         ssl_ = SSL_new(context_);
         if (ssl_ == nullptr) throw std::runtime_error("TLS session creation failed");
-        SSL_set_tlsext_host_name(ssl_, config.host.c_str());
-        if (config.tls_fingerprint.empty()) SSL_set1_host(ssl_, config.host.c_str());
-        SSL_set_fd(ssl_, static_cast<int>(socket_));
+        if (SSL_set_tlsext_host_name(ssl_, config.host.c_str()) != 1) {
+            throw std::runtime_error("cannot set TLS server name for pool");
+        }
+        if (config.tls_fingerprint.empty() &&
+            SSL_set1_host(ssl_, config.host.c_str()) != 1) {
+            throw std::runtime_error("cannot configure TLS hostname verification");
+        }
+        if (SSL_set_fd(ssl_, static_cast<int>(socket_)) != 1) {
+            throw std::runtime_error("cannot attach pool socket to TLS session");
+        }
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         while (true) {
             const int connect_result = SSL_connect(ssl_);
