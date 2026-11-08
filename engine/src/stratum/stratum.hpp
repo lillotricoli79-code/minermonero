@@ -36,7 +36,7 @@ struct PoolConfig {
 std::vector<std::uint8_t> decode_hex(std::string_view value);
 std::uint64_t parse_share_target(std::string_view value);
 Job parse_job(const nlohmann::json& value);
-PoolConfig parse_pool_config(const nlohmann::json& config);
+std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config);
 int run_miner(const std::filesystem::path& config_path,
               std::uint64_t maximum_hashes = 0);
 
