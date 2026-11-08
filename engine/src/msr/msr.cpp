@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <fstream>
+#include <iterator>
 #include <iostream>
 #include <iterator>
 #include <cstring>
