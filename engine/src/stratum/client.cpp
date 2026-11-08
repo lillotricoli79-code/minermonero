@@ -226,15 +226,15 @@ int run_miner(const std::filesystem::path& config_path,
                     }
                     pending.erase(response_id);
 
-                    const bool has_error =
-                        message.contains("error") && !message["error"].is_null();
-                    // Match XMRig BaseClient::handleSubmitResponse: a JSON-RPC
-                    // response without an error is an accepted share. Pools do
-                    // not all return result.status="OK"; some return {}, true,
-                    // or null on success.
+                    const bool has_error = rpc_response_failed(message);
+                    // XMRig treats an error-free JSON-RPC response as accepted;
+                    // NyxRX additionally validates an explicit result.status.
                     const bool accepted = !has_error;
                     log_event("SUBMIT_RESPONSE", message);
-                    std::string error_text = has_error ? message["error"].dump() : std::string();
+                    std::string error_text = has_error
+                        ? (message.contains("error") && !message["error"].is_null()
+                            ? message["error"].dump() : message.value("result", nlohmann::json()).dump())
+                        : std::string();
                     std::transform(error_text.begin(), error_text.end(), error_text.begin(),
                         [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
                     const bool stale = !accepted &&
