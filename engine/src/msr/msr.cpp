@@ -192,7 +192,7 @@ std::vector<unsigned int> online_cpu_ids() {
                 }
                 const auto first = static_cast<unsigned int>(std::stoul(item.substr(0, dash)));
                 const auto last = static_cast<unsigned int>(std::stoul(item.substr(dash + 1)));
-                if (last < first || last - first > 4096) {
+                if (last < first || last >= (1U << 20)) {
                     throw std::runtime_error("invalid Linux online CPU range");
                 }
                 for (unsigned int cpu = first;; ++cpu) {
@@ -214,12 +214,20 @@ std::vector<unsigned int> online_cpu_ids() {
     // Always intersect with the process cpuset, including when the kernel
     // supplied the online list. Use a dynamically sized mask so MSR tuning
     // cannot silently skip CPUs above the legacy CPU_SETSIZE limit.
+#ifdef __linux__
     const auto allowed = platform::linux_cpu::allowed_cpus();
-    if (!allowed.empty()) {
-        cpus.erase(std::remove_if(cpus.begin(), cpus.end(), [&](unsigned int cpu) {
-            return std::find(allowed.begin(), allowed.end(), cpu) == allowed.end();
-        }), cpus.end());
+    if (allowed.empty()) {
+        throw std::runtime_error(
+            "cannot determine process CPU affinity; refusing unsafe MSR writes");
     }
+    cpus.erase(std::remove_if(cpus.begin(), cpus.end(), [&](unsigned int cpu) {
+        return std::find(allowed.begin(), allowed.end(), cpu) == allowed.end();
+    }), cpus.end());
+    if (cpus.empty()) {
+        throw std::runtime_error(
+            "no online CPUs are available to this process for MSR tuning");
+    }
+#endif
     return cpus;
 }
 
