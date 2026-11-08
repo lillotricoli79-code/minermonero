@@ -41,11 +41,18 @@ inline bool pin_current_thread(std::uint32_t logical_cpu) noexcept {
     }
     return false;
 #elif defined(__linux__)
-    if (logical_cpu >= CPU_SETSIZE) return false;
-    cpu_set_t affinity;
-    CPU_ZERO(&affinity);
-    CPU_SET(logical_cpu, &affinity);
-    return pthread_setaffinity_np(pthread_self(), sizeof(affinity), &affinity) == 0;
+    cpu_set_t allowed;
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) != 0) return false;
+    std::uint32_t selected = 0;
+    for (std::uint32_t cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
+        if (!CPU_ISSET(cpu, &allowed)) continue;
+        if (selected++ != logical_cpu) continue;
+        cpu_set_t affinity;
+        CPU_ZERO(&affinity);
+        CPU_SET(cpu, &affinity);
+        return pthread_setaffinity_np(pthread_self(), sizeof(affinity), &affinity) == 0;
+    }
+    return false;
 #else
     (void)logical_cpu;
     return false;
