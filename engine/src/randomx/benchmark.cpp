@@ -68,7 +68,7 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
 
     std::vector<std::uint64_t> lane_hashes(lanes, 0);
     std::vector<Hash> last_hash(lanes);
-    std::vector<std::thread> workers;
+    std::vector<std::jthread> workers;
     workers.reserve(lanes);
     const auto started = std::chrono::steady_clock::now();
     const auto deadline = started + std::chrono::seconds(seconds);
