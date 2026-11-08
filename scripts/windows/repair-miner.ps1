@@ -59,34 +59,23 @@ foreach ($Marker in $Required) {
 
 Write-Host "OK: gestione submit allineata al comportamento XMRig e log diagnostici presenti." -ForegroundColor Green
 
-# Match the user's working MSYS2 toolchain so Windows can load the correct DLLs.
+# Keep the user's installed MSYS2 toolchain available to the unified release builder.
 $MsysBin = "C:\msys64\mingw64\bin"
 if (Test-Path $MsysBin) {
     $env:PATH = "$MsysBin;$env:PATH"
-} else {
-    Write-Host "ATTENZIONE: $MsysBin non trovato; uso il PATH corrente." -ForegroundColor Yellow
 }
 
-$Build = Join-Path $Root "engine\build"
-if (-not (Test-Path (Join-Path $Build "CMakeCache.txt"))) {
-    Stop-Repair "Build directory non configurata: $Build. Non avvio una configurazione diversa automaticamente."
+Write-Host "=== BUILD FINALE COMPLETA ===" -ForegroundColor Cyan
+$BuildScript = Join-Path $Root "scripts\windows\build.ps1"
+if (-not (Test-Path -LiteralPath $BuildScript)) {
+    Stop-Repair "Script di build completa non trovato: $BuildScript"
 }
-
-Write-Host "=== COMPILAZIONE ===" -ForegroundColor Cyan
-& cmake --build $Build --parallel
-if ($LASTEXITCODE -ne 0) { Stop-Repair "Compilazione fallita. Il log del compilatore sopra contiene l'errore." }
-
-Write-Host "=== TEST COMPLETI ===" -ForegroundColor Cyan
-& ctest --test-dir $Build --output-on-failure
-if ($LASTEXITCODE -ne 0) { Stop-Repair "Uno o più test sono falliti. Il miner non viene dichiarato verificato." }
-
-$Exe = Join-Path $Build "unique-rx.exe"
-if (-not (Test-Path $Exe)) {
-    Stop-Repair "Test superati ma unique-rx.exe non trovato nel percorso atteso: $Exe"
+& $BuildScript
+if ($LASTEXITCODE -ne 0) {
+    Stop-Repair "Build completa, test backend o test nativi non riusciti."
 }
 
 Write-Host ""
-Write-Host "[OK] Codice aggiornato, compilazione riuscita e test superati." -ForegroundColor Green
-Write-Host "Miner: $Exe"
-Write-Host "Log Stratum persistente: $(Join-Path $Root 'unique-rx-stratum.log')"
+Write-Host "[OK] Build completa terminata." -ForegroundColor Green
 Write-Host "La configurazione config.json e le credenziali pool non sono state modificate."
+Write-Host "Il mining non viene avviato."
