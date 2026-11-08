@@ -27,6 +27,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "soft_aes.h"
+#include "aes_hash.hpp"
 #include "cpu.hpp"
 #include <cassert>
 
