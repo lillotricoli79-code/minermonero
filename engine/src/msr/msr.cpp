@@ -143,6 +143,8 @@ std::filesystem::path default_module_path() {
     const std::vector<std::filesystem::path> candidates{
         directory / L"msr" / L"IntelMSR.bin",
         directory / L"IntelMSR.bin",
+        directory.parent_path() / L"msr" / L"IntelMSR.bin",
+        directory.parent_path().parent_path() / L"msr" / L"IntelMSR.bin",
         std::filesystem::current_path() / L"msr" / L"IntelMSR.bin",
     };
     for (const auto& candidate : candidates) {
