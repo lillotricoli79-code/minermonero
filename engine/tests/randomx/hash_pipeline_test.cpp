@@ -74,7 +74,7 @@ bool run_mode(randomx_flags flags, const char* mode) {
     }
 
     std::array<Hash, 2> lane_hashes{};
-    std::array<std::thread, 2> workers{
+    std::array<std::jthread, 2> workers{
         std::thread([&] {
             randomx_calculate_hash(lane_vms[0].get(), inputs[0].data(),
                                    inputs[0].size(), lane_hashes[0].data());
@@ -93,7 +93,9 @@ bool run_mode(randomx_flags flags, const char* mode) {
 }
 
 int main() {
-    const auto available_flags = randomx_get_flags();
+    const auto available_flags = static_cast<randomx_flags>(
+        static_cast<int>(randomx_get_flags()) &
+        ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
     const auto interpreter_flags = static_cast<randomx_flags>(
         static_cast<int>(available_flags) & ~static_cast<int>(RANDOMX_FLAG_JIT));
     if (!run_mode(available_flags, "JIT") ||
