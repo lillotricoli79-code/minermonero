@@ -290,7 +290,8 @@ int main() {
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
         miner_errors.str().find("switching pool") == std::string::npos ||
-        miner_output.str().find("Share accepted") == std::string::npos ||\n        miner_output.str().find("Share rejected") == std::string::npos ||
+        miner_output.str().find("Share accepted") == std::string::npos ||
+        miner_output.str().find("Share rejected") == std::string::npos ||
         miner_output.str().find("Share stale") == std::string::npos) {
         std::cerr << "local Stratum failover/login/job/share acceptance test failed\n";
         return 1;
