@@ -345,11 +345,35 @@ int run_miner(const std::filesystem::path& config_path,
                 }
 
                 if (state.stop.load(std::memory_order_acquire) || g_stop_requested) {
-                    send_ready_shares();
-                    const auto drain_deadline = Clock::now() + std::chrono::milliseconds(250);
-                    while (!pending.empty() && Clock::now() < drain_deadline) {
+                    // Stop and join every worker before draining the queue: a worker
+                    // may still be completing its final pipelined hash/share.
+                    state.stop.store(true, std::memory_order_release);
+                    for (auto& worker : workers) {
+                        if (worker.joinable()) worker.join();
+                    }
+
+                    const auto queued_shares = [&] {
+                        std::lock_guard lock(state.share_mutex);
+                        return !state.shares.empty();
+                    };
+                    const auto drain_deadline = Clock::now() + std::chrono::seconds(2);
+                    while (Clock::now() < drain_deadline) {
+                        send_ready_shares();
+                        if (pending.empty() && !queued_shares()) break;
                         for (const auto& line : transport.read_lines(10)) {
                             record_share_response(nlohmann::json::parse(line));
+                        }
+                    }
+                    if (!pending.empty()) {
+                        state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
+                        pending.clear();
+                    }
+                    {
+                        std::lock_guard lock(state.share_mutex);
+                        if (!state.shares.empty()) {
+                            state.dropped_shares.fetch_add(state.shares.size(),
+                                                           std::memory_order_relaxed);
+                            state.shares.clear();
                         }
                     }
                     break;
