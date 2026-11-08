@@ -618,10 +618,11 @@ class MinerController:
                         self._log(line, engine_kind)
                     else:
                         if isinstance(payload, dict) and "hashrate" in payload:
+                            # Machine telemetry is consumed by the API/dashboard,
+                            # not copied into the operator shell as noisy JSON.
                             with self.lock:
                                 if self.process is process:
                                     self.native_status = payload
-                            self._log(line, engine_kind)
                         else:
                             self._log(line, engine_kind)
                 else:
