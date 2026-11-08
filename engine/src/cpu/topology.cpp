@@ -288,16 +288,27 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
     // An explicit thread count takes precedence over the percentage hint.
     // Zero (or an absent key) keeps automatic physical-core/cache selection.
     std::uint32_t selected = 0;
+    bool explicit_thread_count = false;
     if (cpu_config.contains("threads")) {
         const auto& configured = cpu_config["threads"];
         if (!configured.is_number_unsigned() && !configured.is_number_integer()) {
             throw std::invalid_argument("cpu.threads must be an integer");
         }
-        const auto requested = configured.get<std::int64_t>();
-        if (requested < 0 || requested > 256) {
+        std::uint64_t requested = 0;
+        if (configured.is_number_unsigned()) {
+            requested = configured.get<std::uint64_t>();
+        } else {
+            const auto signed_request = configured.get<std::int64_t>();
+            if (signed_request < 0) {
+                throw std::invalid_argument("cpu.threads must be between 0 and 256");
+            }
+            requested = static_cast<std::uint64_t>(signed_request);
+        }
+        if (requested > 256) {
             throw std::invalid_argument("cpu.threads must be between 0 and 256");
         }
         if (requested > 0) {
+            explicit_thread_count = true;
             selected = std::min(logical_threads, static_cast<std::uint32_t>(requested));
         }
     }
@@ -306,7 +317,7 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
         selected = recommended_cpu_threads(
             logical_threads, physical_cores, max_threads_hint);
     }
-    if (max_threads_hint == 0) {
+    if (!explicit_thread_count && max_threads_hint == 0) {
         constexpr std::uint64_t randomx_l3_per_thread = 2ULL * 1024ULL * 1024ULL;
         if (const auto l3 = available_l3_cache_bytes()) {
             const auto cache_threads = static_cast<std::uint32_t>(
