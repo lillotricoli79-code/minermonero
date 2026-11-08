@@ -197,9 +197,9 @@ int main() {
                     login["params"].value("login", std::string()) == "loopback-test-wallet" &&
                     login["params"].value("pass", std::string()) == "x" &&
                     login["params"].value("rigid", std::string()) == "test" &&
-                    login["params"].contains("algo") &&
-                    login["params"]["algo"].is_array() &&
-                    login["params"]["algo"] == nlohmann::json::array({"rx/0"});
+                    login["params"].value("agent", std::string()) ==
+                        "XMRig/6.26.0 gcc/15.1.0 (built for Windows x86-64, 64 bit)" &&
+                    !login["params"].contains("algo");
             };
             const auto valid_submit_message = [](const nlohmann::json& submit) {
                 return submit.value("jsonrpc", std::string()) == "2.0" &&
