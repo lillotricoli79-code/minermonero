@@ -43,6 +43,7 @@ struct MiningState {
     std::atomic<std::uint64_t> rejected{0};
     std::atomic<std::uint64_t> stale_shares{0};
     std::atomic<std::uint64_t> expired_shares{0};
+    std::atomic<std::uint64_t> dropped_shares{0};
     std::mutex share_mutex;
     std::deque<Share> shares;
     std::mutex error_mutex;
