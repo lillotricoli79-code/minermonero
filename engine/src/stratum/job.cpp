@@ -147,4 +147,9 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
     return result;
 }
 
+PoolConfig parse_pool_config(const nlohmann::json& config) {
+    auto pools = parse_pool_configs(config);
+    return std::move(pools.front());
+}
+
 } // namespace unique_rx
