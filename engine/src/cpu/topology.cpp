@@ -157,8 +157,8 @@ std::optional<std::uint64_t> available_l3_cache_bytes() {
                     storage.data() + offset);
                 if (item->Size == 0 || offset + item->Size > bytes) break;
                 if (item->Relationship == RelationCache &&
-                    item->Cache.Level == 3 && item->Cache.Size != 0) {
-                    total += item->Cache.Size;
+                    item->Cache.Level == 3 && item->Cache.CacheSize != 0) {
+                    total += item->Cache.CacheSize;
                 }
                 offset += item->Size;
             }
