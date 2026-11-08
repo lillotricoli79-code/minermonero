@@ -44,6 +44,8 @@
 #include <fcntl.h>
 #include <thread>
 #include <sched.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
@@ -416,18 +418,45 @@ struct MsrManager::Impl {
     }
 #else
     std::vector<LinuxOriginal> originals;
+    int lock_fd = -1;
+
+    void acquire_process_lock() {
+        if (lock_fd >= 0) return;
+        lock_fd = ::open("/run/lock/rxminer-msr.lock",
+                         O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0600);
+        if (lock_fd < 0) {
+            throw std::system_error(errno, std::generic_category(),
+                                    "cannot open shared MSR lock");
+        }
+        if (::flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
+            const int error = errno;
+            ::close(lock_fd);
+            lock_fd = -1;
+            throw std::system_error(error, std::generic_category(),
+                                    "another miner owns the MSR settings lock");
+        }
+    }
+
+    void release_process_lock() noexcept {
+        if (lock_fd >= 0) {
+            ::flock(lock_fd, LOCK_UN);
+            ::close(lock_fd);
+            lock_fd = -1;
+        }
+    }
 
     void apply(const MsrPreset& preset) {
         if (active) return;
         if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
         originals.clear();
-        const auto cpus = online_cpu_ids();
-        if (cpus.empty()) {
-            throw std::runtime_error("no online CPU is available to this process for MSR tuning");
-        }
-        originals.reserve(cpus.size());
 
         try {
+            acquire_process_lock();
+            const auto cpus = online_cpu_ids();
+            if (cpus.empty()) {
+                throw std::runtime_error("no online CPU is available to this process for MSR tuning");
+            }
+            originals.reserve(cpus.size());
             for (const unsigned int cpu : cpus) {
                 const auto path = std::filesystem::path("/dev/cpu") /
                     std::to_string(cpu) / "msr";
@@ -523,6 +552,7 @@ struct MsrManager::Impl {
             }
         }
         active = restoration_pending;
+        if (!restoration_pending) release_process_lock();
     }
 #endif
 
@@ -539,6 +569,7 @@ struct MsrManager::Impl {
                 original.fd = -1;
             }
         }
+        release_process_lock();
 #endif
     }
 };
