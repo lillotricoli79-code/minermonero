@@ -56,7 +56,9 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 continue;
             }
-            if (!active_work || active_work->generation != work->generation) {
+            if (!vm || !active_work ||
+                active_work->flags != work->flags ||
+                active_work->full_memory != work->full_memory) {
                 auto vm_flags = work->flags;
                 if (work->full_memory) vm_flags |= RANDOMX_FLAG_FULL_MEM;
                 vm.reset(randomx_create_vm(
@@ -64,6 +66,17 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     work->full_memory ? nullptr : work->cache.get(),
                     work->full_memory ? work->dataset.get() : nullptr));
                 if (!vm) throw std::runtime_error("worker VM creation failed");
+            } else if (active_work->cache != work->cache ||
+                       active_work->dataset != work->dataset) {
+                if (work->full_memory) {
+                    if (!work->dataset) throw std::runtime_error("new RandomX dataset is missing");
+                    randomx_vm_set_dataset(vm.get(), work->dataset.get());
+                } else {
+                    if (!work->cache) throw std::runtime_error("new RandomX cache is missing");
+                    randomx_vm_set_cache(vm.get(), work->cache.get());
+                }
+            }
+            if (!active_work || active_work->generation != work->generation) {
                 active_work = work;
                 blob = work->job.blob;
                 cursor = 0;
