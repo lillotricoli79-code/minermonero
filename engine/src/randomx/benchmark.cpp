@@ -71,7 +71,8 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
 
     std::shared_ptr<randomx_dataset> dataset;
     if (full_memory) {
-        const auto init_threads = std::max(1U, detected_logical_threads());
+        const auto init_threads = std::max(
+            1U, select_cpu_threads(nlohmann::json::object()));
         try {
             dataset = create_randomx_dataset(cache, init_threads, flags);
         } catch (const std::exception& error) {
