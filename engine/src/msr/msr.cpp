@@ -359,7 +359,8 @@ struct MsrManager::Impl {
 
     void restore() noexcept {
         bool restoration_pending = false;
-        for (auto& original : originals) {
+        for (auto it = originals.rbegin(); it != originals.rend(); ++it) {
+            auto& original = *it;
             if (!original.modified) continue;
             try {
                 ThreadAffinity affinity(original.group, original.processor);
