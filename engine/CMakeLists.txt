@@ -35,6 +35,12 @@ if(WIN32)
 endif()
 
 if(BUILD_TESTING)
+  add_executable(unique-rx-logging-tests tests/logging/logging_rotation_test.cpp
+    src/logging/log.cpp)
+  target_compile_features(unique-rx-logging-tests PRIVATE cxx_std_20)
+  target_include_directories(unique-rx-logging-tests PRIVATE src)
+  add_test(NAME unique-rx-logging-rotation COMMAND unique-rx-logging-tests)
+
   add_test(NAME unique-rx-cli-rejects-invalid-max-hashes
     COMMAND unique-rx --mine config.json not-a-number)
   set_tests_properties(unique-rx-cli-rejects-invalid-max-hashes PROPERTIES WILL_FAIL TRUE)
