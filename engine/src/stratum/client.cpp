@@ -116,6 +116,34 @@ int run_miner(const std::filesystem::path& config_path,
             state.set_work(std::move(work));
         };
 
+        const auto record_share_response = [&](const nlohmann::json& message) {
+            if (!message.contains("id")) return;
+            std::uint64_t response_id = 0;
+            try {
+                response_id = message["id"].get<std::uint64_t>();
+            } catch (const nlohmann::json::exception&) {
+                return;
+            }
+            if (pending.erase(response_id) == 0) return;
+
+            const bool has_error =
+                message.contains("error") && !message["error"].is_null();
+            const bool accepted = !has_error && message.contains("result") &&
+                message["result"].is_object() &&
+                message["result"].value("status", std::string()) == "OK";
+            if (accepted) {
+                std::cout << "Share accepted\n";
+                state.accepted.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                std::cout << "Share rejected: ";
+                if (has_error) std::cout << message["error"].dump();
+                else if (message.contains("result")) std::cout << message["result"].dump();
+                else std::cout << "missing or invalid submit result";
+                std::cout << '\n';
+                state.rejected.fetch_add(1, std::memory_order_relaxed);
+            }
+        };
+
         const auto send_ready_shares = [&] {
             std::deque<Share> ready;
             const auto available_slots = kMaximumPendingShares - pending.size();
@@ -168,25 +196,7 @@ int run_miner(const std::filesystem::path& config_path,
                     std::cout << "Pool login accepted; job " << job.id << '\n';
                     install_job(std::move(job));
                 } else if (message.contains("id")) {
-                    const auto response_id = message["id"].get<std::uint64_t>();
-                    if (pending.erase(response_id) != 0) {
-                        const bool has_error =
-                            message.contains("error") && !message["error"].is_null();
-                        const bool accepted = !has_error && message.contains("result") &&
-                            message["result"].is_object() &&
-                            message["result"].value("status", std::string()) == "OK";
-                        if (accepted) {
-                            std::cout << "Share accepted\n";
-                            state.accepted.fetch_add(1, std::memory_order_relaxed);
-                        } else {
-                            std::cout << "Share rejected: ";
-                            if (has_error) std::cout << message["error"].dump();
-                            else if (message.contains("result")) std::cout << message["result"].dump();
-                            else std::cout << "missing or invalid submit result";
-                            std::cout << '\n';
-                            state.rejected.fetch_add(1, std::memory_order_relaxed);
-                        }
-                    }
+                    record_share_response(message);
                 }
             }
 
@@ -252,6 +262,13 @@ int run_miner(const std::filesystem::path& config_path,
         state.stop.store(true, std::memory_order_release);
         for (auto& worker : workers) if (worker.joinable()) worker.join();
         send_ready_shares();
+
+        const auto drain_deadline = Clock::now() + std::chrono::milliseconds(250);
+        while (!pending.empty() && Clock::now() < drain_deadline) {
+            for (const auto& line : transport.read_lines(10)) {
+                record_share_response(nlohmann::json::parse(line));
+            }
+        }
         {
             std::lock_guard lock(state.error_mutex);
             if (!state.worker_error.empty()) throw std::runtime_error(state.worker_error);
