@@ -134,6 +134,82 @@ std::uint32_t available_logical_threads() {
 // RandomX benefits from starting with one worker per physical core. This
 // follows the physical-core-first policy used by mature RandomX miners rather
 // than assuming that half of every machine's logical CPUs are physical cores.
+// NyxRX's RandomX hardware profile uses roughly 2 MiB of shared L3
+// per worker as a conservative automatic thread limit. Detect the total
+// visible L3 cache once, with an OS topology fallback when unavailable.
+std::optional<std::uint64_t> available_l3_cache_bytes() {
+#ifdef _WIN32
+    DWORD bytes = 0;
+    GetLogicalProcessorInformationEx(RelationCache, nullptr, &bytes);
+    if (GetLastError() == ERROR_INSUFFICIENT_BUFFER && bytes != 0) {
+        std::vector<unsigned char> storage(bytes);
+        auto* item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(
+            storage.data());
+        if (GetLogicalProcessorInformationEx(RelationCache, item, &bytes)) {
+            std::uint64_t total = 0;
+            DWORD offset = 0;
+            while (offset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) <= bytes) {
+                item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(
+                    storage.data() + offset);
+                if (item->Size == 0 || offset + item->Size > bytes) break;
+                if (item->Relationship == RelationCache &&
+                    item->Cache.Level == 3 && item->Cache.Size != 0) {
+                    total += item->Cache.Size;
+                }
+                offset += item->Size;
+            }
+            if (total != 0) return total;
+        }
+    }
+#elif defined(__linux__)
+    std::set<std::string> shared_l3;
+    std::uint64_t total = 0;
+    std::error_code ec;
+    const std::filesystem::path cpu_root("/sys/devices/system/cpu");
+    for (const auto& entry : std::filesystem::directory_iterator(cpu_root, ec)) {
+        if (ec) break;
+        const auto name = entry.path().filename().string();
+        if (!name.starts_with("cpu") || name.size() <= 3 ||
+            !std::all_of(name.begin() + 3, name.end(),
+                         [](unsigned char ch) { return ch >= '0' && ch <= '9'; })) {
+            continue;
+        }
+        const auto cache_root = entry.path() / "cache";
+        std::error_code cache_ec;
+        for (const auto& cache : std::filesystem::directory_iterator(cache_root, cache_ec)) {
+            if (cache_ec) break;
+            std::ifstream level_file(cache.path() / "level");
+            unsigned int level = 0;
+            if (!(level_file >> level) || level != 3) continue;
+            std::ifstream type_file(cache.path() / "type");
+            std::string type;
+            if (!(type_file >> type) || (type != "Unified" && type != "Data")) continue;
+            std::ifstream shared_file(cache.path() / "shared_cpu_list");
+            std::string shared;
+            if (!(shared_file >> shared)) shared = cache.path().string();
+            if (!shared_l3.insert(shared).second) continue;
+            std::ifstream size_file(cache.path() / "size");
+            std::string size;
+            if (!(size_file >> size) || size.empty()) continue;
+            std::uint64_t multiplier = 1;
+            const char suffix = size.back();
+            if (suffix == 'K' || suffix == 'k') { multiplier = 1024; size.pop_back(); }
+            else if (suffix == 'M' || suffix == 'm') { multiplier = 1024 * 1024; size.pop_back(); }
+            else if (suffix == 'G' || suffix == 'g') { multiplier = 1024ULL * 1024ULL * 1024ULL; size.pop_back(); }
+            try {
+                std::size_t used = 0;
+                const auto amount = std::stoull(size, &used, 10);
+                if (used == size.size() && amount <= UINT64_MAX / multiplier)
+                    total += amount * multiplier;
+            } catch (...) {
+            }
+        }
+    }
+    if (total != 0) return total;
+#endif
+    return std::nullopt;
+}
+
 std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
 #ifdef _WIN32
     DWORD bytes = 0;
@@ -209,9 +285,17 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
 
     const auto logical_threads = available_logical_threads();
     const auto physical_cores = available_physical_cores(logical_threads);
+    const auto max_threads_hint = cpu_config.value("max-threads-hint", 0U);
     auto selected = recommended_cpu_threads(
-        logical_threads, physical_cores,
-        cpu_config.value("max-threads-hint", 0U));
+        logical_threads, physical_cores, max_threads_hint);
+    if (max_threads_hint == 0) {
+        constexpr std::uint64_t randomx_l3_per_thread = 2ULL * 1024ULL * 1024ULL;
+        if (const auto l3 = available_l3_cache_bytes()) {
+            const auto cache_threads = static_cast<std::uint32_t>(
+                std::max<std::uint64_t>(1, *l3 / randomx_l3_per_thread));
+            selected = std::min(selected, cache_threads);
+        }
+    }
 #ifdef __linux__
     if (const auto quota = available_cgroup_cpu_quota()) {
         selected = std::min(selected, *quota);
