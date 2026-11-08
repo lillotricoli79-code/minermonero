@@ -179,8 +179,9 @@ private:
         SSL_set_fd(ssl_, static_cast<int>(socket_));
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         while (true) {
-            if (SSL_connect(ssl_) == 1) break;
-            const int error = SSL_get_error(ssl_, -1);
+            const int connect_result = SSL_connect(ssl_);
+            if (connect_result == 1) break;
+            const int error = SSL_get_error(ssl_, connect_result);
             if (error != SSL_ERROR_WANT_READ && error != SSL_ERROR_WANT_WRITE) {
                 throw std::runtime_error("TLS handshake with pool failed");
             }
