@@ -76,10 +76,14 @@ inline bool wait_socket(Socket socket, short events, int timeout_ms) {
         if (socket_interrupted(error)) return false;
         throw std::runtime_error("pool socket poll failed");
     }
-    if (result > 0 && (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
+    if (result > 0 && (descriptor.revents & (POLLERR | POLLNVAL))) {
         throw std::runtime_error("pool socket disconnected");
     }
-    return result > 0 && (descriptor.revents & events) != 0;
+    if (result > 0 && (descriptor.revents & events) != 0) return true;
+    if (result > 0 && (descriptor.revents & POLLHUP) != 0) {
+        throw std::runtime_error("pool socket disconnected");
+    }
+    return false;
 }
 inline std::string address_error(int error) {
     const char* message = gai_strerrorA(error);
@@ -129,10 +133,14 @@ inline bool wait_socket(Socket socket, short events, int timeout_ms) {
         if (socket_interrupted(socket_error())) return false;
         throw std::runtime_error("pool socket poll failed");
     }
-    if (result > 0 && (descriptor.revents & (POLLERR | POLLHUP | POLLNVAL))) {
+    if (result > 0 && (descriptor.revents & (POLLERR | POLLNVAL))) {
         throw std::runtime_error("pool socket disconnected");
     }
-    return result > 0 && (descriptor.revents & events) != 0;
+    if (result > 0 && (descriptor.revents & events) != 0) return true;
+    if (result > 0 && (descriptor.revents & POLLHUP) != 0) {
+        throw std::runtime_error("pool socket disconnected");
+    }
+    return false;
 }
 inline std::string address_error(int error) {
     const char* message = gai_strerror(error);
