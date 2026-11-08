@@ -212,8 +212,16 @@ struct MsrManager::Impl {
         const std::vector<UCHAR> module(
             (std::istreambuf_iterator<char>(module_file)),
             std::istreambuf_iterator<char>());
+        if (module.empty()) {
+            throw std::runtime_error("IntelMSR.bin is empty or unreadable");
+        }
 
-        if (FAILED(open(&handle)) || handle == nullptr) {
+        const HRESULT open_result = open(&handle);
+        if (FAILED(open_result) || handle == nullptr) {
+            if (handle != nullptr) {
+                close(handle);
+                handle = nullptr;
+            }
             throw std::runtime_error(
                 "PawnIO driver could not be opened; check installation and administrator rights");
         }
