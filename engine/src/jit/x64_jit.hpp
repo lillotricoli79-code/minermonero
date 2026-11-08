@@ -407,9 +407,14 @@ public:
     explicit ExecutableCode(const CodeBuffer& buffer) {
         buffer.validate();
         size_ = buffer.code_size();
+        if (size_ == 0) throw std::invalid_argument("cannot allocate an empty JIT buffer");
 #if defined(_WIN32)
         SYSTEM_INFO info{};
         GetSystemInfo(&info);
+        if (info.dwPageSize == 0 ||
+            size_ > std::numeric_limits<std::size_t>::max() - info.dwPageSize + 1) {
+            throw std::runtime_error("invalid Windows page size for JIT allocation");
+        }
         allocation_size_ = ((size_ + info.dwPageSize - 1) / info.dwPageSize) * info.dwPageSize;
         memory_ = VirtualAlloc(nullptr, allocation_size_, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         if (memory_ == nullptr) throw std::runtime_error("VirtualAlloc failed");
@@ -422,7 +427,14 @@ public:
         }
         FlushInstructionCache(GetCurrentProcess(), memory_, size_);
 #else
-        const auto page_size = static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+        const long system_page_size = sysconf(_SC_PAGESIZE);
+        if (system_page_size <= 0) {
+            throw std::runtime_error("sysconf(_SC_PAGESIZE) failed");
+        }
+        const auto page_size = static_cast<std::size_t>(system_page_size);
+        if (size_ > std::numeric_limits<std::size_t>::max() - page_size + 1) {
+            throw std::runtime_error("JIT allocation size overflow");
+        }
         allocation_size_ = ((size_ + page_size - 1) / page_size) * page_size;
         memory_ = mmap(nullptr, allocation_size_, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
