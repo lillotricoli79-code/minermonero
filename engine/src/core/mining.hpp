@@ -1,6 +1,6 @@
 #pragma once
 
-#include "stratum.hpp"
+#include "stratum/stratum.hpp"
 
 #include <randomx.h>
 
