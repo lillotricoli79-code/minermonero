@@ -32,7 +32,8 @@ void write_nonce(std::vector<std::uint8_t>& blob, std::uint32_t nonce) {
     std::copy(encoded.begin(), encoded.end(), blob.begin() + kNonceOffset);
 }
 
-inline constexpr std::size_t kMaximumQueuedShares = 4096;
+// RxMiner's bounded Submitter channel uses QUEUE_LIMIT=8192.
+inline constexpr std::size_t kMaximumQueuedShares = 8192;
 
 std::uint64_t complete_hash(MiningState& state,
                              const std::shared_ptr<const MiningWork>& work,
