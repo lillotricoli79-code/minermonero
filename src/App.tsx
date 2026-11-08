@@ -749,7 +749,7 @@ function App() {
                           )
                         }
                       >
-                        <option value="auto">Automatico · preset CPU</option>
+                        <option value="auto">Automatico · preset XMRig</option>
                         <option value="off">Disattivato</option>
                         <option value="fast">Fast · preset XMRig</option>
                         {config.msr_mode === "custom" && (
@@ -757,7 +757,8 @@ function App() {
                         )}
                       </select>
                       <small>
-                        Fast abilita il preset XMRig per la CPU. Richiede accesso
+                        Automatico, Fast e Personalizzato usano XMRig finché
+                        il motore nativo non integra MSR. Richiedono accesso
                         MSR; `rdmsr` resta attivo per ripristinare i valori
                         originali quando il miner termina.
                       </small>
