@@ -54,7 +54,8 @@ if(BUILD_TESTING)
     src/core/mining.cpp src/workers/hash_worker.cpp)
   target_compile_features(unique-rx-worker-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-worker-tests PRIVATE src "${randomx_SOURCE_DIR}/src")
-  target_link_libraries(unique-rx-worker-tests PRIVATE randomx Threads::Threads)
+  target_link_libraries(unique-rx-worker-tests PRIVATE randomx Threads::Threads
+    nlohmann_json::nlohmann_json)
   add_test(NAME unique-rx-worker-validation COMMAND unique-rx-worker-tests)
 
   add_executable(unique-rx-msr-tests tests/msr/msr_manager_test.cpp src/msr/msr.cpp)
