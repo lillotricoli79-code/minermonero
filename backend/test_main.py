@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from backend.src.shell_log import ShellLog
 
-from backend.main import (
+from backend.src.main import (
     MinerConfigUpdate,
     MinerController,
     apply_config_update,
@@ -193,8 +193,8 @@ class MinerShutdownTests(unittest.TestCase):
         controller = MinerController()
         process = FakeProcess()
         controller.process = process
-        with patch("backend.main.os.name", "nt"), patch(
-            "backend.main.signal.CTRL_BREAK_EVENT", 123, create=True
+        with patch("backend.src.main.os.name", "nt"), patch(
+            "backend.src.main.signal.CTRL_BREAK_EVENT", 123, create=True
         ):
             controller.stop()
 
