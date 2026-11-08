@@ -1,13 +1,12 @@
 #include "stratum.hpp"
+#include "cpu/topology.hpp"
 
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace unique_rx {
@@ -114,16 +113,8 @@ PoolConfig parse_pool_config(const nlohmann::json& config) {
     result.password = pool.value("pass", std::string("x"));
     result.worker = pool.value("rig-id", std::string("rig01"));
     result.tls = pool.value("tls", false);
-    const auto cpu = config.value("cpu", nlohmann::json::object());
-    if (cpu.value("enabled", true)) {
-        const auto logical_threads = std::max(1U, std::thread::hardware_concurrency());
-        const auto hint = std::min(cpu.value("max-threads-hint", 0U), 100U);
-        result.threads = hint == 0
-            ? std::max(1U, logical_threads / 2)
-            : std::clamp(static_cast<std::uint32_t>(
-                  std::lround(logical_threads * (hint / 100.0))), 1U, logical_threads);
-    }
-    result.threads = std::min(result.threads, 64U);
+    result.threads = select_cpu_threads(
+        config.value("cpu", nlohmann::json::object()));
     result.tls_fingerprint = normalize_fingerprint(
         pool.value("tls-fingerprint", std::string()));
     if (!result.tls_fingerprint.empty() && !result.tls) {
