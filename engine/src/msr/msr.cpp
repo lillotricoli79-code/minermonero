@@ -2,6 +2,7 @@
 #include "presets.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -31,6 +32,7 @@
 #endif
 #include <windows.h>
 #include <winreg.h>
+#include <openssl/evp.h>
 #include "platform/affinity.hpp"
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -275,13 +277,17 @@ struct MsrManager::Impl {
     void initialize_pawnio() {
         if (handle != nullptr) return;
         const auto dll_path = pawnio_library_path();
-        library = dll_path.empty()
-            ? LoadLibraryW(L"PawnIOLib.dll")
-            : LoadLibraryW(dll_path.c_str());
+        if (dll_path.empty()) {
+            throw std::runtime_error(
+                "PawnIO is not installed or PawnIOLib.dll was not found in a trusted location. "
+                "Install the official signed PawnIO driver first.");
+        }
+        library = LoadLibraryExW(
+            dll_path.c_str(), nullptr,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (library == nullptr) {
             throw std::runtime_error(
-                "PawnIO is not installed or PawnIOLib.dll cannot be loaded. "
-                "Install the official signed PawnIO driver first.");
+                "PawnIOLib.dll could not be loaded from its resolved absolute path");
         }
         open = reinterpret_cast<PawnioOpen>(GetProcAddress(library, "pawnio_open"));
         load = reinterpret_cast<PawnioLoad>(GetProcAddress(library, "pawnio_load"));
@@ -302,6 +308,26 @@ struct MsrManager::Impl {
             std::istreambuf_iterator<char>());
         if (module.empty()) {
             throw std::runtime_error("IntelMSR.bin is empty or unreadable");
+        }
+
+        // Pin the exact official PawnIO.Modules 0.2.11 Intel module. PawnIO
+        // validates the module signature; this hash additionally rejects a
+        // replaced, truncated or unrelated module before it is submitted.
+        static constexpr std::array<unsigned char, 32> expected_sha256{
+            0xd6, 0xed, 0x85, 0xd6, 0x5a, 0xb1, 0x7a, 0x22,
+            0xf8, 0x13, 0xef, 0x98, 0x20, 0x7d, 0x6d, 0x53,
+            0x71, 0x55, 0xee, 0x2d, 0xed, 0x59, 0x76, 0xa2,
+            0x1c, 0xb4, 0x84, 0x13, 0xc9, 0xb9, 0x2e, 0x5f,
+        };
+        std::array<unsigned char, EVP_MAX_MD_SIZE> actual_sha256{};
+        unsigned int actual_sha256_size = 0;
+        if (EVP_Digest(module.data(), module.size(), actual_sha256.data(),
+                       &actual_sha256_size, EVP_sha256(), nullptr) != 1 ||
+            actual_sha256_size != expected_sha256.size() ||
+            !std::equal(expected_sha256.begin(), expected_sha256.end(),
+                        actual_sha256.begin())) {
+            throw std::runtime_error(
+                "IntelMSR.bin SHA-256 mismatch; expected the official PawnIO.Modules 0.2.11 Intel module");
         }
 
         const HRESULT open_result = open(&handle);

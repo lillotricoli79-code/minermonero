@@ -64,7 +64,7 @@ if(BUILD_TESTING)
   target_compile_features(unique-rx-msr-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-msr-tests PRIVATE src)
   if(WIN32)
-    target_link_libraries(unique-rx-msr-tests PRIVATE advapi32)
+    target_link_libraries(unique-rx-msr-tests PRIVATE advapi32 OpenSSL::Crypto)
   endif()
   add_test(NAME unique-rx-msr-lifecycle COMMAND unique-rx-msr-tests)
 
