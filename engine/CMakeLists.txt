@@ -32,18 +32,18 @@ if(WIN32)
 endif()
 
 if(BUILD_TESTING)
-  add_executable(unique-rx-jit-tests tests/x64_jit_test.cpp)
+  add_executable(unique-rx-jit-tests tests/randomx/jit_codegen_test.cpp)
   target_compile_features(unique-rx-jit-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-jit-tests PRIVATE src "${randomx_SOURCE_DIR}/src")
   add_test(NAME unique-rx-x64-codegen COMMAND unique-rx-jit-tests)
 
-  add_executable(unique-rx-tests tests/hash_pipeline_test.cpp)
+  add_executable(unique-rx-tests tests/randomx/hash_pipeline_test.cpp)
   target_compile_features(unique-rx-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-tests PRIVATE "${randomx_SOURCE_DIR}/src")
   target_link_libraries(unique-rx-tests PRIVATE randomx Threads::Threads)
   add_test(NAME unique-rx-batch-and-lane-equivalence COMMAND unique-rx-tests)
 
-  add_executable(unique-rx-stratum-tests tests/stratum_test.cpp src/stratum/client.cpp
+  add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/stratum/client.cpp
     src/stratum/job.cpp src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/stratum/transport.cpp)
   target_compile_features(unique-rx-stratum-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-stratum-tests PRIVATE src
@@ -56,7 +56,7 @@ if(BUILD_TESTING)
   add_test(NAME unique-rx-stratum-job-validation COMMAND unique-rx-stratum-tests)
 
   add_executable(unique-rx-stratum-integration-tests
-    tests/stratum_loopback_test.cpp src/stratum/client.cpp src/stratum/job.cpp
+    tests/stratum/loopback_test.cpp src/stratum/client.cpp src/stratum/job.cpp
     src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp
     src/stratum/transport.cpp)
   target_compile_features(unique-rx-stratum-integration-tests PRIVATE cxx_std_20)
