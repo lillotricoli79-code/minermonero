@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from pydantic import ValidationError
+from fastapi import HTTPException
 
 from backend.src.shell_log import ShellLog
 
