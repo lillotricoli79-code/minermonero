@@ -24,6 +24,18 @@ bool send_all(int socket, const std::string& value) {
     return true;
 }
 
+bool is_hex_string(const std::string& value, std::size_t expected_size) {
+    if (value.size() != expected_size) return false;
+    for (const unsigned char ch : value) {
+        if (!((ch >= '0' && ch <= '9') ||
+              (ch >= 'a' && ch <= 'f') ||
+              (ch >= 'A' && ch <= 'F'))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool read_line(int socket, std::string& line) {
     char character = 0;
     while (line.size() < 1024 * 1024) {
@@ -70,7 +82,18 @@ int main() {
                 return;
             }
             const auto login = nlohmann::json::parse(line);
-            if (login.value("method", std::string()) != "login") {
+            const bool valid_login =
+                login.value("jsonrpc", std::string()) == "2.0" &&
+                login.value("id", 0) == 1 &&
+                login.value("method", std::string()) == "login" &&
+                login.contains("params") && login["params"].is_object() &&
+                login["params"].value("login", std::string()) == "loopback-test-wallet" &&
+                login["params"].value("pass", std::string()) == "x" &&
+                login["params"].value("rigid", std::string()) == "test" &&
+                login["params"].contains("algo") &&
+                login["params"]["algo"].is_array() &&
+                login["params"]["algo"] == nlohmann::json::array({"rx/0"});
+            if (!valid_login) {
                 close(client);
                 return;
             }
@@ -92,13 +115,16 @@ int main() {
                 return;
             }
             const auto submit = nlohmann::json::parse(line);
-            server_ok.store(
+            const bool valid_submit =
+                submit.value("jsonrpc", std::string()) == "2.0" &&
+                submit.value("id", 0ULL) > 1 &&
                 submit.value("method", std::string()) == "submit" &&
+                submit.contains("params") && submit["params"].is_object() &&
                 submit["params"].value("id", std::string()) == "local-session" &&
                 submit["params"].value("job_id", std::string()) == "local-job" &&
-                submit["params"].value("nonce", std::string()).size() == 8 &&
-                submit["params"].value("result", std::string()).size() == 64,
-                std::memory_order_release);
+                is_hex_string(submit["params"].value("nonce", std::string()), 8) &&
+                is_hex_string(submit["params"].value("result", std::string()), 64);
+            server_ok.store(valid_submit, std::memory_order_release);
             close(client);
         } catch (const std::exception& error) {
             std::cerr << "mock pool error: " << error.what() << '\n';
