@@ -232,7 +232,7 @@ struct MsrManager::Impl {
             close(handle);
             handle = nullptr;
             throw std::runtime_error(
-                "PawnIO rejected IntelMSR.bin; use the signed official module release");
+                "PawnIO rejected IntelMSR.bin; use the official module matching the pinned SHA-256");
         }
     }
 
