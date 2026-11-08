@@ -95,11 +95,12 @@ int main() {
     inferred_nicehash.erase("nicehash");
     ok &= check(parse_job(inferred_nicehash).nonce_fixed == 0xab000000U,
                 "non-zero pool nonce prefix was not detected when NiceHash metadata was absent");
-    auto ordinary_nonce_job = wire_job;
-    ordinary_nonce_job.erase("nicehash");
-    ok &= check(parse_job(ordinary_nonce_job).nonce == 0x12345678U &&
-                    parse_job(ordinary_nonce_job).nonce_mask == UINT32_MAX,
-                "ordinary explicit 32-bit nonce range changed unexpectedly");
+    const auto ordinary_nonce_job = parse_job(wire_job);
+    ok &= check(ordinary_nonce_job.nonce == 0x12345678U &&
+                    ordinary_nonce_job.nonce_mask == UINT32_MAX &&
+                    nonce_space(ordinary_nonce_job) == kNonceSpace &&
+                    nonce_at_offset(ordinary_nonce_job, 0xffffffffULL) == 0x12345677U,
+                "explicitly disabled NiceHash mode did not retain the full 32-bit nonce range");
 
     auto job_without_height = wire_job;
     job_without_height.erase("height");
