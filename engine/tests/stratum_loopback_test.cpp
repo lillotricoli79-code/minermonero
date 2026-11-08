@@ -182,7 +182,13 @@ int main() {
                 submit["params"].value("job_id", std::string()) == "local-job" &&
                 is_hex_string(submit["params"].value("nonce", std::string()), 8) &&
                 is_hex_string(submit["params"].value("result", std::string()), 64);
-            server_ok.store(valid_submit, std::memory_order_release);
+            const nlohmann::json submit_response{
+                {"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
+                {"result", {{"status", "OK"}}},
+            };
+            const bool response_sent = valid_submit &&
+                send_all(client, submit_response.dump() + "\n");
+            server_ok.store(response_sent, std::memory_order_release);
             unique_rx::platform::close_socket(client);
         } catch (const std::exception& error) {
             std::cerr << "mock pool error: " << error.what() << '\n';
