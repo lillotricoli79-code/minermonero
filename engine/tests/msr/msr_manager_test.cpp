@@ -16,6 +16,7 @@ int main() {
     if (!unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x8e) ||
         !unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x9e) ||
         unique_rx::msr_preset_for_cpu("GenuineIntel", 5, 0x04) ||
+        unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x97) ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 6, 0x5e)) {
         std::cerr << "Intel family/model MSR selection failed\n";
         return 1;

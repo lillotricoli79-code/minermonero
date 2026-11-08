@@ -30,7 +30,10 @@ inline std::optional<MsrPreset> msr_preset_for_cpu(
     // Intel's RandomX prefetcher control is the 0x1a4 register.
     // Only touch the four documented prefetcher-disable bits.
     if (vendor == "GenuineIntel") {
-        if (family != 0x06) return std::nullopt;
+        if (family != 0x06 ||
+            (model != 0x5e && model != 0x8e && model != 0x9e)) {
+            return std::nullopt;
+        }
         return MsrPreset{"intel_family_6", {write(0x1a4, 0x0f, 0x0f)}};
     }
 
