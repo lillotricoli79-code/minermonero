@@ -9,14 +9,21 @@
 
 namespace {
 
-unsigned int parse_unsigned(const char* value, unsigned int fallback) {
+std::uint64_t parse_unsigned64(const char* value, std::uint64_t fallback) {
     if (value == nullptr) return fallback;
     try {
-        const auto parsed = std::stoul(value);
-        return parsed <= UINT32_MAX ? static_cast<unsigned int>(parsed) : 0;
+        std::size_t consumed = 0;
+        const auto parsed = std::stoull(value, &consumed, 10);
+        if (value[consumed] != '\\0') return 0;
+        return parsed;
     } catch (const std::exception&) {
         return 0;
     }
+}
+
+unsigned int parse_unsigned(const char* value, unsigned int fallback) {
+    const auto parsed = parse_unsigned64(value, fallback);
+    return parsed <= UINT32_MAX ? static_cast<unsigned int>(parsed) : 0;
 }
 
 void print_usage(const char* executable) {
@@ -31,7 +38,7 @@ void print_usage(const char* executable) {
 int main(int argc, char** argv) {
     if (argc > 1 && std::string_view(argv[1]) == "--mine") {
         const std::filesystem::path config_path = argc > 2 ? argv[2] : "config.json";
-        const auto maximum_hashes = parse_unsigned(argc > 3 ? argv[3] : nullptr, 0);
+        const auto maximum_hashes = parse_unsigned64(argc > 3 ? argv[3] : nullptr, 0);
         return unique_rx::run_miner(config_path, maximum_hashes);
     }
     if (argc < 2 || std::string_view(argv[1]) == "--help") {
