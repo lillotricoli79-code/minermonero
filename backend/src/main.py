@@ -132,10 +132,13 @@ def load_config() -> dict[str, Any]:
         config.update(saved)
         config["cpu"] = {**DEFAULTS["cpu"], **(saved.get("cpu") or {})}
         config["http"] = {**DEFAULTS["http"], **(saved.get("http") or {})}
-    try:
-        configured_api_port = int(config["http"].get("port", DEFAULTS["http"]["port"]))
-    except (TypeError, ValueError) as exc:
-        raise ValueError("config.json: porta API non valida") from exc
+    configured_api_port = config["http"].get("port", DEFAULTS["http"]["port"])
+    if (
+        isinstance(configured_api_port, bool)
+        or not isinstance(configured_api_port, int)
+        or not 1024 <= configured_api_port <= 65535
+    ):
+        raise ValueError("config.json: la porta API deve essere un intero tra 1024 e 65535")
     if configured_api_port == 8000:
         raise ValueError("config.json: la porta 8000 è riservata al backend locale")
     if not config["http"].get("access-token"):
