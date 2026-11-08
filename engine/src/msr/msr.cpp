@@ -408,6 +408,9 @@ struct MsrManager::Impl {
         if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
         originals.clear();
         const auto cpus = online_cpu_ids();
+        if (cpus.empty()) {
+            throw std::runtime_error("no online CPU is available to this process for MSR tuning");
+        }
         originals.reserve(cpus.size());
 
         try {
