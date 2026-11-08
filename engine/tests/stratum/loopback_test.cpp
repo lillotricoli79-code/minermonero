@@ -198,8 +198,9 @@ int main() {
                     login["params"].value("pass", std::string()) == "x" &&
                     login["params"].value("rigid", std::string()) == "test" &&
                     login["params"].value("agent", std::string()) ==
-                        "XMRig/6.26.0 gcc/15.1.0 (built for Windows x86-64, 64 bit)" &&
-                    !login["params"].contains("algo");
+                        "UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)" &&
+                    login["params"].contains("algo") &&
+                    login["params"]["algo"] == nlohmann::json::array({"rx/0"});
             };
             const auto valid_submit_message = [](const nlohmann::json& submit) {
                 return submit.value("jsonrpc", std::string()) == "2.0" &&
