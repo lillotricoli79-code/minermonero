@@ -138,6 +138,9 @@ if(NOT MSVC AND (ARCH_ID STREQUAL "x86_64" OR ARCH_ID STREQUAL "x86-64" OR ARCH_
     set_source_files_properties(src/aes_hash_vaes.cpp PROPERTIES
       COMPILE_OPTIONS "-mvaes;-mavx2;-maes")
     set(RANDOMX_VAES_ENABLED TRUE)
+    # Export the capability to the parent engine CMakeLists so its
+    # VAES-vs-scalar equivalence test is actually registered.
+    set(RANDOMX_VAES_ENABLED TRUE PARENT_SCOPE)
   endif()
 endif()
 
