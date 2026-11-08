@@ -11,6 +11,9 @@
 #ifndef WINVER
 #define WINVER _WIN32_WINNT
 #endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
