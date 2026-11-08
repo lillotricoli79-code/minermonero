@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 namespace {
 
@@ -10,17 +11,50 @@ bool check(bool value, const char* message) {
     return value;
 }
 
+template <typename Function>
+bool rejects(Function&& function, const char* message) {
+    try {
+        function();
+    } catch (const std::exception&) {
+        return true;
+    }
+    std::cerr << message << '\n';
+    return false;
+}
+
+nlohmann::json base_pool_config() {
+    return {
+        {"pools", nlohmann::json::array({nlohmann::json{
+            {"url", "pool.example.net:3333"},
+            {"user", "test-wallet"},
+        }})},
+    };
+}
+
 } // namespace
 
 int main() {
     using namespace unique_rx;
     bool ok = true;
+
+    // Pool target and hexadecimal decoding.
     ok &= check(parse_share_target("ffffffff") == UINT64_MAX,
                 "4-byte little-endian target normalization failed");
     ok &= check(parse_share_target("0100000000000000") == 1,
                 "8-byte little-endian target parsing failed");
+    ok &= check(decode_hex("00aF10") == std::vector<std::uint8_t>{0x00, 0xaf, 0x10},
+                "hexadecimal decoding failed");
+    ok &= rejects([] { decode_hex("abc"); },
+                  "odd-length hexadecimal input was accepted");
+    ok &= rejects([] { decode_hex("0g"); },
+                  "non-hexadecimal input was accepted");
+    ok &= rejects([] { parse_share_target("00000000"); },
+                  "zero pool target was accepted");
+    ok &= rejects([] { parse_share_target("1234"); },
+                  "unsupported target length was accepted");
 
-    const nlohmann::json wire_job{
+    // Job shape, algorithm and seed validation.
+    nlohmann::json wire_job{
         {"job_id", "job-1"},
         {"blob", std::string(76 * 2, '0')},
         {"seed_hash", std::string(64, '0')},
@@ -28,22 +62,67 @@ int main() {
         {"algo", "rx/0"},
     };
     const auto job = parse_job(wire_job);
-    ok &= check(job.id == "job-1" && job.blob.size() == 76 && job.target == UINT64_MAX,
+    ok &= check(job.id == "job-1" && job.blob.size() == 76 &&
+                    job.target == UINT64_MAX,
                 "valid rx/0 job did not parse");
-    try {
-        auto invalid = wire_job;
-        invalid["blob"] = "00";
-        parse_job(invalid);
-        ok &= check(false, "short job blob was accepted");
-    } catch (const std::exception&) {
-    }
-    try {
-        parse_share_target("00000000");
-        ok &= check(false, "zero pool target was accepted");
-    } catch (const std::exception&) {
-    }
+    auto invalid_job = wire_job;
+    invalid_job["blob"] = "00";
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "short job blob was accepted");
+    invalid_job = wire_job;
+    invalid_job["algo"] = "cn/r";
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "unsupported job algorithm was accepted");
+    invalid_job = wire_job;
+    invalid_job["job_id"] = "";
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "empty job identifier was accepted");
+    invalid_job = wire_job;
+    invalid_job["seed_hash"] = "00";
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "incorrect seed hash length was accepted");
+    invalid_job = wire_job;
+    invalid_job["blob"] = std::string((kMaximumBlobSize + 1) * 2, '0');
+    ok &= rejects([&] { parse_job(invalid_job); },
+                  "oversized job blob was accepted");
+
+    // Pool URL parsing, defaults, IPv6 and TLS fingerprint validation.
+    auto config = base_pool_config();
+    const auto pool = parse_pool_config(config);
+    ok &= check(pool.host == "pool.example.net" && pool.port == "3333" &&
+                    pool.wallet == "test-wallet" && pool.password == "x" &&
+                    pool.worker == "rig01" && !pool.tls && pool.threads > 0,
+                "pool configuration defaults or host parsing failed");
+
+    config["pools"][0]["url"] = "[::1]:4444";
+    const auto ipv6_pool = parse_pool_config(config);
+    ok &= check(ipv6_pool.host == "::1" && ipv6_pool.port == "4444",
+                "bracketed IPv6 pool URL parsing failed");
+
+    config["pools"][0]["tls"] = true;
+    config["pools"][0]["tls-fingerprint"] =
+        "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:"
+        "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99";
+    const auto pinned_pool = parse_pool_config(config);
+    ok &= check(pinned_pool.tls &&
+                    pinned_pool.tls_fingerprint ==
+                        "aabbccddeeff00112233445566778899"
+                        "aabbccddeeff00112233445566778899",
+                "TLS fingerprint normalization failed");
+
+    config["pools"][0]["tls"] = false;
+    ok &= rejects([&] { parse_pool_config(config); },
+                  "TLS fingerprint without TLS was accepted");
+    config = base_pool_config();
+    config["pools"][0]["url"] = "missing-port";
+    ok &= rejects([&] { parse_pool_config(config); },
+                  "pool URL without port was accepted");
+    config = base_pool_config();
+    config["pools"] = nlohmann::json::array();
+    ok &= rejects([&] { parse_pool_config(config); },
+                  "empty pool list was accepted");
 
     if (!ok) return 1;
-    std::cout << "Stratum job and target validation passed.\n";
+    std::cout << "Stratum target, job and pool configuration tests passed.\n";
     return 0;
 }
