@@ -143,6 +143,8 @@ int run_miner(const std::filesystem::path& config_path,
         rxm_set_jit_huge_pages(cpu_config.value("jit-huge-pages", false) ? 1 : 0);
         std::uint64_t generation = 0;
         const auto pool_threads = pools.front().threads;
+        // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
+        rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
         auto last_sample_time = started;
         std::deque<std::pair<Clock::time_point, std::uint64_t>> samples;

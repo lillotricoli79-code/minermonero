@@ -43,6 +43,7 @@ int setPagesRW(void*, size_t);
 int setPagesRX(void*, size_t);
 int setPagesRWX(void*, size_t);
 void rxm_set_thp(int enabled);
+void rxm_set_memory_pool(size_t capacity);
 void rxm_set_jit_huge_pages(int enabled);
 void rxm_set_prefetch_mode(int mode);
 int rxm_get_prefetch_mode(void);

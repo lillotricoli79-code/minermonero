@@ -27,10 +27,61 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <new>
+#include <mutex>
+#include <vector>
 #include "allocator.hpp"
 #include "intrin_portable.h"
 #include "virtual_memory.h"
 #include "common.hpp"
+
+namespace {
+    constexpr size_t scratchpadSize = 2UL << 20;
+    struct CachedPage { void* ptr; bool huge; };
+    struct ScratchpadPool {
+        std::mutex mutex;
+        std::vector<CachedPage> pages;
+        size_t capacity = 0;
+
+        ~ScratchpadPool() {
+            for (const auto& page : pages)
+                freePagedMemory(page.ptr, scratchpadSize);
+        }
+
+        void* take(size_t count, bool huge) {
+            if (count != scratchpadSize) return nullptr;
+            std::lock_guard<std::mutex> guard(mutex);
+            for (auto it = pages.begin(); it != pages.end(); ++it) {
+                if (it->huge == huge) {
+                    void* ptr = it->ptr;
+                    pages.erase(it);
+                    return ptr;
+                }
+            }
+            return nullptr;
+        }
+
+        bool put(void* ptr, size_t count, bool huge) {
+            if (!ptr || count != scratchpadSize) return false;
+            std::lock_guard<std::mutex> guard(mutex);
+            if (pages.size() >= capacity) return false;
+            try { pages.push_back({ptr, huge}); }
+            catch (...) { return false; }
+            return true;
+        }
+
+        void set_capacity(size_t next_capacity) {
+            std::lock_guard<std::mutex> guard(mutex);
+            for (const auto& page : pages)
+                freePagedMemory(page.ptr, scratchpadSize);
+            pages.clear();
+            capacity = next_capacity;
+        }
+    } scratchpad_pool;
+}
+
+extern "C" void rxm_set_memory_pool(size_t capacity) {
+    scratchpad_pool.set_capacity(capacity);
+}
 
 namespace randomx {
 
@@ -39,7 +90,8 @@ namespace randomx {
 		/* RxMiner MIT adaptation: RandomX cache and dataset use page-backed mappings.
 		 * The allocator returns at least system-page alignment; on Linux, large
 		 * allocations are 2 MiB aligned for transparent huge-page promotion. */
-		void *mem = allocMemoryPages(count);
+		void *mem = scratchpad_pool.take(count, false);
+        if (!mem) mem = allocMemoryPages(count);
 		if (mem == nullptr)
 			throw std::bad_alloc();
 		return mem;
@@ -47,20 +99,23 @@ namespace randomx {
 
 	template<size_t alignment>
 	void AlignedAllocator<alignment>::freeMemory(void* ptr, size_t count) {
-		freePagedMemory(ptr, count);
+		if (!scratchpad_pool.put(ptr, count, false))
+            freePagedMemory(ptr, count);
 	}
 
 	template struct AlignedAllocator<CacheLineSize>;
 
 	void* LargePageAllocator::allocMemory(size_t count) {
-		void *mem = allocLargePagesMemory(count);
+		void *mem = scratchpad_pool.take(count, true);
+        if (!mem) mem = allocLargePagesMemory(count);
 		if (mem == nullptr)
 			throw std::bad_alloc();
 		return mem;
 	}
 
 	void LargePageAllocator::freeMemory(void* ptr, size_t count) {
-		freePagedMemory(ptr, count);
+        if (!scratchpad_pool.put(ptr, count, true))
+            freePagedMemory(ptr, alignSize(count, 2UL << 20));
 	};
 
 }
