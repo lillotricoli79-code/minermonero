@@ -1,7 +1,9 @@
 #include "benchmark.hpp"
+#include "dataset.hpp"
 
 #include <randomx.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -30,14 +32,14 @@ struct VmRelease {
     }
 };
 
-using Cache = std::unique_ptr<randomx_cache, CacheRelease>;
+using Cache = std::shared_ptr<randomx_cache>;
 using Vm = std::unique_ptr<randomx_vm, VmRelease>;
 using Hash = std::array<std::uint8_t, RANDOMX_HASH_SIZE>;
 
 } // namespace
 
 bool run_benchmark(unsigned int seconds, unsigned int lanes,
-                   bool use_jit, std::string_view key,
+                   bool use_jit, bool full_memory, std::string_view key,
                    std::string_view payload) {
     if (seconds == 0 || seconds > 3600 || lanes == 0 || lanes > 4 ||
         key.empty() || payload.empty()) {
@@ -50,17 +52,39 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
         flags = static_cast<randomx_flags>(
             static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_JIT));
     }
-    Cache cache(randomx_alloc_cache(flags));
+    Cache cache(randomx_alloc_cache(flags), CacheRelease{});
+    if (!cache && (flags & RANDOMX_FLAG_LARGE_PAGES) != RANDOMX_FLAG_DEFAULT) {
+        flags = static_cast<randomx_flags>(
+            static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
+        cache.reset(randomx_alloc_cache(flags));
+    }
     if (!cache) {
         std::cerr << "Allocazione cache RandomX non riuscita.\n";
         return false;
     }
     randomx_init_cache(cache.get(), key.data(), key.size());
 
+    std::shared_ptr<randomx_dataset> dataset;
+    if (full_memory) {
+        const auto init_threads = std::max(1U, std::thread::hardware_concurrency());
+        try {
+            dataset = create_randomx_dataset(cache, init_threads, flags);
+        } catch (const std::exception& error) {
+            std::cerr << "Inizializzazione dataset RandomX non riuscita: "
+                      << error.what() << '\\n';
+            return false;
+        }
+    }
+
+    const auto vm_flags = full_memory
+        ? static_cast<randomx_flags>(flags | RANDOMX_FLAG_FULL_MEM)
+        : flags;
     std::vector<Vm> vms;
     vms.reserve(lanes);
     for (unsigned int lane = 0; lane < lanes; ++lane) {
-        Vm vm(randomx_create_vm(flags, cache.get(), nullptr));
+        Vm vm(randomx_create_vm(
+            vm_flags, full_memory ? nullptr : cache.get(),
+            full_memory ? dataset.get() : nullptr));
         if (!vm) {
             std::cerr << "Creazione VM non riuscita per lane " << lane << ".\n";
             return false;
