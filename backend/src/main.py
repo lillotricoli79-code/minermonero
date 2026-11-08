@@ -221,25 +221,55 @@ def is_intel_cpu() -> bool:
 
 
 def native_msr_available(executable_path: str | None) -> bool:
-    """Check that the native Intel MSR provider and its signed module are present."""
+    """Check that the native MSR provider and the signed Intel module are present."""
     if os.name == "nt":
-        program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-        libraries = [
-            program_files / "PawnIO" / "PawnIOLib.dll",
-            Path("C:/Program Files/PawnIO/PawnIOLib.dll"),
-        ]
+        program_files = Path(os.environ.get("ProgramFiles", r"C:\\Program Files"))
+        libraries = [program_files / "PawnIO" / "PawnIOLib.dll"]
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO",
+            ) as key:
+                install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
+                if install_location:
+                    libraries.append(Path(install_location) / "PawnIOLib.dll")
+        except (ImportError, OSError):
+            pass
+
         modules = [ROOT / "engine" / "msr" / "IntelMSR.bin"]
         if executable_path:
-            modules.append(Path(executable_path).resolve().parent / "msr" / "IntelMSR.bin")
+            executable_dir = Path(executable_path).resolve().parent
+            libraries.append(executable_dir / "PawnIOLib.dll")
+            modules.extend([
+                executable_dir / "msr" / "IntelMSR.bin",
+                executable_dir / "IntelMSR.bin",
+            ])
         return any(path.is_file() for path in libraries) and any(
             path.is_file() for path in modules
         )
 
     if os.name == "posix":
-        device = Path("/dev/cpu/0/msr")
-        return device.exists() and os.access(device, os.R_OK | os.W_OK)
-    return False
+        online_file = Path("/sys/devices/system/cpu/online")
+        try:
+            online = online_file.read_text(encoding="ascii").strip()
+            cpu_ids: list[int] = []
+            for item in online.split(","):
+                if "-" in item:
+                    first, last = (int(value) for value in item.split("-", 1))
+                    cpu_ids.extend(range(first, last + 1))
+                elif item:
+                    cpu_ids.append(int(item))
+        except (OSError, ValueError):
+            cpu_ids = list(range(os.cpu_count() or 1))
 
+        return bool(cpu_ids) and all(
+            (device := Path("/dev/cpu") / str(cpu) / "msr").is_file()
+            and os.access(device, os.R_OK | os.W_OK)
+            for cpu in cpu_ids
+        )
+    return False
 
 def msr_override_enabled(randomx: dict[str, Any]) -> bool:
     """Return True when the requested MSR mode requires XMRig."""
