@@ -68,6 +68,7 @@ struct PoolConfig {
     std::uint32_t threads = 1;
     bool tls = false;
     bool keepalive = false;
+    bool nicehash = false;
 };
 
 // Allocate a nonce within the pool-provided nonce range. NiceHash jobs keep
