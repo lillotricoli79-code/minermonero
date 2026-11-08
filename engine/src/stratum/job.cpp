@@ -252,6 +252,48 @@ bool is_job_notification(const nlohmann::json& message) noexcept {
     return message.is_object() && message.value("method", std::string()) == "job";
 }
 
+// NyxRX accepts both numeric and decimal-string JSON-RPC response IDs.
+std::optional<std::uint64_t> parse_rpc_response_id(const nlohmann::json& message) noexcept {
+    if (!message.is_object() || !message.contains("id")) return std::nullopt;
+    const auto& id = message["id"];
+    if (id.is_number_unsigned()) return id.get<std::uint64_t>();
+    if (id.is_number_integer()) {
+        const auto value = id.get<std::int64_t>();
+        if (value >= 0) return static_cast<std::uint64_t>(value);
+        return std::nullopt;
+    }
+    if (id.is_string()) {
+        const auto& value = id.get_ref<const std::string&>();
+        std::uint64_t parsed = 0;
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
+        if (!value.empty() && result.ec == std::errc{} &&
+            result.ptr == value.data() + value.size()) return parsed;
+    }
+    return std::nullopt;
+}
+
+bool rpc_response_failed(const nlohmann::json& message) noexcept {
+    return message.is_object() && message.contains("error") && !message["error"].is_null();
+}
+
+bool login_advertises_nicehash(const nlohmann::json& result) noexcept {
+    if (!result.is_object() || !result.contains("extensions") ||
+        !result["extensions"].is_array()) return false;
+    for (const auto& extension : result["extensions"]) {
+        if (extension.is_string() && extension.get_ref<const std::string&>() == "nicehash")
+            return true;
+    }
+    return false;
+}
+
+void apply_nicehash_extension(Job& job, bool enabled) noexcept {
+    if (!enabled) return;
+    const auto initial_nonce = decode_nonce_le(job.blob.data() + kNonceOffset);
+    job.nonce_mask = 0x00ffffffU;
+    job.nonce_fixed = initial_nonce & ~job.nonce_mask;
+    job.nonce = initial_nonce & job.nonce_mask;
+}
+
 std::string validate_login_response(const nlohmann::json& message) {
     if (!message.is_object()) {
         throw std::invalid_argument("pool login response is not an object");
