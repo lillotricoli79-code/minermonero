@@ -6,6 +6,7 @@
 #include "msr/msr.hpp"
 #include "platform/socket.hpp"
 #include "stratum/transport.hpp"
+#include "logging/log.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -109,13 +110,12 @@ int run_miner(const std::filesystem::path& config_path,
         if (!msr_explicitly_disabled) {
             try {
                 msr.apply_randomx_preset();
-                std::cout << "Verified CPU-specific RandomX MSR preset applied; "
-                             "original registers will be restored on exit.\n";
+                logging::info("msr", "CPU-specific RandomX preset applied; original registers will be restored on exit");
             } catch (const std::exception& error) {
                 // MSR tuning is an optional optimization. An unknown CPU, a missing
                 // driver, or unavailable permissions must never prevent rx/0 mining.
-                std::cerr << "MSR tuning skipped safely: " << error.what()
-                          << "; continuing with standard CPU settings.\n";
+                logging::warning("msr", std::string("tuning skipped safely: ") + error.what() +
+                                  "; continuing with standard CPU settings");
             }
         }
 
@@ -153,16 +153,46 @@ int run_miner(const std::filesystem::path& config_path,
         // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
         rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
-        std::ofstream stratum_log(config_path.parent_path() / "unique-rx-stratum.log",
-                                  std::ios::app);
+        logging::set_file(config_path.parent_path() / "unique-rx-stratum.log");
+        logging::info("miner", "UniqueRX C++ RandomX V1 miner starting");
+        logging::info("cpu", cpu_summary.dump());
+        logging::info("cpu", std::to_string(pool_threads) + " mining thread(s) selected");
+        logging::info("algo", "RandomX rx/0");
+        logging::info("memory", full_memory ? "full dataset mode" : "light cache mode");
+        auto last_console_speed = started;
         const auto log_event = [&](const std::string& event,
                                    const nlohmann::json& details) {
-            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                Clock::now() - started).count();
-            const std::string line = "[+" + std::to_string(elapsed) + "ms] " +
-                event + " " + details.dump();
-            std::cout << line << '\n' << std::flush;
-            if (stratum_log) stratum_log << line << '\n' << std::flush;
+            if (event == "CONNECTED") {
+                logging::info("net", "connected to " + details.value("host", std::string()) +
+                    ":" + details.value("port", std::string()));
+            } else if (event == "LOGIN_ACCEPTED") {
+                logging::info("net", "pool login accepted; session " +
+                    details.value("session_id", std::string()) + ", job " +
+                    details.value("job_id", std::string()));
+            } else if (event == "NEW_JOB") {
+                std::string message = "new job " + details.value("job_id", std::string());
+                if (details.contains("height") && !details["height"].is_null())
+                    message += ", height " + details["height"].dump();
+                logging::info("net", message + ", algorithm rx/0");
+            } else if (event == "SUBMIT_SENT") {
+                logging::info("net", "share submitted: job " +
+                    details["params"].value("job_id", std::string()) +
+                    ", nonce " + details["params"].value("nonce", std::string()));
+            } else if (event == "SHARE_ACCEPTED") {
+                logging::info("cpu", "share accepted (response " +
+                    std::to_string(details.value("response_id", std::uint64_t{0})) + ")");
+            } else if (event == "SHARE_REJECTED") {
+                logging::warning("cpu", "share rejected: " + details["response"].dump());
+            } else if (event == "SHARE_STALE") {
+                logging::warning("cpu", "stale share: " +
+                    details.value("error", std::string("pool marked job stale")));
+            } else if (event == "POOL_EXCEPTION") {
+                logging::error("net", details.value("host", std::string()) + ":" +
+                    details.value("port", std::string()) + " disconnected: " +
+                    details.value("error", std::string("unknown error")));
+            } else if (event == "UNMATCHED_RESPONSE") {
+                logging::warning("net", "unmatched pool response: " + details.dump());
+            }
         };
         auto last_sample_time = started;
         std::deque<std::pair<Clock::time_point, std::uint64_t>> samples;
@@ -328,7 +358,6 @@ int run_miner(const std::filesystem::path& config_path,
                             }
                             auto job = parse_job(result.at("job"));
                             apply_nicehash_extension(job, session_nicehash);
-                            std::cout << "Pool login accepted; job " << job.id << '\n';
                             install_job(std::move(job));
                             retry_delay = std::chrono::seconds(1);
                         } else if (message.contains("id")) {
@@ -408,6 +437,30 @@ int run_miner(const std::filesystem::path& config_path,
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},
                         };
                         std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
+                        if (now - last_console_speed >= std::chrono::seconds(5)) {
+                            const auto speed_text = [](double rate) {
+                                const char* units[] = {"H/s", "kH/s", "MH/s", "GH/s"};
+                                std::size_t unit = 0;
+                                while (rate >= 1000.0 && unit < 3) {
+                                    rate /= 1000.0;
+                                    ++unit;
+                                }
+                                std::ostringstream value;
+                                value.setf(std::ios::fixed);
+                                value.precision(2);
+                                value << rate << ' ' << units[unit];
+                                return value.str();
+                            };
+                            logging::info("speed", "10s " + speed_text(rate_for(std::chrono::seconds(10))) +
+                                " | 60s " + speed_text(rate_for(std::chrono::seconds(60))) +
+                                " | 15m " + speed_text(rate_for(std::chrono::seconds(900))));
+                            logging::info("shares", "found " + std::to_string(state.found.load()) +
+                                " | accepted " + std::to_string(state.accepted.load()) +
+                                " | rejected " + std::to_string(state.rejected.load()) +
+                                " | stale " + std::to_string(state.stale_shares.load()) +
+                                " | pending " + std::to_string(pending.size()));
+                            last_console_speed = now;
+                        }
                         last_sample_time = now;
                     }
                 }
@@ -486,10 +539,8 @@ int run_miner(const std::filesystem::path& config_path,
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
                 };
                 std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
-                std::cerr << "Pool " << pool.host << ':' << pool.port
-                          << " disconnected: " << error.what()
-                          << "; switching pool and retrying in " << retry_delay.count()
-                          << "s\n";
+                logging::warning("net", "switching pool; retrying in " +
+                    std::to_string(retry_delay.count()) + "s");
                 pool_index = (pool_index + 1) % pools.size();
                 auto remaining_delay =
                     std::chrono::duration_cast<std::chrono::milliseconds>(retry_delay);
