@@ -20,7 +20,8 @@ FetchContent_MakeAvailable(randomx)
 FetchContent_MakeAvailable(nlohmann_json)
 
 add_executable(unique-rx src/main.cpp src/stratum.cpp src/stratum/job.cpp
-  src/cpu/topology.cpp src/randomx/cache.cpp src/core/mining.cpp src/stratum/transport.cpp)
+  src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/benchmark.cpp
+  src/core/mining.cpp src/stratum/transport.cpp)
 target_compile_features(unique-rx PRIVATE cxx_std_20)
 target_include_directories(unique-rx PRIVATE src "${randomx_SOURCE_DIR}/src")
 target_link_libraries(unique-rx PRIVATE randomx Threads::Threads OpenSSL::SSL
