@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <string>
 
 namespace {
 void expect(std::uint32_t actual, std::uint32_t expected, const char* name) {
