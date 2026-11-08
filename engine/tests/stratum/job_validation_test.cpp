@@ -255,6 +255,83 @@ int main() {
     ok &= rejects([&] { parse_pool_configs(config); },
                   "empty pool list was accepted");
 
+
+    // RxMiner/NyxRX JSON-RPC protocol behavior, ported to the native C++ client.
+    const auto login_request = make_login_request(1, pool, "UniqueRX-test");
+    ok &= check(login_request["id"] == 1 &&
+                    login_request["method"] == "login" &&
+                    login_request["params"]["login"] == "test-wallet" &&
+                    login_request["params"]["algo"][0] == "rx/0",
+                "JSON-RPC login request differs from the upstream Stratum protocol");
+    const auto submit_request = make_submit_request(
+        7, "session-1", "job-1", "78563412", std::string(64, 'a'));
+    ok &= check(submit_request["id"] == 7 &&
+                    submit_request["method"] == "submit" &&
+                    submit_request["params"]["id"] == "session-1" &&
+                    submit_request["params"]["nonce"] == "78563412",
+                "JSON-RPC submit request serialization failed");
+    const auto keepalive_request = make_keepalive_request(8, "session-1");
+    ok &= check(keepalive_request["method"] == "keepalived" &&
+                    keepalive_request["params"]["id"] == "session-1",
+                "JSON-RPC keepalive request serialization failed");
+    ok &= check(parse_rpc_response_id(nlohmann::json{{"id", 9}}) == 9 &&
+                    parse_rpc_response_id(nlohmann::json{{"id", "10"}}) == 10 &&
+                    !parse_rpc_response_id(nlohmann::json{{"id", "-1"}}).has_value() &&
+                    !parse_rpc_response_id(nlohmann::json{{"id", "x"}}).has_value(),
+                "numeric and decimal-string JSON-RPC response IDs were not handled correctly");
+    ok &= check(!rpc_response_failed(nlohmann::json{{"id", 2}, {"error", nullptr},
+                    {"result", {{"status", "OK"}}}}) &&
+                    rpc_response_failed(nlohmann::json{{"id", 2}, {"error", nullptr},
+                    {"result", {{"status", "REJECT"}}}}) &&
+                    rpc_response_failed(nlohmann::json{{"id", 2},
+                    {"error", {{"message", "denied"}}}}),
+                "JSON-RPC error and explicit pool status validation failed");
+    ok &= check(format_rpc_error(nlohmann::json("denied")) == "denied" &&
+                    format_rpc_error(nlohmann::json::array({"low", "difficulty"})) ==
+                        "low: difficulty" &&
+                    format_rpc_error(nlohmann::json{{"message", "bad wallet"}}) ==
+                        "bad wallet" &&
+                    format_rpc_error(nlohmann::json::object()) == "unspecified error",
+                "NyxRX pool error formatting did not preserve upstream messages");
+    ok &= check(is_job_notification(nlohmann::json{{"method", "job"}}) &&
+                    !is_job_notification(nlohmann::json{{"method", "submit"}}),
+                "Stratum job notification detection failed");
+    const auto accepted_login = nlohmann::json{
+        {"id", 1}, {"error", nullptr},
+        {"result", {{"id", "session-1"}, {"status", "OK"},
+                    {"job", wire_job}}}};
+    ok &= check(validate_login_response(accepted_login) == "session-1",
+                "valid Stratum login response was rejected");
+    ok &= rejects([&] {
+        validate_login_response(nlohmann::json{
+            {"id", 1}, {"error", {{"message", "invalid wallet"}}}});
+    }, "pool login error response was accepted");
+    ok &= rejects([&] {
+        validate_login_response(nlohmann::json{
+            {"id", 1}, {"error", nullptr},
+            {"result", {{"id", "session-1"}, {"status", "FAILED"},
+                        {"job", wire_job}}}});
+    }, "unsuccessful pool login status was accepted");
+    ok &= rejects([&] {
+        validate_login_response(nlohmann::json{
+            {"id", 1}, {"error", nullptr},
+            {"result", {{"id", "session-1"}, {"status", "OK"}}}});
+    }, "pool login without initial job was accepted");
+    auto nicehash_login_job = wire_job;
+    nicehash_login_job["nicehash"] = false;
+    auto nicehash_login = nlohmann::json{
+        {"id", 1}, {"error", nullptr},
+        {"result", {{"id", "session-1"}, {"status", "OK"},
+                    {"extensions", nlohmann::json::array({"nicehash"})},
+                    {"job", nicehash_login_job}}}};
+    ok &= check(login_advertises_nicehash(nicehash_login["result"]),
+                "NiceHash login extension was not recognized");
+    auto extended_job = parse_job(nicehash_login_job);
+    apply_nicehash_extension(extended_job,
+                             login_advertises_nicehash(nicehash_login["result"]));
+    ok &= check(extended_job.nonce_mask == 0x00ffffffU,
+                "NiceHash login extension did not constrain the nonce range");
+
     if (!ok) return 1;
     std::cout << "Stratum target, job and pool configuration tests passed.\n";
     return 0;
