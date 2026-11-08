@@ -187,18 +187,52 @@ def is_local_api_connection(peer_host: str, request_host: str) -> bool:
     return is_loopback(peer_host) and is_loopback(request_host)
 
 
-def msr_override_enabled(randomx: dict[str, Any]) -> bool:
-    """Return True unless MSR is explicitly disabled.
+def is_intel_cpu() -> bool:
+    """Detect Intel CPU vendor without assuming a model-name string."""
+    if os.name == "nt":
+        command = (
+            "$cpu = Get-CimInstance Win32_Processor -ErrorAction Stop | "
+            "Select-Object -First 1; $cpu.Manufacturer"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                check=False,
+            )
+            if result.returncode == 0:
+                vendor = result.stdout.strip().lower()
+                if vendor:
+                    return "intel" in vendor or "genuineintel" in vendor
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return False
 
-    The native engine does not implement MSR yet, so automatic, fast and
-    custom modes must be routed through XMRig instead of silently mining
-    without the requested CPU register preset.
+    cpuinfo = Path("/proc/cpuinfo")
+    try:
+        for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.lower().startswith("vendor_id"):
+                return line.split(":", 1)[1].strip() == "GenuineIntel"
+    except OSError:
+        return False
+    return False
+
+
+def msr_override_enabled(randomx: dict[str, Any]) -> bool:
+    """Return True when XMRig is required for the requested MSR mode.
+
+    The native engine supports the reversible automatic Intel RandomX preset.
+    Custom presets and non-Intel automatic presets still require XMRig.
     """
     value = randomx.get("wrmsr")
     if value is False:
         return False
     if isinstance(value, int) and not isinstance(value, bool) and value < 0:
         return False
+    if value is None or value is True:
+        return not is_intel_cpu()
     return True
 
 
@@ -297,7 +331,7 @@ class MinerController:
             if not executable_path:
                 detail = "Compila engine/unique-rx o installa XMRig"
                 if msr_requires_xmrig:
-                    detail = "MSR automatico, Fast o personalizzato richiede XMRig finché il motore nativo non implementa MSR"
+                    detail = "Questo preset MSR richiede XMRig: il motore nativo gestisce il preset Intel automatico, mentre preset personalizzati o CPU non Intel richiedono XMRig"
                 raise HTTPException(status_code=400, detail=detail)
             command = [str(executable_path), "-c", str(CONFIG_PATH)]
             engine_kind = "xmrig"
