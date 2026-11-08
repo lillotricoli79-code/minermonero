@@ -10,7 +10,11 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include <io.h>
+#else
+#include <unistd.h>
 #endif
+#include <cstdio>
 
 #include <randomx.h>
 #include "virtual_memory.h"
@@ -45,6 +49,17 @@ using core::Share;
 using core::hash_worker;
 
 volatile std::sig_atomic_t g_stop_requested = 0;
+
+// The backend reads machine telemetry from redirected stdout. When the miner
+// is launched directly in a console, keep that JSON off-screen and show only
+// the human-readable XMRig-style shell.
+bool machine_status_channel_required() {
+#ifdef _WIN32
+    return _isatty(_fileno(stdout)) == 0;
+#else
+    return ::isatty(STDOUT_FILENO) == 0;
+#endif
+}
 
 void request_stop(int) {
     g_stop_requested = 1;
@@ -160,9 +175,20 @@ int run_miner(const std::filesystem::path& config_path,
         // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
         rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
-        logging::info("miner", "UniqueRX C++ RandomX V1 miner starting");
+        logging::info("init", "==============================================================");
+        logging::info("init", "                 UNIQUE-RX  |  RANDOMX MINER");
+        logging::info("init", "==============================================================");
+        logging::info("miner", "UniqueRX native C++ engine starting");
+        logging::info("algo", "RandomX rx/0");
+        logging::info("pool", pools.front().host + ":" + pools.front().port +
+            (pools.front().tls ? " (TLS)" : " (TCP)") +
+            (pools.size() > 1 ? " | failover endpoints: " + std::to_string(pools.size()) : ""));
         logging::info("config", std::to_string(pools.size()) +
-            " enabled pool endpoint(s) loaded; credentials are not logged");
+            " enabled pool endpoint(s); wallet and password are hidden");
+        logging::info("cpu", std::to_string(pool_threads) + " mining thread(s) configured");
+        logging::info("memory", full_memory ? "full RandomX dataset mode" : "light RandomX cache mode");
+        logging::info("msr", msr.active() ? "ACTIVE | CPU preset applied" :
+            (msr_explicitly_disabled ? "DISABLED by configuration" : "INACTIVE | standard CPU registers"));
         const auto cpu_features = cpu_summary.value("features", nlohmann::json::object());
         std::string cpu_line = cpu_summary.value("brand", std::string("Unknown CPU")) +
             " | " + std::to_string(cpu_summary.value("physical_cores", 0U)) +
@@ -195,13 +221,9 @@ int run_miner(const std::filesystem::path& config_path,
                 if (details.contains("height") && !details["height"].is_null())
                     message += ", height " + details["height"].dump();
                 logging::info("net", message + ", algorithm rx/0");
-            } else if (event == "SUBMIT_SENT") {
-                logging::info("net", "share submitted: job " +
-                    details["params"].value("job_id", std::string()) +
-                    ", nonce " + details["params"].value("nonce", std::string()));
-            } else if (event == "SUBMIT_RESPONSE") {
-                logging::info("net", "pool response received for share id " +
-                    std::to_string(details.value("id", std::uint64_t{0})));
+            } else if (event == "SUBMIT_SENT" || event == "SUBMIT_RESPONSE") {
+                // Per-share transport chatter is intentionally omitted from the
+                // operator shell; accepted/rejected counters remain visible.
             } else if (event == "SHARE_ACCEPTED") {
                 logging::info("cpu", "share accepted (response " +
                     std::to_string(details.value("response_id", std::uint64_t{0})) + ")");
@@ -472,7 +494,9 @@ int run_miner(const std::filesystem::path& config_path,
                             {"msr_active", msr.active()}, {"full_memory", full_memory},
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},
                         };
-                        std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
+                        if (machine_status_channel_required()) {
+                            std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
+                        }
                         if (now - last_console_speed >= std::chrono::seconds(5)) {
                             const auto speed_text = [](double rate) {
                                 const char* units[] = {"H/s", "kH/s", "MH/s", "GH/s"};
@@ -494,7 +518,15 @@ int run_miner(const std::filesystem::path& config_path,
                                 " | accepted " + std::to_string(state.accepted.load()) +
                                 " | rejected " + std::to_string(state.rejected.load()) +
                                 " | stale " + std::to_string(state.stale_shares.load()) +
-                                " | pending " + std::to_string(pending.size()));
+                                " | pending " + std::to_string(pending.size()) +
+                                " | expired " + std::to_string(state.expired_shares.load()) +
+                                " | dropped " + std::to_string(state.dropped_shares.load()));
+                            std::ostringstream activity;
+                            activity << "uptime " << uptime << "s | height ";
+                            if (work->job.height) activity << *work->job.height;
+                            else activity << "n/a";
+                            activity << " | job " << work->job.id;
+                            logging::info("status", activity.str());
                             last_console_speed = now;
                         }
                         last_sample_time = now;
@@ -574,7 +606,9 @@ int run_miner(const std::filesystem::path& config_path,
                     {"msr_active", msr.active()}, {"full_memory", full_memory},
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
                 };
-                std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
+                if (machine_status_channel_required()) {
+                    std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
+                }
                 logging::warning("net", "switching pool; retrying in " +
                     std::to_string(retry_delay.count()) + "s");
                 pool_index = (pool_index + 1) % pools.size();
