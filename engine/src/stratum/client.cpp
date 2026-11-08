@@ -202,8 +202,8 @@ int run_miner(const std::filesystem::path& config_path,
                 std::cout << "Connected to pool " << pool.host << ':' << pool.port << '\n';
                 transport.send_json({{"id", 1}, {"jsonrpc", "2.0"}, {"method", "login"},
                     {"params", {{"login", pool.wallet}, {"pass", pool.password},
-                                 {"rigid", pool.worker}, {"agent", "UNIQUE-RX/0.1"},
-                                 {"algo", nlohmann::json::array({"rx/0"})}}}});
+                                 {"agent", "XMRig/6.26.0 gcc/15.1.0 (built for Windows x86-64, 64 bit)"},
+                                 {"rigid", pool.worker}}}});
                 const auto login_deadline = Clock::now() + std::chrono::seconds(30);
 
                 const auto record_share_response = [&](const nlohmann::json& message) {
