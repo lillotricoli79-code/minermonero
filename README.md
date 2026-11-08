@@ -28,19 +28,25 @@ vengono usati come sorgente del miner.
 La dashboard React/TypeScript permette di configurare pool, wallet, thread,
 TLS/fingerprint e MSR, e controlla il processo avviato dall'utente. Il backend
 ascolta esclusivamente su `127.0.0.1`; preferisce `engine/build/unique-rx` e
-legge le sue righe di telemetria `UNIQUE_RX_STATUS`. XMRig resta fallback MSR.
-Hashrate, share e uptime restano vuoti finché l'API del miner non li fornisce.
+legge le sue righe di telemetria `UNIQUE_RX_STATUS`. XMRig è il percorso
+richiesto per le modalità MSR automatico, Fast e personalizzato finché il
+motore nativo non implementa MSR; il motore nativo viene avviato soltanto
+quando MSR è esplicitamente disattivato. Hashrate, share e uptime restano vuoti
+finché l'API o la telemetria del miner non li forniscono.
 
 La configurazione del miner vive esclusivamente nel file radice `config.json`,
 nel formato nativo XMRig. Il bridge e `unique-rx` leggono questo stesso file;
 non vengono creati profili o configurazioni generate. Il file è ignorato da Git
 e viene protetto con permessi locali restrittivi.
 
-MSR Fast imposta `randomx.wrmsr=true` e `randomx.rdmsr=true`: XMRig seleziona il
-preset per la CPU e ripristina i valori originali all'uscita. Richiede accesso
-MSR privilegiato; la modalità automatica resta disponibile. La dashboard usa
-XMRig quando è attivo un preset MSR; il miner nativo rifiuta esplicitamente
-preset non ancora supportati invece di ignorarli.
+MSR Automatico lascia il preset predefinito a XMRig; Fast imposta
+`randomx.wrmsr=true` e `randomx.rdmsr=true`; Personalizzato conserva il preset
+configurato. Tutte e tre le modalità passano a XMRig finché il motore nativo
+non implementa MSR. Richiedono i privilegi necessari per accedere ai registri.
+Il motore nativo rifiuta l'avvio se MSR non è esplicitamente disattivato: non
+deve mai fingere di applicare un preset che non supporta. Su Windows il backend
+richiede un arresto tramite CTRL+BREAK e attende la chiusura normale di XMRig;
+se deve forzare la terminazione, segnala che il ripristino MSR non è garantito.
 
 Per lo sviluppo, avviare il backend e il frontend in due terminali:
 
@@ -69,8 +75,14 @@ cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release
 cmake --build engine/build --target unique-rx
 ```
 
-Il backend preferisce `engine/build/unique-rx`; XMRig resta fallback solo per
-MSR Fast/custom finché il preset non viene implementato nel motore nativo.
+Il backend preferisce `engine/build/unique-rx` solo quando MSR è
+esplicitamente disattivato; per MSR automatico, Fast e personalizzato usa
+XMRig finché il supporto nativo non è implementato.
+
+**Compatibilità piattaforme:** il trasporto Stratum nativo usa attualmente
+API socket POSIX. La compilazione nativa Windows non è ancora completata;
+su Windows il percorso supportato dalla dashboard per le modalità MSR è
+XMRig. La portabilità del motore nativo resta un'attività aperta.
 
 ## Candidati da valutare
 ## Audit fonti dashboard
