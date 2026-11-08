@@ -102,17 +102,20 @@ int main() {
     // Pool URL parsing, defaults, IPv6 and TLS fingerprint validation.
     auto config = base_pool_config();
     config["cpu"] = {{"enabled", false}};
-    ok &= rejects([&] { parse_pool_config(config); },
+    ok &= rejects([&] { parse_pool_configs(config); },
                   "disabled CPU mining configuration was accepted");
     config = base_pool_config();
-    const auto pool = parse_pool_config(config);
-    ok &= check(pool.host == "pool.example.net" && pool.port == "3333" &&
-                    pool.wallet == "test-wallet" && pool.password == "x" &&
-                    pool.worker == "rig01" && !pool.tls && pool.threads > 0,
+    const auto pools = parse_pool_configs(config);
+    const auto& pool = pools.front();
+    ok &= check(pools.size() == 1 && pool.host == "pool.example.net" &&
+                    pool.port == "3333" && pool.wallet == "test-wallet" &&
+                    pool.password == "x" && pool.worker == "rig01" &&
+                    !pool.tls && pool.threads > 0,
                 "pool configuration defaults or host parsing failed");
 
     config["pools"][0]["url"] = "[::1]:4444";
-    const auto ipv6_pool = parse_pool_config(config);
+    const auto ipv6_pools = parse_pool_configs(config);
+    const auto& ipv6_pool = ipv6_pools.front();
     ok &= check(ipv6_pool.host == "::1" && ipv6_pool.port == "4444",
                 "bracketed IPv6 pool URL parsing failed");
 
@@ -120,7 +123,8 @@ int main() {
     config["pools"][0]["tls-fingerprint"] =
         "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:"
         "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99";
-    const auto pinned_pool = parse_pool_config(config);
+    const auto pinned_pools = parse_pool_configs(config);
+    const auto& pinned_pool = pinned_pools.front();
     ok &= check(pinned_pool.tls &&
                     pinned_pool.tls_fingerprint ==
                         "aabbccddeeff00112233445566778899"
@@ -128,15 +132,36 @@ int main() {
                 "TLS fingerprint normalization failed");
 
     config["pools"][0]["tls"] = false;
-    ok &= rejects([&] { parse_pool_config(config); },
+    ok &= rejects([&] { parse_pool_configs(config); },
                   "TLS fingerprint without TLS was accepted");
     config = base_pool_config();
     config["pools"][0]["url"] = "missing-port";
-    ok &= rejects([&] { parse_pool_config(config); },
+    ok &= rejects([&] { parse_pool_configs(config); },
                   "pool URL without port was accepted");
     config = base_pool_config();
+    config["pools"][0]["enabled"] = false;
+    config["pools"].push_back({
+        {"url", "backup.example.net:4444"}, {"user", "backup-wallet"},
+        {"enabled", true},
+    });
+    const auto failover_pools = parse_pool_configs(config);
+    ok &= check(failover_pools.size() == 1 &&
+                    failover_pools.front().host == "backup.example.net" &&
+                    failover_pools.front().wallet == "backup-wallet",
+                "disabled pool was not skipped in configured failover order");
+
+    config["pools"][1]["enabled"] = false;
+    ok &= rejects([&] { parse_pool_configs(config); },
+                  "configuration with no enabled pools was accepted");
+
+    config = base_pool_config();
+    config["pools"][0]["user"] = "";
+    ok &= rejects([&] { parse_pool_configs(config); },
+                  "empty pool wallet was accepted");
+
+    config = base_pool_config();
     config["pools"] = nlohmann::json::array();
-    ok &= rejects([&] { parse_pool_config(config); },
+    ok &= rejects([&] { parse_pool_configs(config); },
                   "empty pool list was accepted");
 
     if (!ok) return 1;
