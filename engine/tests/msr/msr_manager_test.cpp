@@ -15,6 +15,7 @@ struct MockMsrBackend {
     std::size_t reads = 0;
     std::size_t fail_write_at = 0;
     std::size_t corrupt_read_at = 0;
+    bool mutate_unmasked_after_write = false;
 
     std::uint64_t read(std::size_t cpu, std::uint64_t reg) {
         ++reads;
@@ -29,6 +30,9 @@ struct MockMsrBackend {
             throw std::runtime_error("injected mock MSR write failure");
         }
         registers[{cpu, reg}] = value;
+        if (mutate_unmasked_after_write) {
+            registers[{cpu, reg}] ^= 0x40000000ULL;
+        }
     }
 };
 
@@ -79,6 +83,23 @@ bool test_mock_msr_transactions() {
     expected_after_restore[{0, 0x10}] ^= 0x40000000ULL;
     ok &= check(backend.registers == expected_after_restore,
                 "MSR restore overwrote bits outside the miner's write mask");
+
+    // Unrelated bits may change concurrently while a masked write is
+    // applied. Read-back must verify the owned mask, not the whole register.
+    backend.registers = initial;
+    backend.writes = 0;
+    backend.reads = 0;
+    backend.mutate_unmasked_after_write = true;
+    apply_registers(cpus, writes, snapshots, read, write, log);
+    backend.mutate_unmasked_after_write = false;
+    auto expected_with_external_bits = initial;
+    for (auto& [key, value] : expected_with_external_bits) value = value ^ 0x40000000ULL;
+    ok &= check(backend.registers == expected_with_external_bits,
+                "masked MSR write did not preserve unrelated concurrent register bits");
+    ok &= check(!restore_registers(snapshots, read, write, log),
+                "masked restore failed after unrelated register bits changed");
+    ok &= check(backend.registers == expected_with_external_bits,
+                "masked restore overwrote unrelated concurrent register bits");
 
     backend.registers = initial;
     backend.writes = 0;
