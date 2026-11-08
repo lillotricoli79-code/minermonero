@@ -300,6 +300,10 @@ std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
 
 } // namespace
 
+std::uint32_t detected_logical_threads() {
+    return available_logical_threads();
+}
+
 nlohmann::json cpu_summary_json() {
     std::string vendor = "Unknown";
     std::string brand;
