@@ -1,8 +1,8 @@
 #include "mining.hpp"
 
+#include <utility>
 
 namespace unique_rx::core {
-namespace {
 
 std::shared_ptr<const MiningWork> MiningState::current_work() {
     std::lock_guard lock(work_mutex);
