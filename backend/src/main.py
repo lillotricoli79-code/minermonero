@@ -572,15 +572,24 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
         if explicit_threads > 0
         else round((os.cpu_count() or 1) * thread_hint / 100) if thread_hint else 0
     )
+    huge_pages = cpu.get("huge-pages", True)
+    if not isinstance(huge_pages, bool):
+        huge_pages = True
+    jit_huge_pages = cpu.get("jit-huge-pages", False)
+    if not isinstance(jit_huge_pages, bool):
+        jit_huge_pages = False
+    prefetch_mode = cpu.get("prefetch-mode", 1)
+    if type(prefetch_mode) is not int or not 0 <= prefetch_mode <= 3:
+        prefetch_mode = 1
     return {
         "pool": pool.get("url", ""),
         "wallet": pool.get("user", ""),
         "worker": pool.get("rig-id", "rig01"),
         "password_set": bool(pool.get("pass", "")),
         "threads": threads,
-        "huge_pages": bool(cpu.get("huge-pages", True)),
-        "jit_huge_pages": bool(cpu.get("jit-huge-pages", False)),
-        "prefetch_mode": safe_number(cpu.get("prefetch-mode")) if cpu.get("prefetch-mode") is not None else 1,
+        "huge_pages": huge_pages,
+        "jit_huge_pages": jit_huge_pages,
+        "prefetch_mode": prefetch_mode,
         "tls": bool(pool.get("tls", False)),
         "tls_fingerprint": pool.get("tls-fingerprint") or "",
         "msr_mode": msr_mode,
