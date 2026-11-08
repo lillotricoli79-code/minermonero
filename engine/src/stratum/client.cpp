@@ -103,7 +103,7 @@ int run_miner(const std::filesystem::path& config_path,
                 if (full_memory) {
                     std::cout << "Initializing RandomX full dataset..." << std::flush;
                     dataset = create_randomx_dataset(cache, flags, pool.threads);
-                    std::cout << " ready\\n";
+                    std::cout << " ready\n";
                 }
                 active_seed = next_job.seed;
                 have_seed = true;
