@@ -150,6 +150,7 @@ Deve leggere lo stato effettivo del motore/backend e mostrare almeno:
 - wallet/worker configurati, senza esporre segreti;
 - algoritmo e job attivo;
 - CPU rilevata (vendor, modello, famiglia, feature, core fisici/logici, NUMA e cache L3), thread e impostazioni;
+- Controlli dashboard per huge pages RandomX, huge pages JIT e modalità prefetch x86;
 - hashrate corrente e storico;
 - shares accepted/rejected/stale;
 - uptime, connessioni, errori e riconnessioni;

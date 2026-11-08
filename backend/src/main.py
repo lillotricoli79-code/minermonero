@@ -53,6 +53,9 @@ class MinerConfigUpdate(BaseModel):
     worker: str = "rig01"
     password: str | None = None
     threads: int = Field(default=0, ge=0, le=256)
+    huge_pages: bool = True
+    jit_huge_pages: bool = False
+    prefetch_mode: int = Field(default=1, ge=0, le=3)
     tls: bool = False
     tls_fingerprint: str = ""
     msr_mode: Literal["auto", "off", "fast", "custom"] = "auto"
@@ -575,6 +578,9 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
         "worker": pool.get("rig-id", "rig01"),
         "password_set": bool(pool.get("pass", "")),
         "threads": threads,
+        "huge_pages": bool(cpu.get("huge-pages", True)),
+        "jit_huge_pages": bool(cpu.get("jit-huge-pages", False)),
+        "prefetch_mode": safe_number(cpu.get("prefetch-mode")) if cpu.get("prefetch-mode") is not None else 1,
         "tls": bool(pool.get("tls", False)),
         "tls_fingerprint": pool.get("tls-fingerprint") or "",
         "msr_mode": msr_mode,
@@ -616,6 +622,9 @@ def apply_config_update(current: dict[str, Any], update: MinerConfigUpdate) -> d
     else:
         cpu["threads"] = 0
         cpu.pop("max-threads-hint", None)
+    cpu["huge-pages"] = update.huge_pages
+    cpu["jit-huge-pages"] = update.jit_huge_pages
+    cpu["prefetch-mode"] = update.prefetch_mode
     http = dict(result.get("http") or {})
     http.update({
         "enabled": True,

@@ -78,6 +78,9 @@ type MinerConfig = {
   password_set: boolean;
   password: string;
   threads: number;
+  huge_pages: boolean;
+  jit_huge_pages: boolean;
+  prefetch_mode: number;
   tls: boolean;
   tls_fingerprint: string;
   msr_mode: "auto" | "off" | "fast" | "custom";
@@ -796,6 +799,43 @@ function App() {
                         }
                       />
                       <small>0 usa la configurazione automatica del miner.</small>
+                    </label>
+                    <label className="toggle-field">
+                      <span>
+                        <strong>Huge pages RandomX</strong>
+                        <small>Abilita le pagine grandi per cache, dataset e scratchpad; fallback automatico se non disponibili.</small>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={config.huge_pages}
+                        onChange={(event) => updateConfig("huge_pages", event.target.checked)}
+                      />
+                      <i className="toggle-ui" />
+                    </label>
+                    <label className="toggle-field">
+                      <span>
+                        <strong>Huge pages JIT</strong>
+                        <small>Richiede privilegi del sistema; il motore ripiega sulle pagine standard se necessario.</small>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={config.jit_huge_pages}
+                        onChange={(event) => updateConfig("jit_huge_pages", event.target.checked)}
+                      />
+                      <i className="toggle-ui" />
+                    </label>
+                    <label className="field">
+                      <span>Prefetch JIT x86</span>
+                      <select
+                        value={config.prefetch_mode}
+                        onChange={(event) => updateConfig("prefetch_mode", Number(event.target.value))}
+                      >
+                        <option value={0}>Disattivato</option>
+                        <option value={1}>T0 · predefinito</option>
+                        <option value={2}>NTA</option>
+                        <option value={3}>Demand load</option>
+                      </select>
+                      <small>La modalità più veloce dipende dalla CPU: confronta con benchmark.</small>
                     </label>
                     <label className="toggle-field">
                       <span>

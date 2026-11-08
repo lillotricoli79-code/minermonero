@@ -98,6 +98,14 @@ class ConfigValidationTests(unittest.TestCase):
     def test_rejects_bad_fingerprint_and_fingerprint_without_tls(self):
         with self.assertRaises(ValidationError):
             MinerConfigUpdate(tls=True, tls_fingerprint="not-a-fingerprint")
+
+    def test_validates_randomx_memory_and_prefetch_options(self):
+        config = MinerConfigUpdate(huge_pages=False, jit_huge_pages=True, prefetch_mode=3)
+        self.assertFalse(config.huge_pages)
+        self.assertTrue(config.jit_huge_pages)
+        self.assertEqual(config.prefetch_mode, 3)
+        with self.assertRaises(ValidationError):
+            MinerConfigUpdate(prefetch_mode=4)
         with self.assertRaises(ValidationError):
             MinerConfigUpdate(tls_fingerprint="aa" * 32)
 
