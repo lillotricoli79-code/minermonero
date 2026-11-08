@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import DataRow from "./components/DataRow";
 import MetricCard from "./components/MetricCard";
+import { request } from "./services/api";
 import {
   Activity,
   ArrowUpRight,
@@ -74,20 +75,6 @@ const emptyStatus: Status = {
   pool: null,
   connected: null,
 };
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    ...init,
-    headers: {
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok)
-    throw new Error(payload.detail ?? `Richiesta fallita (${response.status})`);
-  return payload as T;
-}
 
 function formatHashrate(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
