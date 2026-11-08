@@ -156,7 +156,20 @@ int run_miner(const std::filesystem::path& config_path,
         auto started = Clock::now();
         logging::set_file(config_path.parent_path() / "unique-rx-stratum.log");
         logging::info("miner", "UniqueRX C++ RandomX V1 miner starting");
-        logging::info("cpu", cpu_summary.dump());
+        const auto cpu_features = cpu_summary.value("features", nlohmann::json::object());
+        std::string cpu_line = cpu_summary.value("brand", std::string("Unknown CPU")) +
+            " | " + std::to_string(cpu_summary.value("physical_cores", 0U)) +
+            " cores / " + std::to_string(cpu_summary.value("logical_threads", 0U)) +
+            " threads";
+        std::string enabled_features;
+        for (const auto& feature : {"aes", "avx2", "bmi2", "ssse3", "vaes"}) {
+            if (cpu_features.value(feature, false)) {
+                if (!enabled_features.empty()) enabled_features += ", ";
+                enabled_features += feature;
+            }
+        }
+        if (!enabled_features.empty()) cpu_line += " | " + enabled_features;
+        logging::info("cpu", cpu_line);
         logging::info("cpu", std::to_string(pool_threads) + " mining thread(s) selected");
         logging::info("algo", "RandomX rx/0");
         logging::info("memory", full_memory ? "full dataset mode" : "light cache mode");
