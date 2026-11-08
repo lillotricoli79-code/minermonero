@@ -97,6 +97,7 @@ std::string validate_login_response(const nlohmann::json& message);
 bool is_job_notification(const nlohmann::json& message) noexcept;
 std::optional<std::uint64_t> parse_rpc_response_id(const nlohmann::json& message) noexcept;
 bool rpc_response_failed(const nlohmann::json& message) noexcept;
+std::string format_rpc_error(const nlohmann::json& error);
 bool login_advertises_nicehash(const nlohmann::json& result) noexcept;
 void apply_nicehash_extension(Job& job, bool enabled) noexcept;
 std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config);
