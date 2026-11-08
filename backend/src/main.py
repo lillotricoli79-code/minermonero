@@ -10,6 +10,7 @@ import signal
 import subprocess
 import threading
 import time
+import tempfile
 import urllib.error
 import urllib.request
 from collections import deque
@@ -107,12 +108,23 @@ def load_config() -> dict[str, Any]:
     if CONFIG_PATH.exists():
         try:
             saved = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            if isinstance(saved, dict):
-                config.update(saved)
-                config["cpu"] = {**DEFAULTS["cpu"], **(saved.get("cpu") or {})}
-                config["http"] = {**DEFAULTS["http"], **(saved.get("http") or {})}
-        except (OSError, json.JSONDecodeError):
-            pass
+        except (OSError, json.JSONDecodeError) as exc:
+            # Never replace a user's damaged/unreadable configuration with
+            # defaults: that can silently erase wallet and pool settings.
+            raise ValueError(f"Impossibile leggere config.json senza rischiare di sovrascriverlo: {exc}") from exc
+        if not isinstance(saved, dict):
+            raise ValueError("config.json deve contenere un oggetto JSON")
+        for section in ("cpu", "http"):
+            if section in saved and not isinstance(saved[section], dict):
+                raise ValueError(f"config.json: la sezione {section} deve essere un oggetto")
+        if "pools" in saved and (
+            not isinstance(saved["pools"], list)
+            or any(not isinstance(pool, dict) for pool in saved["pools"])
+        ):
+            raise ValueError("config.json: pools deve essere un elenco di oggetti")
+        config.update(saved)
+        config["cpu"] = {**DEFAULTS["cpu"], **(saved.get("cpu") or {})}
+        config["http"] = {**DEFAULTS["http"], **(saved.get("http") or {})}
     if not config["http"].get("access-token"):
         config["http"]["access-token"] = secrets.token_urlsafe(32)
         save_config(config)
@@ -120,9 +132,27 @@ def load_config() -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any]) -> None:
-    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
-    if os.name != "nt":
-        CONFIG_PATH.chmod(0o600)
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=CONFIG_PATH.parent,
+            prefix=f".{CONFIG_PATH.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(json.dumps(config, indent=2))
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, CONFIG_PATH)
+        if os.name != "nt":
+            CONFIG_PATH.chmod(0o600)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
 
 
 def safe_number(value: Any) -> float | None:

@@ -1,3 +1,5 @@
+import json
+import os
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +14,7 @@ from backend.src.main import (
     MinerController,
     apply_config_update,
     is_local_api_connection,
+    load_config,
     msr_override_enabled,
     normalize_summary,
     public_config,
@@ -74,6 +77,29 @@ class SummaryTests(unittest.TestCase):
             "expired": None, "dropped": None,
         })
         self.assertIsNone(result["uptime_seconds"])
+
+
+class ConfigPersistenceTests(unittest.TestCase):
+    def test_invalid_config_is_not_replaced_with_defaults(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            original = "{ invalid json"
+            path.write_text(original, encoding="utf-8")
+            with patch("backend.src.main.CONFIG_PATH", path):
+                with self.assertRaises(ValueError):
+                    load_config()
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
+
+    def test_config_save_replaces_atomically_and_keeps_private_permissions(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            config = {"http": {"access-token": "test-token"}, "pools": []}
+            with patch("backend.src.main.CONFIG_PATH", path):
+                from backend.src.main import save_config
+                save_config(config)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), config)
+            if os.name != "nt":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
 
 class ConfigValidationTests(unittest.TestCase):
