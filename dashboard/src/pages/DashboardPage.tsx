@@ -89,7 +89,7 @@ type MinerConfig = {
   api_port: number;
 };
 type ChartPoint = { at: number; hashrate: number };
-type LogItem = { id: number; time: number; message: string };
+type LogItem = { id: number; time: number; message: string; engine?: string };
 
 const emptyStatus: Status = {
   state: "OFFLINE",
@@ -713,7 +713,7 @@ function App() {
                                 "it-IT",
                               )}
                             </time>
-                            <span>{entry.message}</span>
+                            <span>{entry.engine ? `[${entry.engine}] ` : ""}{entry.message}</span>
                           </div>
                         ))
                     ) : (
