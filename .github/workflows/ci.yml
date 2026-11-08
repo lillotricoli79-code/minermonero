@@ -126,7 +126,10 @@ jobs:
           $moduleHash = (Get-FileHash -LiteralPath (Join-Path $out "msr\IntelMSR.bin") -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($moduleHash -ne "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f") { throw "Packaged IntelMSR.bin SHA-256 mismatch." }
           $hash = (Get-FileHash -LiteralPath (Join-Path $out "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
-          Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Value "$hash  unique-rx.exe" -Encoding ascii
+          Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ascii -Value @(
+            "$hash  unique-rx.exe",
+            "$moduleHash  msr/IntelMSR.bin"
+          )
           "Portable miner staged: $out"
 
       - name: Upload verified Windows x64 executable
