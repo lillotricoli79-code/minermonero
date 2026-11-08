@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cerrno>
 #include <chrono>
 #include <cstring>
 #include <deque>
@@ -222,6 +221,7 @@ int run_miner(const std::filesystem::path& config_path,
                 "for automatic, Fast or custom MSR presets.");
         }
 
+        platform::NetworkRuntime network;
         Transport transport;
         transport.connect_to(pool);
         transport.send_json({{"id", 1}, {"jsonrpc", "2.0"}, {"method", "login"},
