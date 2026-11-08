@@ -146,6 +146,8 @@ public:
     }
 
 private:
+    // Winsock must be initialized before getaddrinfo/socket are used on Windows.
+    platform::NetworkRuntime network_;
     platform::Socket socket_ = platform::kInvalidSocket;
     SSL_CTX* context_ = nullptr;
     SSL* ssl_ = nullptr;
