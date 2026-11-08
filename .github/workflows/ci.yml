@@ -9,10 +9,11 @@ on:
 permissions:
   contents: read
 
-# Do not cancel a Windows native build just because another commit is pushed
-# while vcpkg is compiling OpenSSL.
+# Keep each CI generation isolated: an older runner blocked while installing
+# vcpkg dependencies must not hold validation of the current source revision.
+# Builds within the same generation are not cancelled by subsequent pushes.
 concurrency:
-  group: native-ci-${{ github.ref }}
+  group: native-ci-v2-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
