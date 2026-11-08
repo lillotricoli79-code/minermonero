@@ -2,6 +2,7 @@
 #include <configuration.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
