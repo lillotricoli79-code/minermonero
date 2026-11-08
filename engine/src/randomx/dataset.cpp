@@ -50,7 +50,7 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
     std::vector<std::jthread> workers;
     workers.reserve(worker_count);
     for (std::uint32_t worker = 0; worker < worker_count; ++worker) {
-        workers.emplace_back([dataset, cache, &next_item, item_count, worker, kDatasetChunkItems] {
+        workers.emplace_back([dataset, cache, &next_item, &completed_items, &next_progress, item_count, worker, kDatasetChunkItems] {
             // First-touch dataset pages from the same interleaved physical-core
             // order used by the mining workers. This spreads initialization
             // traffic across visible NUMA nodes when the OS permits pinning.
