@@ -30,6 +30,7 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
