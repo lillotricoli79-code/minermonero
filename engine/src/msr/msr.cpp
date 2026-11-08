@@ -40,6 +40,7 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <thread>
+#include <sched.h>
 #include <unistd.h>
 #if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
@@ -205,6 +206,14 @@ std::vector<unsigned int> online_cpu_ids() {
     std::vector<unsigned int> cpus;
     cpus.reserve(count);
     for (unsigned int cpu = 0; cpu < count; ++cpu) cpus.push_back(cpu);
+    // Restrict tuning to CPUs this process can actually run on. This avoids
+    // touching host CPUs outside a container/cgroup cpuset.
+    cpu_set_t allowed;
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
+        cpus.erase(std::remove_if(cpus.begin(), cpus.end(), [&](unsigned int cpu) {
+            return cpu >= CPU_SETSIZE || !CPU_ISSET(cpu, &allowed);
+        }), cpus.end());
+    }
     return cpus;
 }
 
