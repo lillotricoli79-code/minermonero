@@ -588,11 +588,12 @@ p {
   box-shadow: none;
 }
 .log-list {
-  height: 155px;
+  height: 320px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  overflow: hidden;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
   margin-top: 12px;
   border-top: 1px solid #edf1ee;
 }
