@@ -33,7 +33,21 @@ int main() {
     unique_rx::logging::close_file();
     std::filesystem::remove_all(directory, error);
     if (!passed) {
-        std::cerr << "bounded log rotation test failed\n";
+        std::error_code inspect_error;
+        const bool rotated_exists = std::filesystem::exists(rotated, inspect_error);
+        const auto rotated_size = rotated_exists
+            ? std::filesystem::file_size(rotated, inspect_error) : 0U;
+        inspect_error.clear();
+        const bool current_exists = std::filesystem::exists(path, inspect_error);
+        const auto current_size = current_exists
+            ? std::filesystem::file_size(path, inspect_error) : 0U;
+        std::cerr << "bounded log rotation test failed"
+                  << " rotated_exists=" << rotated_exists
+                  << " rotated_size=" << rotated_size
+                  << " current_exists=" << current_exists
+                  << " current_size=" << current_size
+                  << " expected_rotated_min=" << (8U * 1024U * 1024U)
+                  << '\\n';
         return 1;
     }
     std::cout << "Bounded rotating file logger passed.\n";
