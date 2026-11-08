@@ -2,29 +2,32 @@
 #include "randomx/benchmark.hpp"
 
 #include <cstdint>
+#include <charconv>
+#include <algorithm>
 #include <filesystem>
 #include <exception>
 #include <iostream>
 #include <string>
 #include <stdexcept>
 #include <string_view>
+#include <system_error>
 
 namespace {
 
 std::uint64_t parse_unsigned64(const char* value, std::uint64_t fallback) {
     if (value == nullptr) return fallback;
-    if (*value == '-') {
-        throw std::invalid_argument("unsigned numeric argument cannot be negative");
+    const std::string_view text(value);
+    if (text.empty() || !std::all_of(text.begin(), text.end(), [](unsigned char ch) {
+            return ch >= '0' && ch <= '9';
+        })) {
+        throw std::invalid_argument(
+            std::string("invalid unsigned numeric argument: ") + value);
     }
-    std::size_t consumed = 0;
     std::uint64_t parsed = 0;
-    try {
-        parsed = std::stoull(value, &consumed, 10);
-    } catch (const std::exception&) {
-        throw std::invalid_argument(std::string("invalid unsigned numeric argument: ") + value);
-    }
-    if (value[consumed] != '\0') {
-        throw std::invalid_argument(std::string("invalid unsigned numeric argument: ") + value);
+    const auto result = std::from_chars(text.data(), text.data() + text.size(), parsed, 10);
+    if (result.ec != std::errc{} || result.ptr != text.data() + text.size()) {
+        throw std::invalid_argument(
+            std::string("invalid or out-of-range unsigned numeric argument: ") + value);
     }
     return parsed;
 }

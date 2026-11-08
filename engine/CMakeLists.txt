@@ -41,6 +41,15 @@ if(BUILD_TESTING)
   add_test(NAME unique-rx-cli-rejects-extra-mine-arguments
     COMMAND unique-rx --mine config.json 100 extra)
   set_tests_properties(unique-rx-cli-rejects-extra-mine-arguments PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME unique-rx-cli-rejects-negative-max-hashes
+    COMMAND unique-rx --mine config.json -1)
+  set_tests_properties(unique-rx-cli-rejects-negative-max-hashes PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME unique-rx-cli-rejects-whitespace-max-hashes
+    COMMAND unique-rx --mine config.json " 1")
+  set_tests_properties(unique-rx-cli-rejects-whitespace-max-hashes PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME unique-rx-cli-rejects-overflow-max-hashes
+    COMMAND unique-rx --mine config.json 18446744073709551616)
+  set_tests_properties(unique-rx-cli-rejects-overflow-max-hashes PROPERTIES WILL_FAIL TRUE)
 
   add_executable(unique-rx-cpu-topology-tests tests/cpu/topology_test.cpp src/cpu/topology.cpp)
   target_compile_features(unique-rx-cpu-topology-tests PRIVATE cxx_std_20)
