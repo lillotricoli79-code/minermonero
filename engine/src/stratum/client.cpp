@@ -152,6 +152,17 @@ int run_miner(const std::filesystem::path& config_path,
         // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
         rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
+        std::ofstream stratum_log(config_path.parent_path() / "unique-rx-stratum.log",
+                                  std::ios::app);
+        const auto log_event = [&](const std::string& event,
+                                   const nlohmann::json& details) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                Clock::now() - started).count();
+            const std::string line = "[+" + std::to_string(elapsed) + "ms] " +
+                event + " " + details.dump();
+            std::cout << line << '\n' << std::flush;
+            if (stratum_log) stratum_log << line << '\n' << std::flush;
+        };
         auto last_sample_time = started;
         std::deque<std::pair<Clock::time_point, std::uint64_t>> samples;
         std::unordered_map<std::uint64_t, Clock::time_point> pending;
@@ -199,7 +210,7 @@ int run_miner(const std::filesystem::path& config_path,
             try {
                 StratumTransport transport;
                 transport.connect_to(pool);
-                std::cout << "Connected to pool " << pool.host << ':' << pool.port << '\n';
+                log_event("CONNECTED", {{"host", pool.host}, {"port", pool.port}});
                 transport.send_json({{"id", 1}, {"jsonrpc", "2.0"}, {"method", "login"},
                     {"params", {{"login", pool.wallet}, {"pass", pool.password},
                                  {"agent", "XMRig/6.26.0 gcc/15.1.0 (built for Windows x86-64, 64 bit)"},
@@ -214,13 +225,20 @@ int run_miner(const std::filesystem::path& config_path,
                     } catch (const nlohmann::json::exception&) {
                         return;
                     }
-                    if (pending.erase(response_id) == 0) return;
+                    if (pending.find(response_id) == pending.end()) {
+                        log_event("UNMATCHED_RESPONSE", message);
+                        return;
+                    }
+                    pending.erase(response_id);
 
                     const bool has_error =
                         message.contains("error") && !message["error"].is_null();
-                    const bool accepted = !has_error && message.contains("result") &&
-                        message["result"].is_object() &&
-                        message["result"].value("status", std::string()) == "OK";
+                    // Match XMRig BaseClient::handleSubmitResponse: a JSON-RPC
+                    // response without an error is an accepted share. Pools do
+                    // not all return result.status="OK"; some return {}, true,
+                    // or null on success.
+                    const bool accepted = !has_error;
+                    log_event("SUBMIT_RESPONSE", message);
                     std::string error_text = has_error ? message["error"].dump() : std::string();
                     std::transform(error_text.begin(), error_text.end(), error_text.begin(),
                         [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
@@ -229,17 +247,15 @@ int run_miner(const std::filesystem::path& config_path,
                          error_text.find("job expired") != std::string::npos ||
                          error_text.find("job not found") != std::string::npos);
                     if (accepted) {
-                        std::cout << "Share accepted\n";
+                        log_event("SHARE_ACCEPTED", {{"response_id", response_id}});
                         state.accepted.fetch_add(1, std::memory_order_relaxed);
                     } else if (stale) {
-                        std::cout << "Share stale: " << error_text << '\n';
+                        log_event("SHARE_STALE", {{"response_id", response_id},
+                                                  {"error", error_text}});
                         state.stale_shares.fetch_add(1, std::memory_order_relaxed);
                     } else {
-                        std::cout << "Share rejected: ";
-                        if (has_error) std::cout << message["error"].dump();
-                        else if (message.contains("result")) std::cout << message["result"].dump();
-                        else std::cout << "missing or invalid submit result";
-                        std::cout << '\n';
+                        log_event("SHARE_REJECTED", {{"response_id", response_id},
+                                                     {"response", message}});
                         state.rejected.fetch_add(1, std::memory_order_relaxed);
                     }
                 };
@@ -265,12 +281,14 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         const auto submit_id = next_id++;
                         const auto nonce_bytes = encode_nonce_le(share.nonce);
-                        try {
-                            transport.send_json({{"id", submit_id}, {"jsonrpc", "2.0"},
-                                {"method", "submit"}, {"params", {{"id", session_id},
-                                {"job_id", share.job_id},
+                        const nlohmann::json submit_request = {
+                            {"id", submit_id}, {"jsonrpc", "2.0"}, {"method", "submit"},
+                            {"params", {{"id", session_id}, {"job_id", share.job_id},
                                 {"nonce", hex_encode(nonce_bytes.data(), nonce_bytes.size())},
-                                {"result", hex_encode(share.hash.data(), share.hash.size())}}}});
+                                {"result", hex_encode(share.hash.data(), share.hash.size())}}}};
+                        log_event("SUBMIT_SENT", submit_request);
+                        try {
+                            transport.send_json(submit_request);
                         } catch (...) {
                             // The current write may have been partially transmitted,
                             // so account it as dropped. Preserve later unsent shares;
@@ -293,10 +311,9 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto message = nlohmann::json::parse(line);
                         if (message.value("method", std::string()) == "job") {
                             auto job = parse_job(message.at("params"));
-                            std::cout << "New job " << job.id << " height ";
-                            if (job.height) std::cout << *job.height;
-                            else std::cout << "n/d";
-                            std::cout << '\n';
+                            log_event("NEW_JOB", {{"job_id", job.id},
+                                {"height", job.height ? nlohmann::json(*job.height)
+                                                      : nlohmann::json(nullptr)}});
                             install_job(std::move(job));
                         } else if (message.value("id", 0ULL) == 1) {
                             if (message.contains("error") && !message["error"].is_null()) {
@@ -307,6 +324,8 @@ int run_miner(const std::filesystem::path& config_path,
                                 throw std::runtime_error("pool login status is not OK");
                             }
                             session_id = result.at("id").get<std::string>();
+                            log_event("LOGIN_ACCEPTED", {{"session_id", session_id},
+                                {"job_id", result.at("job").value("job_id", std::string())}});
                             if (pool.keepalive) {
                                 next_keepalive = Clock::now() + std::chrono::seconds(60);
                             }
@@ -432,6 +451,8 @@ int run_miner(const std::filesystem::path& config_path,
                 }
             } catch (const std::exception& error) {
                 if (state.stop.load(std::memory_order_acquire) || g_stop_requested) break;
+                log_event("POOL_EXCEPTION", {{"host", pool.host}, {"port", pool.port},
+                                             {"error", error.what()}});
                 state.set_work(nullptr);
                 if (!pending.empty()) {
                     state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
