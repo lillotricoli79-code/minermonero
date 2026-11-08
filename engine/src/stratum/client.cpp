@@ -353,10 +353,12 @@ int run_miner(const std::filesystem::path& config_path,
                           << "; switching pool and retrying in " << retry_delay.count()
                           << "s\n";
                 pool_index = (pool_index + 1) % pools.size();
-                auto remaining_delay = retry_delay;
-                while (remaining_delay > std::chrono::seconds::zero() &&
+                auto remaining_delay =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(retry_delay);
+                while (remaining_delay > std::chrono::milliseconds::zero() &&
                        !g_stop_requested && !state.stop.load(std::memory_order_acquire)) {
-                    const auto step = std::min(remaining_delay, std::chrono::milliseconds(100));
+                    const auto step = std::min(
+                        remaining_delay, std::chrono::milliseconds(100));
                     std::this_thread::sleep_for(step);
                     remaining_delay -= step;
                 }
