@@ -38,7 +38,8 @@ if(BUILD_TESTING)
   add_executable(unique-rx-cpu-topology-tests tests/cpu/topology_test.cpp src/cpu/topology.cpp)
   target_compile_features(unique-rx-cpu-topology-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-cpu-topology-tests PRIVATE src "${randomx_SOURCE_DIR}/src")
-  target_link_libraries(unique-rx-cpu-topology-tests PRIVATE randomx nlohmann_json::nlohmann_json)
+  target_link_libraries(unique-rx-cpu-topology-tests PRIVATE randomx Threads::Threads
+    nlohmann_json::nlohmann_json)
   add_test(NAME unique-rx-cpu-topology COMMAND unique-rx-cpu-topology-tests)
 
   add_executable(unique-rx-jit-tests tests/randomx/jit_codegen_test.cpp)
@@ -66,6 +67,7 @@ if(BUILD_TESTING)
   if(WIN32)
     target_link_libraries(unique-rx-msr-tests PRIVATE advapi32 OpenSSL::Crypto)
   endif()
+  target_link_libraries(unique-rx-msr-tests PRIVATE Threads::Threads)
   add_test(NAME unique-rx-msr-lifecycle COMMAND unique-rx-msr-tests)
 
   add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/stratum/client.cpp
