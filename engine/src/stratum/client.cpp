@@ -403,7 +403,7 @@ int run_miner(const std::filesystem::path& config_path,
                     {"uptime_seconds", reconnect_uptime},
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
                 };
-                std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\\n' << std::flush;
+                std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
                 std::cerr << "Pool " << pool.host << ':' << pool.port
                           << " disconnected: " << error.what()
                           << "; switching pool and retrying in " << retry_delay.count()
