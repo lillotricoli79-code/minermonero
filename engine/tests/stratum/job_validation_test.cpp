@@ -113,6 +113,12 @@ int main() {
                     !pool.tls && pool.threads > 0,
                 "pool configuration defaults or host parsing failed");
 
+    config["pools"][0]["keepalive"] = true;
+    const auto keepalive_pools = parse_pool_configs(config);
+    ok &= check(keepalive_pools.front().keepalive,
+                "per-pool keepalive setting was not parsed");
+    config = base_pool_config();
+
     config["pools"][0]["url"] = "[::1]:4444";
     const auto ipv6_pools = parse_pool_configs(config);
     const auto& ipv6_pool = ipv6_pools.front();
