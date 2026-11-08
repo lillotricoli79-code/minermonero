@@ -49,7 +49,7 @@ jobs:
 
 
   windows:
-    name: Windows dashboard build
+    name: Windows x64 native miner, backend and dashboard
     runs-on: windows-2022
     steps:
       - name: Check out repository
@@ -64,8 +64,53 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
-      - name: Build dashboard
-        run: |
-          npm ci --prefix dashboard
-          npm run build --prefix dashboard
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
+      - name: Install MSYS2 MinGW-w64 toolchain
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-openssl
+
+      - name: Build miner, run native tests, backend tests and dashboard
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & .\scripts\windows\build.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Build script failed." }
+
+      - name: Stage portable Windows x64 executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $build = Join-Path $env:GITHUB_WORKSPACE "engine\build-mingw-ninja"
+          $exe = Join-Path $build "unique-rx.exe"
+          if (-not (Test-Path -LiteralPath $exe)) { throw "unique-rx.exe not found after successful build." }
+          $out = Join-Path $env:GITHUB_WORKSPACE "release\unique-rx-windows-x64"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item -LiteralPath $exe -Destination $out
+          Get-ChildItem -LiteralPath $build -Filter "*.dll" -File | Copy-Item -Destination $out -Force
+          $msr = Join-Path $env:GITHUB_WORKSPACE "engine\msr\IntelMSR.bin"
+          if (Test-Path -LiteralPath $msr) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $out "msr") | Out-Null
+            Copy-Item -LiteralPath $msr -Destination (Join-Path $out "msr\IntelMSR.bin")
+          }
+          $hash = (Get-FileHash -LiteralPath (Join-Path $out "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Value "$hash  unique-rx.exe" -Encoding ascii
+          "Portable miner staged: $out"
+
+      - name: Upload verified Windows x64 executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: unique-rx-windows-x64
+          path: release/unique-rx-windows-x64/
+          if-no-files-found: error
+          retention-days: 30
