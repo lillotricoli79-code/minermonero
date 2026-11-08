@@ -111,7 +111,6 @@ if ((CMAKE_SIZEOF_VOID_P EQUAL 8) AND (ARCH_ID STREQUAL "x86_64" OR ARCH_ID STRE
     list(APPEND randomx_sources src/jit_compiler_x86_static.S)
     set_property(SOURCE src/jit_compiler_x86_static.S PROPERTY LANGUAGE C)
     set_property(SOURCE src/jit_compiler_x86_static.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
-
     if(ARCH STREQUAL "native")
       add_flag("-march=native")
     else()
