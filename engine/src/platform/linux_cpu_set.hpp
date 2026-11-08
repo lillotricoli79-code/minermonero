@@ -37,11 +37,20 @@ inline std::vector<unsigned int> allowed_cpus() noexcept {
 inline bool pin_current_thread(unsigned int cpu) noexcept {
     constexpr std::size_t bits = sizeof(unsigned long) * 8U;
     if (cpu >= (1U << 20)) return false;
-    std::vector<unsigned long> mask(static_cast<std::size_t>(cpu) / bits + 1, 0UL);
-    mask[cpu / bits] |= 1UL << (cpu % bits);
-    return pthread_setaffinity_np(
-        pthread_self(), mask.size() * sizeof(unsigned long),
-        reinterpret_cast<const cpu_set_t*>(mask.data())) == 0;
+    // pthread_setaffinity_np also requires a mask at least as large as the
+    // kernel's configured cpumask, not merely large enough for this CPU id.
+    const auto minimum_words = static_cast<std::size_t>(cpu) / bits + 1;
+    for (std::size_t words = 16; words <= 16384; words *= 2) {
+        words = words < minimum_words ? minimum_words : words;
+        std::vector<unsigned long> mask(words, 0UL);
+        mask[cpu / bits] |= 1UL << (cpu % bits);
+        const int result = pthread_setaffinity_np(
+            pthread_self(), mask.size() * sizeof(unsigned long),
+            reinterpret_cast<const cpu_set_t*>(mask.data()));
+        if (result == 0) return true;
+        if (result != EINVAL) return false;
+    }
+    return false;
 }
 
 } // namespace unique_rx::platform::linux_cpu
