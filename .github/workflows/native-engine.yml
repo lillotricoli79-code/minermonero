@@ -80,7 +80,7 @@ jobs:
         run: |
           $opensslBin = Join-Path $env:OPENSSL_ROOT_DIR "bin"
           $dlls = @(Get-ChildItem -Path $opensslBin -File | Where-Object {
-            $_.Name -match '^lib(ssl|crypto).*\\.dll
+            $_.Name -like "libssl*.dll" -or $_.Name -like "libcrypto*.dll"
           })
           if ($dlls.Count -lt 2) {
             throw "OpenSSL runtime DLLs were not found in $opensslBin"
