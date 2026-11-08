@@ -87,41 +87,61 @@ Job parse_job(const nlohmann::json& value) {
     return job;
 }
 
-PoolConfig parse_pool_config(const nlohmann::json& config) {
+std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
     if (!config.contains("pools") || !config["pools"].is_array() || config["pools"].empty()) {
         throw std::invalid_argument("config.json has no enabled pool");
     }
-    const auto& pool = config["pools"].front();
-    const auto address = pool.at("url").get<std::string>();
-    PoolConfig result;
-    if (!address.empty() && address.front() == '[') {
-        const auto end = address.find(']');
-        if (end == std::string::npos || end + 2 >= address.size() || address[end + 1] != ':') {
-            throw std::invalid_argument("pool address must be [IPv6]:port");
-        }
-        result.host = address.substr(1, end - 1);
-        result.port = address.substr(end + 2);
-    } else {
-        const auto separator = address.rfind(':');
-        if (separator == std::string::npos || separator == 0 || separator + 1 == address.size()) {
-            throw std::invalid_argument("pool address must be host:port");
-        }
-        result.host = address.substr(0, separator);
-        result.port = address.substr(separator + 1);
-    }
-    result.wallet = pool.at("user").get<std::string>();
-    result.password = pool.value("pass", std::string("x"));
-    result.worker = pool.value("rig-id", std::string("rig01"));
-    result.tls = pool.value("tls", false);
-    result.threads = select_cpu_threads(
+
+    const auto cpu_threads = select_cpu_threads(
         config.value("cpu", nlohmann::json::object()));
-    if (result.threads == 0) {
+    if (cpu_threads == 0) {
         throw std::invalid_argument("CPU mining is disabled in the configuration");
     }
-    result.tls_fingerprint = normalize_fingerprint(
-        pool.value("tls-fingerprint", std::string()));
-    if (!result.tls_fingerprint.empty() && !result.tls) {
-        throw std::invalid_argument("pool fingerprint requires TLS");
+
+    std::vector<PoolConfig> result;
+    for (const auto& pool : config["pools"]) {
+        if (!pool.is_object()) {
+            throw std::invalid_argument("pool configuration entry must be an object");
+        }
+        if (!pool.value("enabled", true)) continue;
+
+        const auto address = pool.at("url").get<std::string>();
+        PoolConfig entry;
+        if (!address.empty() && address.front() == '[') {
+            const auto end_bracket = address.find(']');
+            if (end_bracket == std::string::npos || end_bracket + 2 >= address.size() ||
+                address[end_bracket + 1] != ':') {
+                throw std::invalid_argument("pool address must be [IPv6]:port");
+            }
+            entry.host = address.substr(1, end_bracket - 1);
+            entry.port = address.substr(end_bracket + 2);
+        } else {
+            const auto separator = address.rfind(':');
+            if (separator == std::string::npos || separator == 0 ||
+                separator + 1 == address.size()) {
+                throw std::invalid_argument("pool address must be host:port");
+            }
+            entry.host = address.substr(0, separator);
+            entry.port = address.substr(separator + 1);
+        }
+        entry.wallet = pool.at("user").get<std::string>();
+        if (entry.wallet.empty()) {
+            throw std::invalid_argument("pool wallet/login cannot be empty");
+        }
+        entry.password = pool.value("pass", std::string("x"));
+        entry.worker = pool.value("rig-id", std::string("rig01"));
+        entry.tls = pool.value("tls", false);
+        entry.threads = cpu_threads;
+        entry.tls_fingerprint = normalize_fingerprint(
+            pool.value("tls-fingerprint", std::string()));
+        if (!entry.tls_fingerprint.empty() && !entry.tls) {
+            throw std::invalid_argument("pool fingerprint requires TLS");
+        }
+        result.push_back(std::move(entry));
+    }
+
+    if (result.empty()) {
+        throw std::invalid_argument("config.json has no enabled pool");
     }
     return result;
 }
