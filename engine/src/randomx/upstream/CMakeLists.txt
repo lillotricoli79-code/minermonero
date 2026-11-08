@@ -111,28 +111,8 @@ if ((CMAKE_SIZEOF_VOID_P EQUAL 8) AND (ARCH_ID STREQUAL "x86_64" OR ARCH_ID STRE
     set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} /DRELWITHDEBINFO")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /DRELWITHDEBINFO")
 
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/src/asm/configuration.asm
-      COMMAND powershell -ExecutionPolicy Bypass -File h2inc.ps1 ..\\src\\configuration.h > ..\\src\\asm\\configuration.asm SET ERRORLEVEL = 0
-      COMMENT "Generating configuration.asm at ${CMAKE_CURRENT_SOURCE_DIR}"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/vcxproj)
-    add_custom_target(generate-asm
-      DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/asm/configuration.asm)
-  else()
-    list(APPEND randomx_sources src/jit_compiler_x86_static.S)
-
-    # cheat because cmake and ccache hate each other
-    set_property(SOURCE src/jit_compiler_x86_static.S PROPERTY LANGUAGE C)
-    set_property(SOURCE src/jit_compiler_x86_static.S PROPERTY XCODE_EXPLICIT_FILE_TYPE sourcecode.asm)
-
-    if(ARCH STREQUAL "native")
-      add_flag("-march=native")
-    else()
-      # default build has hardware AES enabled (software AES can be selected at runtime)
-      add_flag("-maes")
-      check_c_compiler_flag(-mssse3 HAVE_SSSE3)
-      if(HAVE_SSSE3)
-        set_source_files_properties(src/argon2_ssse3.c COMPILE_FLAGS -mssse3)
-      endif()
+    # Use the checked-in RandomX x86 assembly configuration.
+  endif()
       check_c_compiler_flag(-mavx2 HAVE_AVX2)
       if(HAVE_AVX2)
         set_source_files_properties(src/argon2_avx2.c COMPILE_FLAGS -mavx2)
@@ -228,45 +208,11 @@ install(TARGETS randomx
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-add_executable(randomx-tests
-  src/tests/tests.cpp)
-target_link_libraries(randomx-tests
-  PRIVATE randomx)
-set_property(TARGET randomx-tests PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_property(TARGET randomx-tests PROPERTY CXX_STANDARD 11)
-
-add_executable(randomx-codegen
-  src/tests/code-generator.cpp)
-target_link_libraries(randomx-codegen
-  PRIVATE randomx)
-
-set_property(TARGET randomx-codegen PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_property(TARGET randomx-codegen PROPERTY CXX_STANDARD 11)
-
-if(NOT Threads_FOUND AND UNIX AND NOT APPLE)
-  set(THREADS_PREFER_PTHREAD_FLAG ON)
-  find_package(Threads)
+if(BUILD_TESTING)
+  add_executable(randomx-tests
+    src/tests/tests.cpp)
+  target_link_libraries(randomx-tests
+    PRIVATE randomx)
+  set_property(TARGET randomx-tests PROPERTY POSITION_INDEPENDENT_CODE ON)
+  set_property(TARGET randomx-tests PROPERTY CXX_STANDARD 11)
 endif()
-
-add_executable(randomx-benchmark
-  src/tests/benchmark.cpp
-  src/tests/affinity.cpp)
-target_link_libraries(randomx-benchmark
-  PRIVATE randomx
-  PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-
-include(CheckCXXSourceCompiles)
-check_cxx_source_compiles("
-#include <cstdint>
-#include <atomic>
-int main() {
-  std::atomic<uint64_t> a;
-  a.is_lock_free();
-}" HAVE_CXX_ATOMICS)
-
-if(NOT HAVE_CXX_ATOMICS)
-  target_link_libraries(randomx-benchmark
-    PRIVATE "atomic")
-endif()
-set_property(TARGET randomx-benchmark PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_property(TARGET randomx-benchmark PROPERTY CXX_STANDARD 11)
