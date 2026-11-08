@@ -183,7 +183,10 @@ int run_miner(const std::filesystem::path& config_path,
                 logging::info("cpu", "share accepted (response " +
                     std::to_string(details.value("response_id", std::uint64_t{0})) + ")");
             } else if (event == "SHARE_REJECTED") {
-                logging::warning("cpu", "share rejected: " + details["response"].dump());
+                const auto response = details.value("response", nlohmann::json::object());
+                const auto reason = response.contains("error") && !response["error"].is_null()
+                    ? format_rpc_error(response["error"]) : response.dump();
+                logging::warning("cpu", "share rejected: " + reason);
             } else if (event == "SHARE_STALE") {
                 logging::warning("cpu", "stale share: " +
                     details.value("error", std::string("pool marked job stale")));
