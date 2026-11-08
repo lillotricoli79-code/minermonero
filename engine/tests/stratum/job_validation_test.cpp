@@ -44,8 +44,8 @@ int main() {
     ok &= check(parse_share_target("ffffffff") == UINT64_MAX,
                 "4-byte little-endian target normalization failed");
     ok &= check(parse_share_target("00000080") ==
-                    UINT64_MAX / (UINT32_MAX / 0x80000000ULL),
-                "4-byte target normalization diverged from pool target semantics");
+                    0x8000000080000000ULL,
+                "4-byte target expansion to 64-bit pool difficulty failed");
     ok &= check(parse_share_target("0100000000000000") == 1,
                 "8-byte little-endian target parsing failed");
     ok &= check(decode_hex("00aF10") == std::vector<std::uint8_t>{0x00, 0xaf, 0x10},
