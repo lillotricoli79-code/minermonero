@@ -209,6 +209,16 @@ int main() {
                     !pool.tls && pool.threads > 0,
                 "pool configuration defaults or host parsing failed");
 
+    auto nicehash_config = base_pool_config();
+    nicehash_config["pools"][0]["url"] = "randomx.nicehash.com:443";
+    nicehash_config["pools"][0]["nicehash"] = false;
+    ok &= check(parse_pool_configs(nicehash_config).front().nicehash,
+                "NiceHash hostname was not detected like XMRig");
+    nicehash_config = base_pool_config();
+    nicehash_config["pools"][0]["nicehash"] = true;
+    ok &= check(parse_pool_configs(nicehash_config).front().nicehash,
+                "explicit NiceHash pool option was ignored");
+
     config["pools"][0]["keepalive"] = true;
     const auto keepalive_pools = parse_pool_configs(config);
     ok &= check(keepalive_pools.front().keepalive,
