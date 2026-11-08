@@ -173,14 +173,15 @@ std::filesystem::path default_module_path() {
 #else
 
 std::vector<unsigned int> online_cpu_ids() {
+    std::vector<unsigned int> cpus;
     std::ifstream online_file("/sys/devices/system/cpu/online");
     std::string online;
     if (online_file && std::getline(online_file, online)) {
         try {
             std::stringstream ranges(online);
             std::string item;
-            std::vector<unsigned int> cpus;
             while (std::getline(ranges, item, ',')) {
+                if (item.empty()) throw std::runtime_error("empty CPU range");
                 const auto dash = item.find('-');
                 if (dash == std::string::npos) {
                     cpus.push_back(static_cast<unsigned int>(std::stoul(item)));
@@ -196,18 +197,20 @@ std::vector<unsigned int> online_cpu_ids() {
                     if (cpu == last) break;
                 }
             }
-            if (!cpus.empty()) return cpus;
         } catch (const std::exception&) {
-            // Fall back to the contiguous hardware_concurrency range below.
+            cpus.clear();
         }
     }
 
-    const auto count = std::max(1U, std::thread::hardware_concurrency());
-    std::vector<unsigned int> cpus;
-    cpus.reserve(count);
-    for (unsigned int cpu = 0; cpu < count; ++cpu) cpus.push_back(cpu);
-    // Restrict tuning to CPUs this process can actually run on. This avoids
-    // touching host CPUs outside a container/cgroup cpuset.
+    if (cpus.empty()) {
+        const auto count = std::max(1U, std::thread::hardware_concurrency());
+        cpus.reserve(count);
+        for (unsigned int cpu = 0; cpu < count; ++cpu) cpus.push_back(cpu);
+    }
+
+    // Always intersect with the process cpuset, including when the kernel
+    // supplied the online list. Returning early here would tune host CPUs
+    // outside a container or a restricted service affinity mask.
     cpu_set_t allowed;
     if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
         cpus.erase(std::remove_if(cpus.begin(), cpus.end(), [&](unsigned int cpu) {
