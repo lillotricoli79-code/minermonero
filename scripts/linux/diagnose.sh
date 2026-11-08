@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -u
-SCRIPT_DIR="$(cd -- "$(dirname -- "\${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd -- "\${SCRIPT_DIR}/../.." && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
 echo "UNIQUE RX - Diagnostica locale"
-echo "Repository: \${ROOT}"
-if [[ -f "\${ROOT}/config.json" ]]; then
-  python3 - "\${ROOT}/config.json" <<'PY'
+echo "Repository: ${ROOT}"
+if [[ -f "${ROOT}/config.json" ]]; then
+  python3 - "${ROOT}/config.json" <<'PY'
 import json, sys
 try:
     config = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -21,10 +21,10 @@ if command -v python3 >/dev/null 2>&1; then
 else echo "[ATTENZIONE] Python 3 non trovato."; fi
 if command -v cmake >/dev/null 2>&1; then cmake --version | head -n 1; else echo "[ATTENZIONE] CMake non trovato."; fi
 MINER=""
-for candidate in "\${ROOT}/engine/build/unique-rx" "\${ROOT}/engine/build-mingw/unique-rx.exe"; do
-  if [[ -x "\${candidate}" || -f "\${candidate}" ]]; then MINER="\${candidate}"; break; fi
+for candidate in "${ROOT}/engine/build/unique-rx" "${ROOT}/engine/build-mingw/unique-rx.exe"; do
+  if [[ -x "${candidate}" || -f "${candidate}" ]]; then MINER="${candidate}"; break; fi
 done
-if [[ -n "\${MINER}" ]]; then echo "[OK] Motore nativo: \${MINER}"; else echo "[ATTENZIONE] eseguibile assente. Compila con scripts/linux/build.sh."; fi
+if [[ -n "${MINER}" ]]; then echo "[OK] Motore nativo: ${MINER}"; else echo "[ATTENZIONE] eseguibile assente. Compila con scripts/linux/build.sh."; fi
 python3 - <<'PY'
 import json, urllib.request
 try:
