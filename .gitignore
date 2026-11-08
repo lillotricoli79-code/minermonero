@@ -8,3 +8,5 @@ __pycache__/
 CMakeFiles/
 
 /logs/
+/dashboard/node_modules/
+/dashboard/dist/
