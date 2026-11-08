@@ -205,7 +205,7 @@ struct MsrManager::Impl {
         std::ifstream module_file(module_path, std::ios::binary);
         if (!module_file) {
             throw std::runtime_error(
-                "IntelMSR.bin not found. Run scripts/windows/setup-msr.ps1 first.");
+                "IntelMSR.bin not found. Place the official PawnIO Intel MSR module in the miner's msr directory.");
         }
         const std::vector<UCHAR> module(
             (std::istreambuf_iterator<char>(module_file)),
