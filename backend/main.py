@@ -23,6 +23,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from backend.src.shell_log import ShellLog
+
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
@@ -201,11 +203,17 @@ class MinerController:
         self.log_lock = threading.Lock()
         self.logs: deque[dict[str, Any]] = deque(maxlen=400)
         self.log_sequence = 0
+        self.shell_log = ShellLog(ROOT / "logs" / "shell.log")
 
     def _log(self, message: str) -> None:
         with self.log_lock:
             self.log_sequence += 1
             self.logs.append({"id": self.log_sequence, "time": time.time(), "message": message})
+            try:
+                self.shell_log.write(message)
+            except OSError:
+                # A full or unavailable disk must not stop the miner process.
+                pass
 
     def is_running(self) -> bool:
         with self.lock:
