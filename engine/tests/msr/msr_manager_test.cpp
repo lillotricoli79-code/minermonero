@@ -155,7 +155,7 @@ bool test_mock_msr_transactions() {
 
     backend.writes = 0;
     backend.reads = 0;
-    backend.corrupt_read_at = 5;
+    backend.corrupt_read_at = 6; // snapshots (4), apply read (1), then read-back
     bool readback_failed = false;
     try {
         apply_registers(cpus, writes, snapshots, read, write, log);
