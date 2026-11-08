@@ -41,6 +41,9 @@ int main() {
 
     unique_rx::logging::set_file(path);
     unique_rx::logging::info("test", "rotation verified");
+    // Close and flush the Windows CRT/MinGW stream before querying file sizes.
+    // This makes the assertion measure persisted bytes, not an open-handle view.
+    unique_rx::logging::close_file();
 
     const auto rotated = std::filesystem::path(path.string() + ".1");
     std::error_code inspect_error;
