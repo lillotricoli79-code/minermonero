@@ -60,12 +60,11 @@ std::uint64_t parse_share_target(std::string_view value) {
             (static_cast<std::uint32_t>(bytes[2]) << 16) |
             (static_cast<std::uint32_t>(bytes[3]) << 24);
         if (compact == 0) throw std::invalid_argument("zero pool target");
-        // Stratum's compact rx/0 target is a 32-bit little-endian
-        // threshold replicated into both halves of the 64-bit comparison word.
-        // Division-based expansion loses precision (and can turn 0x80000000
-        // into UINT64_MAX), accepting shares that the pool will reject.
-        return static_cast<std::uint64_t>(compact) |
-               (static_cast<std::uint64_t>(compact) << 32);
+        // Match the established CryptoNote/RandomX pool compact-target
+        // expansion used by XMRig: preserve the pool's integer division
+        // semantics exactly for 4-byte targets.
+        return UINT64_MAX /
+            (UINT32_MAX / static_cast<std::uint64_t>(compact));
     }
     if (bytes.size() == 8) {
         std::uint64_t target = 0;
