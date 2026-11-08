@@ -27,41 +27,40 @@ inline std::optional<MsrPreset> msr_preset_for_cpu(
         return MsrWrite{reg, value, mask};
     };
 
-    // Adapted from NyxRX MSR preset selection (MIT; see LICENSES/NYXRX-MIT.txt).
-    // This 0x1a4 prefetcher write is enabled only for the verified Skylake-S
-    // family/model used by this build target. Unknown Intel models stay untouched.
+    // Intel's RandomX prefetcher control is the 0x1a4 register.
+    // Only touch the four documented prefetcher-disable bits.
     if (vendor == "GenuineIntel") {
-        if (family != 0x06 || model != 0x5e) return std::nullopt;
-        return MsrPreset{"intel_skylake_s", {write(0x1a4, 0x0f, 0x0f)}};
+        if (family != 0x06) return std::nullopt;
+        return MsrPreset{"intel_family_6", {write(0x1a4, 0x0f, 0x0f)}};
     }
+
     if (vendor != "AuthenticAMD") return std::nullopt;
 
-    if (family == 0x17) {
-        return MsrPreset{"ryzen_17h", {
-            write(0xc0011020, 0, all_bits),
-            write(0xc0011021, 0x40, amd_mask),
-            write(0xc0011022, 0x01510000, all_bits),
-            write(0xc001102b, 0x2000cc16, all_bits),
+    // AMD Zen/Zen+ models with a verified RandomX MSR profile.
+    if (family == 0x17 &&
+        (model == 0x31 || model == 0x60 || model == 0x68 || model == 0x71)) {
+        return MsrPreset{"amd_zen_17h", {
+            write(0xc0011020, 0x0000000000000000, all_bits),
+            write(0xc0011021, 0x0000000000000040, amd_mask),
+            write(0xc0011022, 0x0000000001510000, all_bits),
+            write(0xc001102b, 0x000000002000cc16, all_bits),
         }};
     }
-    if (family == 0x19 && (model == 0x61 || model == 0x75)) {
-        return MsrPreset{"ryzen_19h_zen4", {
-            write(0xc0011020, 0x0004400000000000, all_bits),
-            write(0xc0011021, 0x0004000000000040, amd_mask),
-            write(0xc0011022, 0x8680000401570000, all_bits),
-            write(0xc001102b, 0x2040cc10, all_bits),
-        }};
-    }
-    if (family == 0x19) {
-        return MsrPreset{"ryzen_19h", {
+
+    // AMD Zen 3 / Zen 4 families. The model allow-list follows the
+    // tested RxMiner profile; Zen 4 has its separate XMRig-derived values.
+    if (family == 0x19 &&
+        (model <= 0x0f || (model >= 0x20 && model <= 0x2f) ||
+         (model >= 0x50 && model <= 0x5f))) {
+        return MsrPreset{"amd_zen_19h", {
             write(0xc0011020, 0x0004480000000000, all_bits),
             write(0xc0011021, 0x001c000200000040, amd_mask),
             write(0xc0011022, 0xc000000401570000, all_bits),
             write(0xc001102b, 0x2000cc10, all_bits),
         }};
     }
-    if (family == 0x1a) {
-        return MsrPreset{"ryzen_1ah_zen5", {
+    if (family == 0x19 && (model == 0x61 || model == 0x75)) {
+        return MsrPreset{"amd_zen4_19h", {
             write(0xc0011020, 0x0004400000000000, all_bits),
             write(0xc0011021, 0x0004000000000040, amd_mask),
             write(0xc0011022, 0x8680000401570000, all_bits),
