@@ -118,6 +118,7 @@ int run_miner(const std::filesystem::path& config_path,
             pending.clear();
             std::uint64_t next_id = 2;
             std::string session_id;
+            auto next_keepalive = Clock::time_point::max();
             try {
                 StratumTransport transport;
                 transport.connect_to(pool);
@@ -204,6 +205,9 @@ int run_miner(const std::filesystem::path& config_path,
                                 throw std::runtime_error("pool login status is not OK");
                             }
                             session_id = result.at("id").get<std::string>();
+                            if (pool.keepalive) {
+                                next_keepalive = Clock::now() + std::chrono::seconds(60);
+                            }
                             auto job = parse_job(result.at("job"));
                             std::cout << "Pool login accepted; job " << job.id << '\n';
                             install_job(std::move(job));
@@ -216,6 +220,11 @@ int run_miner(const std::filesystem::path& config_path,
                     const auto now = Clock::now();
                     if (session_id.empty() && now >= login_deadline) {
                         throw std::runtime_error("pool login timed out");
+                    }
+                    if (pool.keepalive && !session_id.empty() && now >= next_keepalive) {
+                        transport.send_json({{"id", next_id++}, {"jsonrpc", "2.0"},
+                            {"method", "keepalived"}, {"params", {{"id", session_id}}}});
+                        next_keepalive = now + std::chrono::seconds(60);
                     }
                     for (auto it = pending.begin(); it != pending.end();) {
                         if (now - it->second >= kShareResponseTimeout) {
