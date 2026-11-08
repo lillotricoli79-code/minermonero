@@ -125,6 +125,8 @@ class ConfigValidationTests(unittest.TestCase):
     def test_rejects_api_port_reserved_for_local_backend(self):
         with self.assertRaises(ValidationError):
             MinerConfigUpdate(api_port=8000)
+        with self.assertRaises(ValidationError):
+            MinerConfigUpdate(api_port=True)
 
     def test_normalizes_pool_tls_fingerprint(self):
         config = MinerConfigUpdate(

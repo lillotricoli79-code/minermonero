@@ -60,7 +60,7 @@ class MinerConfigUpdate(BaseModel):
     tls: bool = False
     tls_fingerprint: str = ""
     msr_mode: Literal["auto", "off", "fast", "custom"] = "auto"
-    api_port: int = Field(default=18088, ge=1024, le=65535)
+    api_port: int = Field(default=18088, ge=1024, le=65535, strict=True)
 
     @field_validator("pool")
     @classmethod
