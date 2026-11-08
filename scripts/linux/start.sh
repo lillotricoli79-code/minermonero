@@ -22,4 +22,4 @@ if ! health; then
   done
   if [[ "\${READY}" -ne 1 ]]; then echo "Backend non raggiungibile su \${API}." >&2; exit 1; fi
 fi
-python3 -c 'import urllib.request; r=urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8000/api/miner/start", data=b"{}", method="POST", headers={"Content-Type":"application/json"}), timeout=10); print(r.read().decode())'
+python3 -c 'import urllib.request; r=urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8000/api/miner/start", method="POST"), timeout=10); print(r.read().decode())'
