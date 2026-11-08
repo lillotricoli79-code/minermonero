@@ -28,13 +28,9 @@ std::filesystem::path log_path;
 
 bool color_output() {
 #ifdef _WIN32
-    static const bool enabled = [] {
-        const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        DWORD mode = 0;
-        return handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode) &&
-            SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-    }();
-    return enabled;
+    // Keep Windows console output plain: older MinGW/Windows SDK headers do
+    // not consistently define ENABLE_VIRTUAL_TERMINAL_PROCESSING.
+    return false;
 #else
     return ::isatty(STDOUT_FILENO) != 0;
 #endif
