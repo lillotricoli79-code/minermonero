@@ -140,6 +140,7 @@ int main() {
             {"rig-id", "test"}, {"tls", false},
         }})},
         {"cpu", {{"enabled", true}, {"max-threads-hint", 1}}},
+        {"randomx", {{"wrmsr", false}}},
     };
     {
         std::ofstream file(config_path);
