@@ -5,6 +5,7 @@
 namespace unique_rx {
 
 bool run_benchmark(unsigned int seconds, unsigned int lanes, bool use_jit,
-                   bool full_memory, std::string_view key, std::string_view payload);
+                   bool full_memory, std::string_view key, std::string_view payload,
+                   unsigned int prefetch_mode = 1, bool jit_huge_pages = false);
 
 } // namespace unique_rx

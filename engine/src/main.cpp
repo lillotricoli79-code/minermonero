@@ -33,6 +33,8 @@ void print_usage(const char* executable) {
               << " --benchmark|--benchmark-full|--benchmark-interpreter|--benchmark-full-interpreter [seconds] [lanes:1..4] [seed] [input]\n";
     std::cout << "       " << executable
               << " --mine [config.json] [max-hashes:0=unlimited]\n";
+    std::cout << "       " << executable
+              << " --benchmark [seconds] [lanes:1..4] [seed] [input] [prefetch-mode:0..3] [jit-huge-pages:0|1]\n";
 }
 
 } // namespace
@@ -59,12 +61,23 @@ int main(int argc, char** argv) {
             return 2;
         }
 
+        if (argc > 8) {
+            print_usage(argv[0]);
+            return 2;
+        }
         const auto seconds = parse_unsigned(argc > 2 ? argv[2] : nullptr, 10);
         const auto lanes = parse_unsigned(argc > 3 ? argv[3] : nullptr, 1);
         const std::string_view key = argc > 4 ? argv[4] : "UNIQUE-RX reference seed";
         const std::string_view input = argc > 5 ? argv[5] : "UNIQUE-RX reference input";
+        const auto prefetch_mode = parse_unsigned(argc > 6 ? argv[6] : nullptr, 1);
+        const auto jit_huge_pages = parse_unsigned(argc > 7 ? argv[7] : nullptr, 0);
+        if (prefetch_mode > 3 || jit_huge_pages > 1) {
+            print_usage(argv[0]);
+            return 2;
+        }
         return unique_rx::run_benchmark(seconds, lanes, use_jit, full_memory,
-                                        key, input) ? 0 : 1;
+                                        key, input, prefetch_mode,
+                                        jit_huge_pages != 0) ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << "UNIQUE RX fatal error: " << error.what() << '\n';
         return 1;

@@ -1,6 +1,7 @@
 #include "benchmark.hpp"
 #include "dataset.hpp"
 #include "platform/affinity.hpp"
+#include "virtual_memory.h"
 
 #include <randomx.h>
 
@@ -40,13 +41,16 @@ using Hash = std::array<std::uint8_t, RANDOMX_HASH_SIZE>;
 
 bool run_benchmark(unsigned int seconds, unsigned int lanes,
                    bool use_jit, bool full_memory, std::string_view key,
-                   std::string_view payload) {
+                   std::string_view payload, unsigned int prefetch_mode,
+                   bool jit_huge_pages) {
     if (seconds == 0 || seconds > 3600 || lanes == 0 || lanes > 4 ||
-        key.empty() || payload.empty()) {
+        prefetch_mode > 3 || key.empty() || payload.empty()) {
         std::cerr << "Durata (1..3600), lane (1..4), seed e input sono obbligatori.\n";
         return false;
     }
 
+    rxm_set_prefetch_mode(static_cast<int>(prefetch_mode));
+    rxm_set_jit_huge_pages(jit_huge_pages ? 1 : 0);
     auto flags = randomx_get_flags();
     if (!use_jit) {
         flags = static_cast<randomx_flags>(
@@ -66,7 +70,8 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
 
     std::shared_ptr<randomx_dataset> dataset;
     if (full_memory) {
-        const auto init_threads = std::max(1U, std::thread::hardware_concurrency());
+        const auto init_threads = std::max(
+            1U, static_cast<unsigned int>(platform::available_processors().size()));
         try {
             dataset = create_randomx_dataset(cache, init_threads, flags);
         } catch (const std::exception& error) {
@@ -182,6 +187,8 @@ bool run_benchmark(unsigned int seconds, unsigned int lanes,
     std::cout << "UNIQUE RX · RandomX benchmark\n"
               << "Mode: " << (use_jit ? "JIT" : "interpreter") << "\n"
               << "Lanes: " << lanes << "\n"
+              << "JIT prefetch mode: " << prefetch_mode << "\n"
+              << "JIT huge pages: " << (jit_huge_pages ? "on" : "off") << "\n"
               << "Memory: " << (full_memory ? "full dataset" : "light reference") << "\n"
               << "RandomX flags: 0x" << std::hex
               << static_cast<unsigned int>(vm_flags) << std::dec << "\n"
