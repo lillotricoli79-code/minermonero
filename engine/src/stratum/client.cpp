@@ -175,6 +175,11 @@ int run_miner(const std::filesystem::path& config_path,
             const bool same_work = previous_work &&
                 previous_work->job.same_work(next_job);
             if (!have_seed || next_job.seed != active_seed) {
+                // NyxRX engine.rs clears the active job before building a new
+                // RandomX epoch. Do the same here: workers must not continue
+                // hashing the old seed while the network thread initializes a
+                // potentially multi-minute dataset for the new epoch.
+                state.set_work(nullptr);
                 // Build the next epoch resources off to the side. If cache or
                 // dataset creation fails, keep the previous seed/cache pair
                 // coherent for a later pool reconnect.
