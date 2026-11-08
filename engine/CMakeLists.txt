@@ -6,17 +6,22 @@ include(FetchContent)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-FetchContent_Declare(
-  randomx
-  GIT_REPOSITORY https://github.com/tevador/RandomX.git
-  GIT_TAG 12f2c2ffe2108d6cf54c391fee33c8bc3646cdab
-)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/randomx/upstream/CMakeLists.txt")
+  set(randomx_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/randomx/upstream")
+  add_subdirectory(src/randomx/upstream)
+else()
+  FetchContent_Declare(
+    randomx
+    GIT_REPOSITORY https://github.com/tevador/RandomX.git
+    GIT_TAG 12f2c2ffe2108d6cf54c391fee33c8bc3646cdab
+  )
+  FetchContent_MakeAvailable(randomx)
+endif()
 FetchContent_Declare(
   nlohmann_json
   GIT_REPOSITORY https://github.com/nlohmann/json.git
   GIT_TAG v3.12.0
 )
-FetchContent_MakeAvailable(randomx)
 FetchContent_MakeAvailable(nlohmann_json)
 
 add_executable(unique-rx src/main.cpp src/stratum/client.cpp src/stratum/job.cpp
