@@ -486,11 +486,15 @@ class LocalApiTests(unittest.TestCase):
         self.assertTrue(msr_override_enabled({"wrmsr": 6}))
 
     def test_native_msr_availability_checks_only_process_allowed_cpus(self):
-        with patch("backend.src.main.Path.read_text", return_value="0-3"), patch(
+        # Simulate Linux paths without constructing PosixPath on Windows CI.
+        fake_path = unittest.mock.MagicMock()
+        fake_path.return_value.read_text.return_value = "0-3"
+        fake_path.return_value.is_file.return_value = True
+        with patch("backend.src.main.Path", fake_path), patch(
             "backend.src.main.os.sched_getaffinity", return_value={1, 3}, create=True
-        ), patch("backend.src.main.Path.is_file", return_value=True), patch(
-            "backend.src.main.os.access", return_value=True
-        ), patch("backend.src.main.sys.platform", "linux"):
+        ), patch("backend.src.main.os.access", return_value=True), patch(
+            "backend.src.main.sys.platform", "linux"
+        ):
             self.assertTrue(native_msr_available(None))
 
     def test_native_msr_availability_returns_false_for_empty_process_affinity(self):
