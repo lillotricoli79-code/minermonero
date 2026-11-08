@@ -76,13 +76,29 @@ if (-not (Test-Path (Join-Path $dashboardDir "dist\index.html"))) {
     throw "Build dashboard terminata senza dashboard\dist\index.html."
 }
 
-# Prefer the already-used MSYS2 MinGW-w64 installation when present.
-$msysBin = "C:\msys64\mingw64\bin"
-if (Test-Path -LiteralPath $msysBin) {
-    $pathEntries = $env:PATH -split [IO.Path]::PathSeparator
-    if ($pathEntries -notcontains $msysBin) {
-        $env:PATH = "$msysBin$([IO.Path]::PathSeparator)$env:PATH"
-    }
+# Prefer the MSYS2 prefix installed by setup-msys2 on GitHub runners.
+# A separate C:\mingw64 may contain an older compiler without OpenSSL, so
+# discover the active MSYS2 /mingw64 prefix instead of trusting the first g++.
+$mingwPrefixes = @()
+$cygpath = Get-Command cygpath -ErrorAction SilentlyContinue
+if ($cygpath) {
+    $translatedPrefix = (& $cygpath.Source -w /mingw64 2>$null | Select-Object -First 1)
+    if ($translatedPrefix) { $mingwPrefixes += $translatedPrefix.Trim() }
+}
+if ($env:RUNNER_TEMP) {
+    $mingwPrefixes += (Join-Path $env:RUNNER_TEMP "setup-msys2\mingw64")
+}
+$mingwPrefixes += @("C:\msys64\mingw64", "C:\mingw64")
+$mingwPrefix = $mingwPrefixes |
+    Select-Object -Unique |
+    Where-Object {
+        (Test-Path -LiteralPath (Join-Path $_ "bin\g++.exe")) -and
+        (Test-Path -LiteralPath (Join-Path $_ "include\openssl\ssl.h"))
+    } |
+    Select-Object -First 1
+if ($mingwPrefix) {
+    $msysBin = Join-Path $mingwPrefix "bin"
+    $env:PATH = "$msysBin$([IO.Path]::PathSeparator)$env:PATH"
 }
 
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
@@ -90,9 +106,13 @@ if (-not $cmake) { throw "CMake è obbligatorio. Installa CMake e riapri PowerSh
 $ctest = Get-Command ctest -ErrorAction SilentlyContinue
 if (-not $ctest) { throw "CTest non trovato: reinstalla CMake con i componenti di testing." }
 
-$gxx = Get-Command g++ -ErrorAction SilentlyContinue
-$ninja = Get-Command ninja -ErrorAction SilentlyContinue
-$mingwMake = Get-Command mingw32-make -ErrorAction SilentlyContinue
+$gxx = if ($mingwPrefix) { Get-Command (Join-Path $mingwPrefix "bin\g++.exe") } else { Get-Command g++ -ErrorAction SilentlyContinue }
+$ninja = if ($mingwPrefix -and (Test-Path (Join-Path $mingwPrefix "bin\ninja.exe"))) {
+    Get-Command (Join-Path $mingwPrefix "bin\ninja.exe")
+} else { Get-Command ninja -ErrorAction SilentlyContinue }
+$mingwMake = if ($mingwPrefix -and (Test-Path (Join-Path $mingwPrefix "bin\mingw32-make.exe"))) {
+    Get-Command (Join-Path $mingwPrefix "bin\mingw32-make.exe")
+} else { Get-Command mingw32-make -ErrorAction SilentlyContinue }
 
 $runtimeSearchDirs = @()
 if ($gxx) {
