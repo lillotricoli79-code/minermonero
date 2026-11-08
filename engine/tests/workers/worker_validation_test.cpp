@@ -1,25 +1,37 @@
 #include "core/mining.hpp"
 
-#include <cassert>
+#include <iostream>
 #include <string>
 
+namespace {
+
+bool check(bool condition, const char* message) {
+    if (!condition) std::cerr << message << '\n';
+    return condition;
+}
+
+bool has_error(unique_rx::core::MiningState& state, const std::string& expected) {
+    std::lock_guard lock(state.error_mutex);
+    return state.worker_error == expected;
+}
+
+} // namespace
+
 int main() {
-    unique_rx::core::MiningState state;
+    using unique_rx::core::MiningState;
+    constexpr const char* expected_error = "invalid CPU worker index or worker count";
+    bool ok = true;
+
+    MiningState state;
     unique_rx::core::hash_worker(state, 0, 0, 0);
+    ok &= check(state.stop.load(), "zero worker count did not stop the miner");
+    ok &= check(has_error(state, expected_error), "zero worker count error was not reported");
 
-    assert(state.stop.load());
-    {
-        std::lock_guard lock(state.error_mutex);
-        assert(state.worker_error == "invalid CPU worker index or worker count");
-    }
-
-    unique_rx::core::MiningState invalid_index_state;
+    MiningState invalid_index_state;
     unique_rx::core::hash_worker(invalid_index_state, 2, 2, 0);
-    assert(invalid_index_state.stop.load());
-    {
-        std::lock_guard lock(invalid_index_state.error_mutex);
-        assert(invalid_index_state.worker_error == "invalid CPU worker index or worker count");
-    }
+    ok &= check(invalid_index_state.stop.load(), "out-of-range worker index did not stop the miner");
+    ok &= check(has_error(invalid_index_state, expected_error),
+                 "out-of-range worker index error was not reported");
 
-    return 0;
+    return ok ? 0 : 1;
 }
