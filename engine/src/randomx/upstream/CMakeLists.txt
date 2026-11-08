@@ -127,6 +127,20 @@ if ((CMAKE_SIZEOF_VOID_P EQUAL 8) AND (ARCH_ID STREQUAL "x86_64" OR ARCH_ID STRE
   endif()
 endif()
 
+# Optional x86 VAES fast path from RxMiner. The baseline remains portable;
+# runtime dispatch is enabled only when the OS saves AVX state and the CPU
+# reports both AVX2 and VAES. MSVC keeps the standard RandomX AES path.
+if(NOT MSVC AND (ARCH_ID STREQUAL "x86_64" OR ARCH_ID STREQUAL "x86-64" OR ARCH_ID STREQUAL "amd64"))
+  check_cxx_compiler_flag("-mvaes" HAVE_MVAES)
+  check_cxx_compiler_flag("-mavx2" HAVE_MAVX2_VAES)
+  if(HAVE_MVAES AND HAVE_MAVX2_VAES)
+    list(APPEND randomx_sources src/aes_hash_vaes.cpp)
+    set_source_files_properties(src/aes_hash_vaes.cpp PROPERTIES
+      COMPILE_OPTIONS "-mvaes;-mavx2;-maes")
+    set(RANDOMX_VAES_ENABLED TRUE)
+  endif()
+endif()
+
 # PowerPC
 if(ARCH_ID STREQUAL "ppc64" OR ARCH_ID STREQUAL "ppc64le")
   if(ARCH STREQUAL "native")
@@ -198,6 +212,9 @@ endif()
 set(RANDOMX_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/src" CACHE STRING "RandomX Include path")
 
 add_library(randomx ${randomx_sources})
+if(RANDOMX_VAES_ENABLED)
+  target_compile_definitions(randomx PRIVATE RANDOMX_HAVE_VAES=1)
+endif()
 
 if(TARGET generate-asm)
   add_dependencies(randomx generate-asm)

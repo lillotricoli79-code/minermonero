@@ -39,6 +39,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 			__cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 		}
 	#endif
+	static bool avxStateEnabled(int features) {
+		const int required = (1 << 27) | (1 << 28); // OSXSAVE + AVX
+		if ((features & required) != required) return false;
+#if defined(_MSC_VER)
+		return (_xgetbv(0) & 6) == 6;
+#else
+		unsigned int lo = 0, hi = 0;
+		__asm__ volatile ("xgetbv" : "=a"(lo), "=d"(hi) : "c"(0));
+		return (lo & 6) == 6;
+#endif
+	}
 #endif
 
 #if defined(HAVE_HWCAP)
@@ -48,19 +59,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace randomx {
 
-	Cpu::Cpu() : aes_(false), ssse3_(false), avx2_(false) {
+	Cpu::Cpu() : aes_(false), ssse3_(false), avx2_(false), vaes_(false) {
 #ifdef HAVE_CPUID
 		int info[4];
 		cpuid(info, 0);
 		int nIds = info[0];
+		bool avxState = false;
 		if (nIds >= 0x00000001) {
 			cpuid(info, 0x00000001);
 			ssse3_ = (info[2] & (1 << 9)) != 0;
 			aes_ = (info[2] & (1 << 25)) != 0;
+			avxState = avxStateEnabled(info[2]);
 		}
 		if (nIds >= 0x00000007) {
 			cpuid(info, 0x00000007);
-			avx2_ = (info[1] & (1 << 5)) != 0;
+			avx2_ = avxState && (info[1] & (1 << 5)) != 0;
+			vaes_ = avx2_ && (info[2] & (1 << 9)) != 0;
 		}
 #elif defined(__aarch64__)
 	#if defined(HWCAP_AES)
