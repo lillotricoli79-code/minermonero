@@ -253,7 +253,7 @@ int main() {
     unique_rx::platform::close_socket(listener);
     std::filesystem::remove(config_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
-        miner_output.str().find("switching pool") == std::string::npos ||
+        miner_errors.str().find("switching pool") == std::string::npos ||
         miner_output.str().find("Share accepted") == std::string::npos) {
         std::cerr << "local Stratum failover/login/job/share acceptance test failed\n";
         return 1;
