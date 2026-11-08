@@ -115,6 +115,9 @@ PoolConfig parse_pool_config(const nlohmann::json& config) {
     result.tls = pool.value("tls", false);
     result.threads = select_cpu_threads(
         config.value("cpu", nlohmann::json::object()));
+    if (result.threads == 0) {
+        throw std::invalid_argument("CPU mining is disabled in the configuration");
+    }
     result.tls_fingerprint = normalize_fingerprint(
         pool.value("tls-fingerprint", std::string()));
     if (!result.tls_fingerprint.empty() && !result.tls) {
