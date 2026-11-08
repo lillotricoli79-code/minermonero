@@ -25,7 +25,14 @@ if (Test-Path -LiteralPath $pythonExe) {
 } else { Write-Warning "Python non trovato." }
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
 if ($cmake) { & $cmake.Source --version | Select-Object -First 1 } else { Write-Warning "CMake non trovato." }
-$bins = @((Join-Path $repoRoot "engine\build\unique-rx.exe"),(Join-Path $repoRoot "engine\build-mingw\unique-rx.exe"),(Join-Path $repoRoot "engine\build-msvc\Release\unique-rx.exe"))
+$bins = @(
+    (Join-Path $repoRoot "engine\build\unique-rx.exe"),
+    (Join-Path $repoRoot "engine\build-mingw-ninja\unique-rx.exe"),
+    (Join-Path $repoRoot "engine\build-mingw-make\unique-rx.exe"),
+    (Join-Path $repoRoot "engine\build-mingw\unique-rx.exe"),
+    (Join-Path $repoRoot "engine\build-msvc\unique-rx.exe"),
+    (Join-Path $repoRoot "engine\build-msvc\Release\unique-rx.exe")
+)
 $miner = $bins | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if ($miner) { Write-Host "[OK] Motore nativo: $miner" } else { Write-Warning "Eseguibile assente. Compila con scripts/windows/build.ps1." }
 try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/health" -TimeoutSec 2; Write-Host "[OK] Backend: $($health.status)"; Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/status" -TimeoutSec 3 | ConvertTo-Json -Depth 6 } catch { Write-Host "Backend locale non avviato." }
