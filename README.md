@@ -8,7 +8,7 @@ Realizzare un miner CPU autonomo per Monero, algoritmo **RandomX `rx/0`**, con m
 
 Il progetto deve essere portabile e utilizzabile su **più computer e configurazioni CPU**, non costruito o limitato al PC di sviluppo (Intel i7-6700K). Il rilevamento hardware e le impostazioni devono adattarsi alla macchina in uso.
 
-Il motore deve restare un progetto autonomo: non trasformarlo in un fork/collage di miner esistenti e non integrare interi motori esterni. I progetti di riferimento servono per studiare e verificare implementazioni mature e per portare singole soluzioni compatibili, non per sostituire l'architettura del progetto.
+**Il motore deve diventare un sistema ibrido (mix) realmente funzionante, composto integrando codice sorgente originale e moduli compatibili provenienti dai miner di riferimento indicati dall'utente.** Non è richiesto mantenere un motore autonomo né limitarsi a copiare singole idee: occorre recuperare i sorgenti effettivi, selezionare e integrare i componenti che insieme producono un miner completo, coerente e compilabile. Il risultato deve mantenere una sola applicazione e una sola dashboard, con moduli interni chiaramente identificati per provenienza, responsabilità e licenza. Non basta affiancare cartelle o eseguibili indipendenti: le parti integrate devono essere collegate nella stessa architettura operativa e condividere configurazione, gestione dei job, worker, stato, telemetria e log dove tecnicamente compatibile.
 
 ## 2. Regole inderogabili di lavoro
 
@@ -25,18 +25,18 @@ Il motore deve restare un progetto autonomo: non trasformarlo in un fork/collage
 
 ## 3. Sorgenti di riferimento e licenze
 
-Studiare miner e librerie maturi per individuare soluzioni reali e collaudate, verificando sempre sorgente, licenza, compatibilità e test prima di portare una singola implementazione.
+Recuperare e integrare nel miner ibrido i sorgenti originali dei miner di riferimento. L'obiettivo non è soltanto studiarli: è riutilizzare e collegare codice reale, moduli e sottosistemi compatibili fino a ottenere un unico miner funzionante. Prima dell'integrazione di ciascun componente verificare il repository sorgente, il commit/versione, la licenza, le dipendenze, le interfacce e le condizioni tecniche di compatibilità. Quando un modulo richiede adattamenti, partire dal codice upstream effettivo e documentare con precisione le modifiche: non sostituirlo con una riscrittura inventata.
 
 Riferimenti già individuati:
 - **RandomX upstream**: riferimento/oracolo per la correttezza dell'algoritmo e dei risultati hash; licenza BSD-3-Clause. Mantenere il comportamento compatibile con RandomX usato da Monero.
 - **RxMiner**: riferimento per idee e implementazioni CPU/Stratum/MSR; verificare la licenza MIT e conservare attribuzioni e avvisi quando si riutilizza codice.
 - **NyxRX**: riferimento per rilevamento hardware, core fisici, cache e NUMA; verificare e rispettare la licenza MIT per ogni porzione eventualmente portata.
-- **XMRig**: riferimento tecnico per CPU, RandomX, MSR e gestione miner; è GPL-3.0. Non copiare o incorporare codice senza rispettare tutti gli obblighi GPL e la compatibilità della licenza del progetto.
+- **XMRig**: sorgente di integrazione per componenti reali di CPU, RandomX, MSR, Stratum, pool, TLS, strategie e gestione miner; licenza GPL-3.0. Se il codice XMRig viene incorporato o collegato nel miner distribuito, trattare l'opera combinata secondo gli obblighi GPL applicabili: mantenere copyright e licenza, rendere disponibile il corrispondente sorgente completo e le modifiche, rispettare gli obblighi di distribuzione e verificare la compatibilità delle altre componenti. Non rimuovere o aggirare tali obblighi.
 - **XMR-Miner**: non copiare codice finché non è individuata una licenza esplicita che autorizzi il riutilizzo.
 
 Regole:
 - “Open source” non significa assenza di condizioni: verificare la licenza di ogni sorgente.
-- Non copiare interi repository, motori, worker o sottosistemi senza una decisione architetturale e una verifica delle licenze.
+- L'integrazione può comprendere interi moduli o sottosistemi upstream quando sono necessari al funzionamento del mix e la licenza lo consente. Non copiare repository alla cieca: selezionare i componenti necessari, collegarli realmente all'applicazione, conservarne gli avvisi e verificare dipendenze e obblighi di distribuzione.
 - Per ogni codice portato, registrare provenienza, autore/copyright, licenza e modifiche; includere i file di licenza e gli avvisi richiesti.
 - Non attribuire al progetto funzionalità o prestazioni di un miner di riferimento che non siano state effettivamente integrate e testate.
 
@@ -241,7 +241,7 @@ Non definire il progetto “finito” se manca uno dei criteri sopra.
 
 ---
 
-**Regola finale:** queste disposizioni sono permanenti per il progetto. Prima di ogni intervento rileggere il README e preservare il lavoro già presente. Le modifiche devono migliorare il miner reale, non soltanto aggiungere file o dichiarazioni.
+**Regola finale:** queste disposizioni sono permanenti per il progetto. La direzione architetturale approvata dall'utente è un miner ibrido ottenuto integrando codice originale e moduli compatibili di più miner di riferimento. Prima di ogni intervento rileggere il README e preservare il lavoro già presente. Le modifiche devono produrre un unico miner realmente funzionante, non soltanto aggiungere file, documentazione o dichiarazioni.
 
 ### Attribuzioni di codice integrato
 
@@ -260,7 +260,7 @@ Il presente documento operativo è vincolante per tutte le attività del progett
 
 1. **Priorità assoluta: completare il codice effettivo dei miner di riferimento.** Procedere prima di tutto a recuperare, integrare e completare nel progetto principale il codice reale prelevato dai miner indicati dall'utente. Non sostituire questo lavoro con analisi, audit, elenchi, spiegazioni o documentazione non richiesta.
 2. **Nessuna finzione.** Non dichiarare mai di aver copiato, integrato, completato, compilato o verificato codice se l'operazione non è stata realmente eseguita. Distinguere sempre il codice effettivamente presente dalle attività ancora da svolgere e dalle verifiche non eseguite.
-3. **Niente codice inventato come sostituto.** Non creare implementazioni fittizie, segnaposto, moduli dimostrativi o codice improvvisato al posto delle implementazioni reali disponibili nei miner di riferimento. Integrare soltanto codice compatibile, adattandolo tecnicamente quando necessario e rispettando sempre licenze e attribuzioni.
+3. **Mix di sorgenti originali, non collage scollegato.** Recuperare e integrare codice effettivo dai miner di riferimento. È consentito e richiesto costruire un sistema ibrido con moduli provenienti da progetti diversi, anche sostituendo componenti interni quando necessario. Ogni modulo deve essere collegato e utilizzato dal miner reale; non sono ammessi segnaposto, copie decorative, eseguibili lasciati separati o dichiarazioni di integrazione senza codice. Gli adattamenti devono derivare dal sorgente originale, mantenere la sua provenienza e rispettare licenze e attribuzioni.
 4. **Lavoro continuo e senza interruzioni superflue.** Non interrompere continuamente lo sviluppo per inviare aggiornamenti, commenti o resoconti di singoli passaggi. Procedere in modo continuativo e comunicare soltanto quando è necessario un intervento dell'utente o quando si raggiunge un risultato concreto.
 5. **Stima del tempo ogni dieci minuti.** Durante il lavoro, fornire ogni dieci minuti un'indicazione aggiornata e realistica del tempo residuo stimato per completare il progetto. Non inventare una scadenza: se non è possibile stimarla con affidabilità, dichiararlo chiaramente e indicare le attività che determinano il tempo residuo.
 6. **Rilettura ogni tre minuti.** Rileggere il README ogni tre minuti durante il lavoro continuativo, oltre che prima di ogni intervento e prima di ogni fase significativa. La cadenza di tre minuti sostituisce la precedente indicazione di due minuti.
