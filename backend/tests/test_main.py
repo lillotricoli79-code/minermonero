@@ -326,6 +326,43 @@ class MinerStatusTests(unittest.TestCase):
 
 
 class MinerOutputReaderTests(unittest.TestCase):
+    def test_reader_start_failure_stops_and_unpublishes_child(self):
+        class FakeProcess:
+            def __init__(self):
+                self.terminated = False
+                self.waited = False
+
+            def poll(self):
+                return None if not self.waited else 0
+
+            def terminate(self):
+                self.terminated = True
+                self.waited = True
+
+            def wait(self, timeout):
+                self.waited = True
+                return 0
+
+        class FailedThread:
+            def __init__(self, **kwargs):
+                pass
+
+            def start(self):
+                raise RuntimeError("thread resources exhausted")
+
+        controller = MinerController()
+        process = FakeProcess()
+        controller.process = process
+        controller.engine_kind = "unique-rx"
+
+        with patch("backend.src.main.threading.Thread", FailedThread), self.assertRaises(HTTPException):
+            controller._start_output_reader(process, "unique-rx")
+
+        self.assertTrue(process.terminated)
+        self.assertIsNone(controller.process)
+        self.assertIsNone(controller.engine_kind)
+
+
     def test_exit_log_uses_engine_kind_captured_for_that_process(self):
         class FinishedProcess:
             stdout = ()

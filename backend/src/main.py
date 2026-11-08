@@ -533,11 +533,7 @@ class MinerController:
                 )
             else:
                 self._log(f"Avvio {engine_kind} richiesto dall'utente.")
-            threading.Thread(
-                target=self._read_output,
-                args=(process, engine_kind),
-                daemon=True,
-            ).start()
+            self._start_output_reader(process, engine_kind)
         except OSError as exc:
             # Do not clear a process that a concurrent start request may
             # already have published after this Popen attempt failed.
@@ -547,6 +543,47 @@ class MinerController:
                     self.engine_kind = None
                     self.native_status = None
             raise HTTPException(status_code=500, detail=f"Impossibile avviare XMRig: {exc}") from exc
+
+    def _start_output_reader(
+        self, process: subprocess.Popen[str], engine_kind: str
+    ) -> None:
+        try:
+            threading.Thread(
+                target=self._read_output,
+                args=(process, engine_kind),
+                daemon=True,
+            ).start()
+        except RuntimeError as exc:
+            # A child must never be left mining without its output/status reader:
+            # the dashboard would lose process lifecycle and shutdown telemetry.
+            self._log(f"Impossibile avviare il lettore output: {exc}; arresto miner.")
+            try:
+                if process.poll() is None:
+                    if os.name == "nt":
+                        process.send_signal(signal.CTRL_BREAK_EVENT)
+                    else:
+                        process.terminate()
+            except (AttributeError, OSError, ValueError):
+                if process.poll() is None:
+                    try:
+                        process.terminate()
+                    except OSError:
+                        pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+            finally:
+                with self.lock:
+                    if self.process is process:
+                        self.process = None
+                        self.engine_kind = None
+                        self.native_status = None
+            raise HTTPException(
+                status_code=500,
+                detail="Impossibile avviare il lettore output; il miner è stato arrestato",
+            ) from exc
 
     def _read_output(
         self, process: subprocess.Popen[str], engine_kind: str
