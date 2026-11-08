@@ -134,6 +134,41 @@ class ConfigValidationTests(unittest.TestCase):
         self.assertEqual(saved["pools"][0]["tls-fingerprint"], "ab" * 32)
         self.assertEqual(public_config(saved)["tls_fingerprint"], "ab" * 32)
 
+    def test_dashboard_update_preserves_backup_pools_and_edits_first_enabled(self):
+        current = {
+            "http": {"port": 18088},
+            "cpu": {"enabled": True},
+            "pools": [
+                {"url": "disabled.example:3333", "user": "disabled-wallet", "enabled": False},
+                {"url": "primary.example:4444", "user": "primary-wallet", "enabled": True},
+                {"url": "backup.example:5555", "user": "backup-wallet", "enabled": True},
+            ],
+        }
+        saved = apply_config_update(
+            current,
+            MinerConfigUpdate(pool="new-primary.example:6666", wallet="new-wallet"),
+        )
+
+        self.assertEqual(len(saved["pools"]), 3)
+        self.assertEqual(saved["pools"][0]["url"], "disabled.example:3333")
+        self.assertEqual(saved["pools"][1]["url"], "new-primary.example:6666")
+        self.assertEqual(saved["pools"][1]["user"], "new-wallet")
+        self.assertEqual(saved["pools"][2]["url"], "backup.example:5555")
+        self.assertEqual(public_config(saved)["pool"], "new-primary.example:6666")
+
+    def test_public_config_uses_first_enabled_pool(self):
+        public = public_config({
+            "http": {"port": 18088},
+            "pools": [
+                {"url": "disabled.example:3333", "user": "disabled-wallet", "enabled": False},
+                {"url": "backup.example:4444", "user": "backup-wallet", "enabled": True},
+            ],
+        })
+
+        self.assertEqual(public["pool"], "backup.example:4444")
+        self.assertEqual(public["wallet"], "backup-wallet")
+
+
     def test_msr_fast_enables_xmrig_preset_and_restores_original_values(self):
         saved = apply_config_update(
             {"http": {"port": 18088}, "pools": []},
