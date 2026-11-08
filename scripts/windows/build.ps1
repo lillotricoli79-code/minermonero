@@ -196,6 +196,12 @@ $exeHash = (Get-FileHash -LiteralPath (Join-Path $packageDir "unique-rx.exe") -A
 $moduleHash = (Get-FileHash -LiteralPath (Join-Path $packageMsrDir "IntelMSR.bin") -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($moduleHash -ne $expectedMsrSha256) { throw "Hash del modulo MSR nel pacchetto non valido." }
 Set-Content -LiteralPath (Join-Path $packageDir "SHA256SUMS.txt") -Encoding ascii -Value @("$exeHash  unique-rx.exe", "$moduleHash  msr/IntelMSR.bin")
+Copy-Item -LiteralPath (Join-Path $repoRoot "config.example.json") -Destination (Join-Path $packageDir "config.example.json")
+$launcherDir = Join-Path $packageDir "scripts\windows"
+New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start.bat") -Destination $launcherDir
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start.ps1") -Destination $launcherDir
+Write-Host "Launcher MSR amministrativo incluso nel pacchetto: $launcherDir"
 Write-Host ""
 Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
 Write-Host "Miner: $exe"
