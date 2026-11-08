@@ -126,6 +126,7 @@ int run_miner(const std::filesystem::path& config_path,
                     {"params", {{"login", pool.wallet}, {"pass", pool.password},
                                  {"rigid", pool.worker}, {"agent", "UNIQUE-RX/0.1"},
                                  {"algo", nlohmann::json::array({"rx/0"})}}}});
+                const auto login_deadline = Clock::now() + std::chrono::seconds(30);
 
                 const auto record_share_response = [&](const nlohmann::json& message) {
                     if (!message.contains("id")) return;
@@ -213,6 +214,9 @@ int run_miner(const std::filesystem::path& config_path,
                     }
 
                     const auto now = Clock::now();
+                    if (session_id.empty() && now >= login_deadline) {
+                        throw std::runtime_error("pool login timed out");
+                    }
                     for (auto it = pending.begin(); it != pending.end();) {
                         if (now - it->second >= kShareResponseTimeout) {
                             it = pending.erase(it);
