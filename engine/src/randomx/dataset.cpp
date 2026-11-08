@@ -2,6 +2,7 @@
 #include "platform/affinity.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -34,22 +35,31 @@ std::shared_ptr<randomx_dataset> create_randomx_dataset(
 
     const auto worker_count = std::max(
         1U, std::min(initialization_threads, static_cast<std::uint32_t>(item_count)));
-    const unsigned long base_items = item_count / worker_count;
-    const unsigned long remainder = item_count % worker_count;
 
+    // RxMiner randomx.rs (MIT), pinned at 5fe52dde2650c623fd0472804152a94711889dce:
+    // dynamically claim 65,536-item (4 MiB) chunks. Static equal partitions
+    // leave the whole dataset build waiting for the slowest core; bounded
+    // atomic claims let faster cores finish additional ranges without putting
+    // synchronization inside RandomX's per-item initialization loop.
+    constexpr unsigned long kDatasetChunkItems = 1UL << 16;
+    std::atomic<unsigned long> next_item{0};
     std::vector<std::jthread> workers;
     workers.reserve(worker_count);
-    unsigned long start_item = 0;
     for (std::uint32_t worker = 0; worker < worker_count; ++worker) {
-        const unsigned long count = base_items + (worker < remainder ? 1UL : 0UL);
-        workers.emplace_back([dataset, cache, start_item, count, worker] {
+        workers.emplace_back([dataset, cache, &next_item, item_count, worker] {
             // First-touch dataset pages from the same interleaved physical-core
             // order used by the mining workers. This spreads initialization
             // traffic across visible NUMA nodes when the OS permits pinning.
             (void)platform::pin_current_thread(worker);
-            randomx_init_dataset(dataset.get(), cache.get(), start_item, count);
+            for (;;) {
+                const auto start_item = next_item.fetch_add(
+                    kDatasetChunkItems, std::memory_order_relaxed);
+                if (start_item >= item_count) break;
+                const auto count = std::min(
+                    kDatasetChunkItems, item_count - start_item);
+                randomx_init_dataset(dataset.get(), cache.get(), start_item, count);
+            }
         });
-        start_item += count;
     }
     for (auto& worker : workers) worker.join();
 
