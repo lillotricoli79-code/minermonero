@@ -452,7 +452,8 @@ class MinerController:
                     else:
                         if isinstance(payload, dict) and "hashrate" in payload:
                             with self.lock:
-                                self.native_status = payload
+                                if self.process is process:
+                                    self.native_status = payload
                         else:
                             self._log("Schema telemetria UNIQUE RX non valido.")
                 else:
