@@ -1,6 +1,8 @@
 #include "topology.hpp"
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdint>
 #include <cmath>
 #include <filesystem>
 #include <optional>
@@ -113,6 +115,34 @@ std::optional<std::uint32_t> available_cgroup_cpu_quota() {
 }
 #endif
 
+#ifdef __linux__
+// Linux cpusets can exceed CPU_SETSIZE on large hosts. Grow the affinity mask
+// until the kernel accepts it, then enumerate every CPU allowed to this process.
+// This follows the dynamic-affinity approach used by RxMiner (MIT).
+std::vector<unsigned int> allowed_linux_cpus() {
+    for (std::size_t words = 16; words <= 16384; words *= 2) {
+        std::vector<unsigned long> mask(words, 0UL);
+        const auto bytes = mask.size() * sizeof(unsigned long);
+        if (sched_getaffinity(0, bytes, reinterpret_cast<cpu_set_t*>(mask.data())) == 0) {
+            std::vector<unsigned int> cpus;
+            constexpr unsigned int bits = sizeof(unsigned long) * 8U;
+            for (std::size_t word = 0; word < mask.size(); ++word) {
+                auto value = mask[word];
+                while (value != 0) {
+                    const auto bit = static_cast<unsigned int>(__builtin_ctzl(value));
+                    const auto cpu = word * bits + bit;
+                    if (cpu <= UINT32_MAX) cpus.push_back(static_cast<unsigned int>(cpu));
+                    value &= value - 1;
+                }
+            }
+            return cpus;
+        }
+        if (errno != EINVAL) break;
+    }
+    return {};
+}
+#endif
+
 std::uint32_t available_logical_threads() {
 #ifdef _WIN32
     std::uint32_t count = 0;
@@ -122,11 +152,8 @@ std::uint32_t available_logical_threads() {
     }
     if (count != 0) return count;
 #elif defined(__linux__)
-    cpu_set_t allowed;
-    if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
-        const int count = CPU_COUNT(&allowed);
-        if (count > 0) return static_cast<std::uint32_t>(count);
-    }
+    const auto cpus = allowed_linux_cpus();
+    if (!cpus.empty()) return static_cast<std::uint32_t>(cpus.size());
 #endif
     return std::max(1U, std::thread::hardware_concurrency());
 }
@@ -232,11 +259,10 @@ std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
         }
     }
 #elif defined(__linux__)
-    cpu_set_t allowed;
-    if (sched_getaffinity(0, sizeof(allowed), &allowed) == 0) {
+    const auto allowed = allowed_linux_cpus();
+    if (!allowed.empty()) {
         std::set<std::pair<int, int>> cores;
-        for (int cpu = 0; cpu < CPU_SETSIZE; ++cpu) {
-            if (!CPU_ISSET(cpu, &allowed)) continue;
+        for (const auto cpu : allowed) {
             const auto root = std::string("/sys/devices/system/cpu/cpu") +
                 std::to_string(cpu) + "/topology/";
             std::ifstream package_file(root + "physical_package_id");
