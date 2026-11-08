@@ -260,9 +260,11 @@ int main() {
                         unique_rx::platform::close_socket(client);
                         return;
                     }
+                    // XMRig treats a JSON-RPC submit response with no error
+                    // as accepted even when the pool returns an empty result object.
                     const nlohmann::json accepted{
                         {"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                        {"result", {{"status", "OK"}}},
+                        {"result", nlohmann::json::object()},
                     };
                     first_session_ok = send_all(client, accepted.dump() + "\n");
                     unique_rx::platform::close_socket(client);
