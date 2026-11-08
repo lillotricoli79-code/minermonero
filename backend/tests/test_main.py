@@ -269,6 +269,20 @@ class ConfigValidationTests(unittest.TestCase):
 
 
 class MinerStatusTests(unittest.TestCase):
+    def test_offline_status_has_complete_telemetry_shape(self):
+        controller = MinerController()
+        with patch("backend.src.main.load_config", return_value={}), patch.object(
+            controller, "read_summary", side_effect=OSError("offline")
+        ):
+            status = controller.status()
+        self.assertEqual(status["state"], "OFFLINE")
+        self.assertIn("job_id", status)
+        self.assertIn("height", status)
+        self.assertEqual(
+            set(status["shares"]),
+            {"accepted", "rejected", "total", "stale", "pending", "expired", "dropped"},
+        )
+
     def test_native_startup_status_has_complete_telemetry_shape(self):
         class FakeProcess:
             def poll(self):
