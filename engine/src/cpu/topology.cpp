@@ -89,6 +89,7 @@ std::optional<std::uint32_t> available_cgroup_cpu_quota() {
             }
             if (has_cpu) {
                 starts.emplace_back(std::filesystem::path("/sys/fs/cgroup/cpu") / suffix);
+                starts.emplace_back(std::filesystem::path("/sys/fs/cgroup/cpu,cpuacct") / suffix);
             }
         }
     }
