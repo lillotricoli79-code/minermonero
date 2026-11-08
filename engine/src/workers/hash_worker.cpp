@@ -36,8 +36,24 @@ inline constexpr std::size_t kMaximumQueuedShares = 4096;
 
 std::uint64_t complete_hash(MiningState& state,
                              const std::shared_ptr<const MiningWork>& work,
-                             std::uint32_t nonce, const Hash& hash) {
-    const auto count = state.hashes.fetch_add(1, std::memory_order_relaxed) + 1;
+                             std::uint32_t nonce, const Hash& hash,
+                             std::uint64_t maximum_hashes) {
+    // Multiple workers may finish simultaneously. Reserve the completed-hash
+    // counter with a CAS so the public limit cannot be exceeded by fetch_add
+    // races; work finishing after the limit is reached is not submitted.
+    auto count = state.hashes.load(std::memory_order_relaxed);
+    for (;;) {
+        if (maximum_hashes != 0 && count >= maximum_hashes) {
+            state.stop.store(true, std::memory_order_release);
+            return count;
+        }
+        if (state.hashes.compare_exchange_weak(
+                count, count + 1, std::memory_order_relaxed,
+                std::memory_order_relaxed)) {
+            ++count;
+            break;
+        }
+    }
     // Serialize the final generation check with queue insertion. This closes
     // the reconnect race where a worker could enqueue an old-session share
     // immediately after the network thread had cleared the previous queue.
@@ -100,7 +116,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         auto completed_work = std::move(pending_work);
         pending_work.reset();
         const auto count = complete_hash(
-            state, completed_work, pending_nonce, hash);
+            state, completed_work, pending_nonce, hash, maximum_hashes);
         if (maximum_hashes != 0 && count >= maximum_hashes) {
             state.stop.store(true, std::memory_order_release);
         }
@@ -206,7 +222,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     vm.get(), blob.data(), blob.size(), hash.data());
                 if (pending_work) {
                     const auto count = complete_hash(
-                        state, pending_work, pending_nonce, hash);
+                        state, pending_work, pending_nonce, hash, maximum_hashes);
                     if (maximum_hashes != 0 && count >= maximum_hashes) {
                         state.stop.store(true, std::memory_order_release);
                     }
