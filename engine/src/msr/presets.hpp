@@ -33,7 +33,7 @@ inline std::optional<MsrPreset> msr_preset_for_cpu(
     // the same MSR write to arbitrary Intel generations.
     if (vendor == "GenuineIntel") {
         if (family != 0x06 || model != 0x5e) return std::nullopt;
-        return MsrPreset{"intel_skylake_s", {write(0x1a4, 0x0f, all_bits)}};
+        return MsrPreset{"intel_skylake_s", {write(0x1a4, 0x0f, 0x0f)}};
     }
     if (vendor != "AuthenticAMD") return std::nullopt;
 

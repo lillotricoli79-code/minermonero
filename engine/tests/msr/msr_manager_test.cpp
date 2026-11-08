@@ -7,7 +7,7 @@ int main() {
     const auto intel = unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x5e);
     if (!intel || intel->name != "intel_skylake_s" || intel->writes.size() != 1 ||
         intel->writes[0].register_id != 0x1a4 ||
-        intel->writes[0].value != 0x0f) {
+        intel->writes[0].value != 0x0f || intel->writes[0].mask != 0x0f) {
         std::cerr << "Intel Skylake-S RandomX MSR preset selection failed\n";
         return 1;
     }
