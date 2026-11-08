@@ -206,6 +206,7 @@ int run_miner(const std::filesystem::path& config_path,
             pending.clear();
             std::uint64_t next_id = 2;
             std::string session_id;
+            bool session_nicehash = false;
             auto next_keepalive = Clock::time_point::max();
             try {
                 StratumTransport transport;
@@ -216,13 +217,9 @@ int run_miner(const std::filesystem::path& config_path,
                 const auto login_deadline = Clock::now() + std::chrono::seconds(30);
 
                 const auto record_share_response = [&](const nlohmann::json& message) {
-                    if (!message.contains("id")) return;
-                    std::uint64_t response_id = 0;
-                    try {
-                        response_id = message["id"].get<std::uint64_t>();
-                    } catch (const nlohmann::json::exception&) {
-                        return;
-                    }
+                    const auto parsed_id = parse_rpc_response_id(message);
+                    if (!parsed_id) return;
+                    const std::uint64_t response_id = *parsed_id;
                     if (pending.find(response_id) == pending.end()) {
                         log_event("UNMATCHED_RESPONSE", message);
                         return;
@@ -308,19 +305,22 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto message = nlohmann::json::parse(line);
                         if (is_job_notification(message)) {
                             auto job = parse_job(message.at("params"));
+                            apply_nicehash_extension(job, session_nicehash);
                             log_event("NEW_JOB", {{"job_id", job.id},
                                 {"height", job.height ? nlohmann::json(*job.height)
                                                       : nlohmann::json(nullptr)}});
                             install_job(std::move(job));
-                        } else if (message.value("id", 0ULL) == 1) {
+                        } else if (parse_rpc_response_id(message).value_or(0) == 1) {
                             session_id = validate_login_response(message);
                             const auto& result = message.at("result");
+                            session_nicehash = login_advertises_nicehash(result);
                             log_event("LOGIN_ACCEPTED", {{"session_id", session_id},
                                 {"job_id", result.at("job").value("job_id", std::string())}});
                             if (pool.keepalive) {
                                 next_keepalive = Clock::now() + std::chrono::seconds(60);
                             }
                             auto job = parse_job(result.at("job"));
+                            apply_nicehash_extension(job, session_nicehash);
                             std::cout << "Pool login accepted; job " << job.id << '\n';
                             install_job(std::move(job));
                             retry_delay = std::chrono::seconds(1);
