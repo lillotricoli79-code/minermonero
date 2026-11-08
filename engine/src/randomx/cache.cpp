@@ -1,4 +1,5 @@
 #include "cache.hpp"
+#include "logging/log.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -11,7 +12,7 @@ std::shared_ptr<randomx_cache> create_randomx_cache(
     if (cache == nullptr && (flags & RANDOMX_FLAG_LARGE_PAGES) != 0) {
         flags = static_cast<randomx_flags>(
             static_cast<int>(flags) & ~static_cast<int>(RANDOMX_FLAG_LARGE_PAGES));
-        std::cerr << "RandomX large pages unavailable; using standard cache pages.\n";
+        logging::warning("memory", "large pages unavailable; using standard cache pages");
         cache = randomx_alloc_cache(flags);
     }
     if (cache == nullptr) {
@@ -20,7 +21,9 @@ std::shared_ptr<randomx_cache> create_randomx_cache(
 
     std::shared_ptr<randomx_cache> owned_cache(
         cache, [](randomx_cache* value) { randomx_release_cache(value); });
+    logging::info("memory", "initializing RandomX cache");
     randomx_init_cache(owned_cache.get(), seed.data(), seed.size());
+    logging::info("memory", "RandomX cache initialized");
     return owned_cache;
 }
 
