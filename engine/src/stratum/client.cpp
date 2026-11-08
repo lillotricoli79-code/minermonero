@@ -80,7 +80,7 @@ int run_miner(const std::filesystem::path& config_path,
         MsrManager msr(randomx_config.value("msr-module", std::string()));
         if (!msr_explicitly_disabled) {
             msr.apply_randomx_preset();
-            std::cout << "Intel RandomX MSR preset applied and will be restored on exit.\\n";
+            std::cout << "Intel RandomX MSR preset applied and will be restored on exit.\n";
         }
 
         platform::NetworkRuntime network;
