@@ -54,6 +54,15 @@ if (-not (Test-Path (Join-Path $dashboardDir "dist\index.html"))) {
     throw "Build dashboard terminata senza dashboard\dist\index.html."
 }
 
+# Prefer the already-used MSYS2 MinGW-w64 installation when present.
+$msysBin = "C:\msys64\mingw64\bin"
+if (Test-Path -LiteralPath $msysBin) {
+    $pathEntries = $env:PATH -split [IO.Path]::PathSeparator
+    if ($pathEntries -notcontains $msysBin) {
+        $env:PATH = "$msysBin$([IO.Path]::PathSeparator)$env:PATH"
+    }
+}
+
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
 if (-not $cmake) { throw "CMake è obbligatorio. Installa CMake e riapri PowerShell." }
 $ctest = Get-Command ctest -ErrorAction SilentlyContinue
