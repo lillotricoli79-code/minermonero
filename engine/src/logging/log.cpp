@@ -76,7 +76,7 @@ void set_file(const std::filesystem::path& path) {
         std::filesystem::create_directories(path.parent_path(), error);
         if (error) {
             std::cerr << "[ERROR] log cannot create directory "
-                      << path.parent_path().string() << ": " << error.message() << '\\n';
+                      << path.parent_path().string() << ": " << error.message() << '\n';
             return;
         }
     }
@@ -99,7 +99,7 @@ void set_file(const std::filesystem::path& path) {
             if (!error) std::filesystem::rename(path, rotated(1), error);
             if (error) {
                 std::cerr << "[WARN] log rotation skipped for " << path.string()
-                          << ": " << error.message() << '\\n';
+                          << ": " << error.message() << '\n';
             }
         }
     }
@@ -107,7 +107,7 @@ void set_file(const std::filesystem::path& path) {
     log_file.clear();
     log_file.open(path, std::ios::app);
     if (!log_file) {
-        std::cerr << "[ERROR] cannot open miner log file: " << path.string() << '\\n';
+        std::cerr << "[ERROR] cannot open miner log file: " << path.string() << '\n';
     }
 }
 
