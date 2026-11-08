@@ -1,9 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 from pydantic import ValidationError
 
 from backend.main import (
     MinerConfigUpdate,
+    MinerController,
     apply_config_update,
     is_local_api_connection,
     msr_override_enabled,
@@ -131,6 +133,43 @@ class ConfigValidationTests(unittest.TestCase):
                 MinerConfigUpdate(msr_mode="custom"),
             )
 
+
+
+class MinerShutdownTests(unittest.TestCase):
+    def test_windows_stop_requests_graceful_ctrl_break(self):
+        class FakeProcess:
+            def __init__(self):
+                self.signals = []
+                self.terminated = False
+                self.killed = False
+
+            def poll(self):
+                return None
+
+            def send_signal(self, value):
+                self.signals.append(value)
+
+            def terminate(self):
+                self.terminated = True
+
+            def wait(self, timeout):
+                return 0
+
+            def kill(self):
+                self.killed = True
+
+        controller = MinerController()
+        process = FakeProcess()
+        controller.process = process
+        with patch("backend.main.os.name", "nt"), patch(
+            "backend.main.signal.CTRL_BREAK_EVENT", 123, create=True
+        ):
+            controller.stop()
+
+        self.assertEqual(process.signals, [123])
+        self.assertFalse(process.terminated)
+        self.assertFalse(process.killed)
+        self.assertIn("Arresto miner completato", controller.recent_logs()[-1]["message"])
 
 class LocalApiTests(unittest.TestCase):
     def test_rejects_forwarded_non_loopback_peer_even_with_loopback_host(self):
