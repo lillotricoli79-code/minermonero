@@ -122,6 +122,10 @@ class ConfigValidationTests(unittest.TestCase):
 
         self.assertEqual(config.pool, "pool.example:3333")
 
+    def test_rejects_api_port_reserved_for_local_backend(self):
+        with self.assertRaises(ValidationError):
+            MinerConfigUpdate(api_port=8000)
+
     def test_normalizes_pool_tls_fingerprint(self):
         config = MinerConfigUpdate(
             pool="pool.example:3333",

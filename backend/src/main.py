@@ -86,6 +86,13 @@ class MinerConfigUpdate(BaseModel):
             raise ValueError("Valore non valido")
         return value
 
+    @field_validator("api_port")
+    @classmethod
+    def api_port_not_backend_port(cls, value: int) -> int:
+        if value == 8000:
+            raise ValueError("La porta 8000 è riservata al backend locale")
+        return value
+
     @field_validator("tls_fingerprint")
     @classmethod
     def valid_tls_fingerprint(cls, value: str) -> str:
@@ -125,6 +132,12 @@ def load_config() -> dict[str, Any]:
         config.update(saved)
         config["cpu"] = {**DEFAULTS["cpu"], **(saved.get("cpu") or {})}
         config["http"] = {**DEFAULTS["http"], **(saved.get("http") or {})}
+    try:
+        configured_api_port = int(config["http"].get("port", DEFAULTS["http"]["port"]))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("config.json: porta API non valida") from exc
+    if configured_api_port == 8000:
+        raise ValueError("config.json: la porta 8000 è riservata al backend locale")
     if not config["http"].get("access-token"):
         config["http"]["access-token"] = secrets.token_urlsafe(32)
         save_config(config)
