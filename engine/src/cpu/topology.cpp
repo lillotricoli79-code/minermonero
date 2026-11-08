@@ -16,6 +16,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -262,16 +263,28 @@ std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
 #elif defined(__linux__)
     const auto allowed = platform::linux_cpu::allowed_cpus();
     if (!allowed.empty()) {
-        std::set<std::pair<int, int>> cores;
+        std::set<std::tuple<int, int, int>> cores;
         for (const auto cpu : allowed) {
-            const auto root = std::string("/sys/devices/system/cpu/cpu") +
-                std::to_string(cpu) + "/topology/";
-            std::ifstream package_file(root + "physical_package_id");
-            std::ifstream core_file(root + "core_id");
+            const auto cpu_root = std::filesystem::path("/sys/devices/system/cpu") /
+                ("cpu" + std::to_string(cpu));
+            const auto topology = cpu_root / "topology";
+            std::ifstream package_file(topology / "physical_package_id");
+            std::ifstream core_file(topology / "core_id");
             int package = 0;
             int core = 0;
+            int node = -1;
+            std::error_code ec;
+            for (const auto& entry : std::filesystem::directory_iterator(cpu_root, ec)) {
+                const auto name = entry.path().filename().string();
+                if (name.size() > 4 && name.starts_with("node") &&
+                    std::all_of(name.begin() + 4, name.end(),
+                        [](unsigned char ch) { return ch >= '0' && ch <= '9'; })) {
+                    try { node = std::stoi(name.substr(4)); } catch (...) { node = -1; }
+                    break;
+                }
+            }
             if (package_file >> package && core_file >> core) {
-                cores.emplace(package, core);
+                cores.emplace(node, package, core);
             }
         }
         if (!cores.empty()) {
