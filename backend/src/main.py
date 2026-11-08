@@ -28,7 +28,7 @@ from .shell_log import ShellLog
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "config.json"
-DIST_DIR = ROOT / "dist"
+DIST_DIR = ROOT / "dashboard" / "dist"
 DEFAULTS: dict[str, Any] = {
     "autosave": True,
     "background": False,
