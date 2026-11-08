@@ -46,6 +46,8 @@ type Status = {
     accepted: number | null;
     rejected: number | null;
     total: number | null;
+    stale: number | null;
+    pending: number | null;
   };
   uptime_seconds: number | null;
   pool: string | null;
@@ -71,7 +73,7 @@ const emptyStatus: Status = {
   managed: false,
   error: null,
   hashrate: { "10s": null, "60s": null, "15m": null },
-  shares: { accepted: null, rejected: null, total: null },
+  shares: { accepted: null, rejected: null, total: null, stale: null, pending: null },
   uptime_seconds: null,
   pool: null,
   connected: null,
@@ -375,6 +377,20 @@ function App() {
                   icon={<CircleHelp size={16} />}
                   tone="orange"
                   detail="conteggio reale"
+                />
+                <MetricCard
+                  label="SHARE STALE"
+                  value={formatCount(status.shares.stale)}
+                  icon={<RefreshCw size={16} />}
+                  tone="orange"
+                  detail="job non più valido"
+                />
+                <MetricCard
+                  label="SHARE IN ATTESA"
+                  value={formatCount(status.shares.pending)}
+                  icon={<Radio size={16} />}
+                  tone="blue"
+                  detail="risposta pool pendente"
                 />
                 <MetricCard
                   label="UPTIME"

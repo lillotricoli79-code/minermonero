@@ -166,6 +166,8 @@ def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
             "accepted": int(accepted) if accepted is not None else None,
             "rejected": rejected,
             "total": int(total_shares) if total_shares is not None else None,
+            "stale": None,
+            "pending": None,
         },
         "uptime_seconds": int(uptime) if uptime is not None else None,
         "pool": connection.get("pool"),
