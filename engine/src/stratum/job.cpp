@@ -273,7 +273,18 @@ std::optional<std::uint64_t> parse_rpc_response_id(const nlohmann::json& message
 }
 
 bool rpc_response_failed(const nlohmann::json& message) noexcept {
-    return message.is_object() && message.contains("error") && !message["error"].is_null();
+    if (!message.is_object()) return true;
+    if (message.contains("error") && !message["error"].is_null()) return true;
+    if (message.contains("result") && message["result"].is_object()) {
+        const auto& result = message["result"];
+        if (result.contains("status") && result["status"].is_string()) {
+            const auto& status = result["status"].get_ref<const std::string&>();
+            if (status.size() != 2 ||
+                std::tolower(static_cast<unsigned char>(status[0])) != 'o' ||
+                std::tolower(static_cast<unsigned char>(status[1])) != 'k') return true;
+        }
+    }
+    return false;
 }
 
 bool login_advertises_nicehash(const nlohmann::json& result) noexcept {
