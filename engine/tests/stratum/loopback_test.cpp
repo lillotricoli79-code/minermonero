@@ -255,6 +255,8 @@ int main() {
             unique_rx::platform::close_socket(client);
         } catch (const std::exception& error) {
             std::cerr << "mock pool error: " << error.what() << '\n';
+        } catch (...) {
+            std::cerr << "mock pool error: unknown exception\n";
         }
     });
 
