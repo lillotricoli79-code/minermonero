@@ -30,7 +30,7 @@ unsigned int parse_unsigned(const char* value, unsigned int fallback) {
 
 void print_usage(const char* executable) {
     std::cout << "Usage: " << executable
-              << " --benchmark|--benchmark-interpreter [seconds] [lanes:1..4] [seed] [input]\n";
+              << " --benchmark|--benchmark-full|--benchmark-interpreter|--benchmark-full-interpreter [seconds] [lanes:1..4] [seed] [input]\n";
     std::cout << "       " << executable
               << " --mine [config.json] [max-hashes:0=unlimited]\n";
 }
@@ -49,8 +49,12 @@ int main(int argc, char** argv) {
             return argc < 2 ? 2 : 0;
         }
         const std::string_view command(argv[1]);
-        const bool use_jit = command == "--benchmark";
-        if (!use_jit && command != "--benchmark-interpreter") {
+        const bool full_memory =
+            command == "--benchmark-full" || command == "--benchmark-full-interpreter";
+        const bool use_jit =
+            command == "--benchmark" || command == "--benchmark-full";
+        if (!use_jit && command != "--benchmark-interpreter" &&
+            command != "--benchmark-full-interpreter") {
             print_usage(argv[0]);
             return 2;
         }
@@ -59,7 +63,8 @@ int main(int argc, char** argv) {
         const auto lanes = parse_unsigned(argc > 3 ? argv[3] : nullptr, 1);
         const std::string_view key = argc > 4 ? argv[4] : "UNIQUE-RX reference seed";
         const std::string_view input = argc > 5 ? argv[5] : "UNIQUE-RX reference input";
-        return unique_rx::run_benchmark(seconds, lanes, use_jit, key, input) ? 0 : 1;
+        return unique_rx::run_benchmark(seconds, lanes, use_jit, full_memory,
+                                        key, input) ? 0 : 1;
     } catch (const std::exception& error) {
         std::cerr << "UNIQUE RX fatal error: " << error.what() << '\n';
         return 1;
