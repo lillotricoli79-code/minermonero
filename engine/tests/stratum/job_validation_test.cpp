@@ -79,6 +79,17 @@ int main() {
                     job.target == UINT64_MAX && job.nonce == 0x12345678U &&
                     job.height == std::optional<std::uint64_t>{2345678},
                 "valid rx/0 job or little-endian nonce did not parse");
+    for (const auto* alias : {"rx/0", "rx", "randomx", "randomx/0"}) {
+        auto alias_job = wire_job;
+        alias_job["algo"] = alias;
+        ok &= check(parse_job(alias_job).id == "job-1",
+                    "a supported RandomX V1 pool algorithm alias was rejected");
+    }
+    auto rx2_job = wire_job;
+    rx2_job["algo"] = "rx/2";
+    ok &= rejects([&] { parse_job(rx2_job); },
+                  "unsupported RandomX V2 rx/2 was accepted by the V1-only engine");
+
     auto nicehash_job = wire_job;
     nicehash_job["nicehash"] = true;
     nicehash_job["blob"] = std::string(kNonceOffset * 2, '0') +
