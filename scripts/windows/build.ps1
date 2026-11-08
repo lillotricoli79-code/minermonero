@@ -111,7 +111,7 @@ foreach ($candidatePrefix in $mingwCandidates) {
     $versionText = (& $candidateGxx -dumpfullversion -dumpversion 2>$null | Select-Object -First 1)
     try { $compilerVersion = [version]$versionText.Trim() } catch { continue }
     if ($compilerVersion.Major -lt 13) {
-        Write-Host "Ignoro GCC $compilerVersion in $candidatePrefix: richiesto GCC 13+." -ForegroundColor Yellow
+        Write-Host "Ignoro GCC $compilerVersion in ${candidatePrefix}: richiesto GCC 13+." -ForegroundColor Yellow
         continue
     }
     $mingwPrefix = $candidatePrefix
