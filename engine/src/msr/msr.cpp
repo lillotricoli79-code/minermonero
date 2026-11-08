@@ -3,13 +3,10 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
-#include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <iterator>
 #include <iostream>
 #include <iterator>
-#include <cstring>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -286,6 +283,7 @@ struct MsrManager::Impl {
     }
 
     void restore() noexcept {
+        bool restoration_pending = false;
         for (auto& original : originals) {
             if (!original.modified) continue;
             try {
@@ -293,12 +291,15 @@ struct MsrManager::Impl {
                 write_current_msr(original.value);
                 original.modified = false;
             } catch (const std::exception& error) {
+                restoration_pending = true;
                 std::cerr << "MSR restore warning: " << error.what() << '\n';
             } catch (...) {
+                restoration_pending = true;
                 std::cerr << "MSR restore warning: unknown error\n";
             }
+            restoration_pending = restoration_pending || original.modified;
         }
-        active = false;
+        active = restoration_pending;
     }
 
     void close_pawnio() noexcept {
@@ -340,13 +341,16 @@ struct MsrManager::Impl {
 
         try {
             for (auto& original : originals) {
-                if (::pwrite(original.fd, &kRandomXIntelMsrValue,
-                             sizeof(kRandomXIntelMsrValue), kIntelMiscFeatureControl) !=
-                    static_cast<ssize_t>(sizeof(kRandomXIntelMsrValue))) {
-                    throw std::system_error(errno, std::generic_category(),
+                // Mark before the write so a short/failed write is also rolled back.
+                original.modified = true;
+                const auto written = ::pwrite(
+                    original.fd, &kRandomXIntelMsrValue,
+                    sizeof(kRandomXIntelMsrValue), kIntelMiscFeatureControl);
+                if (written != static_cast<ssize_t>(sizeof(kRandomXIntelMsrValue))) {
+                    const int error = written < 0 ? errno : EIO;
+                    throw std::system_error(error, std::generic_category(),
                                             "cannot write Intel MSR 0x1A4");
                 }
-                original.modified = true;
                 std::uint64_t current_value = 0;
                 if (::pread(original.fd, &current_value, sizeof(current_value),
                             kIntelMiscFeatureControl) !=
@@ -363,22 +367,26 @@ struct MsrManager::Impl {
     }
 
     void restore() noexcept {
+        bool restoration_pending = false;
         for (auto& original : originals) {
             if (original.modified) {
-                if (::pwrite(original.fd, &original.value, sizeof(original.value),
-                             kIntelMiscFeatureControl) !=
-                    static_cast<ssize_t>(sizeof(original.value))) {
+                const auto written = ::pwrite(
+                    original.fd, &original.value, sizeof(original.value),
+                    kIntelMiscFeatureControl);
+                if (written != static_cast<ssize_t>(sizeof(original.value))) {
+                    restoration_pending = true;
                     std::cerr << "MSR restore warning: failed to restore MSR 0x1A4\n";
                 } else {
                     original.modified = false;
                 }
             }
-            if (original.fd >= 0) {
+            restoration_pending = restoration_pending || original.modified;
+            if (original.fd >= 0 && !original.modified) {
                 ::close(original.fd);
                 original.fd = -1;
             }
         }
-        active = false;
+        active = restoration_pending;
     }
 #endif
 
@@ -386,6 +394,14 @@ struct MsrManager::Impl {
         restore();
 #ifdef _WIN32
         close_pawnio();
+#else
+        // A final close is required even if the kernel rejected a restore write.
+        for (auto& original : originals) {
+            if (original.fd >= 0) {
+                ::close(original.fd);
+                original.fd = -1;
+            }
+        }
 #endif
     }
 };
