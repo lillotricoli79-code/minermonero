@@ -163,7 +163,8 @@ int run_miner(const std::filesystem::path& config_path,
         std::shared_ptr<randomx_dataset> dataset;
         auto flags = randomx_get_flags();
         const auto cpu_config = config.value("cpu", nlohmann::json::object());
-        if (cpu_config.value("huge-pages", false)) flags |= RANDOMX_FLAG_LARGE_PAGES;
+        const bool large_pages_requested = cpu_config.value("huge-pages", false);
+        if (large_pages_requested) flags |= RANDOMX_FLAG_LARGE_PAGES;
         // Explicit JIT huge pages are optional and fall back to normal pages
         // when the OS privilege/reservation is unavailable.
         rxm_set_jit_huge_pages(cpu_config.value("jit-huge-pages", false) ? 1 : 0);
@@ -528,6 +529,10 @@ int run_miner(const std::filesystem::path& config_path,
                             {"threads", pool_threads}, {"cpu", cpu_summary},
                             {"workers", collect_worker_status()},
                             {"msr_active", msr.active()}, {"full_memory", full_memory},
+                    {"large_pages_requested", large_pages_requested},
+                    {"large_pages_active", (flags & RANDOMX_FLAG_LARGE_PAGES) != 0},
+                            {"large_pages_requested", large_pages_requested},
+                            {"large_pages_active", (work->flags & RANDOMX_FLAG_LARGE_PAGES) != 0},
                             {"system", {
                                 {"cpu_percent", optional_number(system_sample.system_cpu_percent)},
                                 {"process_cpu_percent", optional_number(system_sample.process_cpu_percent)},
