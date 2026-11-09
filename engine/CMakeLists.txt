@@ -94,7 +94,7 @@ if(BUILD_TESTING)
   add_test(NAME unique-rx-msr-lifecycle COMMAND unique-rx-msr-tests)
 
   add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/logging/log.cpp src/stratum/client.cpp
-    src/stratum/job.cpp src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp)
+    src/stratum/job.cpp src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp src/telemetry/system.cpp)
   target_compile_features(unique-rx-stratum-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-stratum-tests PRIVATE src
     "${randomx_SOURCE_DIR}/src")
@@ -108,7 +108,7 @@ if(BUILD_TESTING)
   add_executable(unique-rx-stratum-integration-tests
     tests/stratum/loopback_test.cpp src/logging/log.cpp src/stratum/client.cpp src/stratum/job.cpp
     src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp
-    src/stratum/transport.cpp)
+    src/stratum/transport.cpp src/telemetry/system.cpp)
   target_compile_features(unique-rx-stratum-integration-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-stratum-integration-tests PRIVATE src
     "${randomx_SOURCE_DIR}/src")
