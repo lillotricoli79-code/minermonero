@@ -150,6 +150,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     constexpr std::uint64_t kNonceReservationSize = 256;
     std::uint32_t pending_nonce = 0;
     bool pipeline_active = false;
+    std::uint64_t active_vm_config_generation = UINT64_MAX;
     Hash hash{};
 
     const auto flush_pending = [&]() {
@@ -195,9 +196,12 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
 
             const bool job_changed =
                 !active_work || active_work->generation != work->generation;
+            const auto requested_vm_config_generation =
+                state.vm_config_generation.load(std::memory_order_acquire);
             const bool vm_flags_changed =
                 !vm || !active_work || active_work->flags != work->flags ||
-                active_work->full_memory != work->full_memory;
+                active_work->full_memory != work->full_memory ||
+                active_vm_config_generation != requested_vm_config_generation;
             const bool memory_changed =
                 active_work && (active_work->cache != work->cache ||
                                active_work->dataset != work->dataset);
@@ -237,6 +241,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     }
                 }
                 if (!vm) throw std::runtime_error("worker VM creation failed");
+                active_vm_config_generation = requested_vm_config_generation;
                 logging::info("cpu", "worker #" + std::to_string(worker_id) + " RandomX VM ready");
             } else if (memory_changed) {
                 if (work->full_memory) {
