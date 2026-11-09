@@ -220,7 +220,7 @@ int run_miner(const std::filesystem::path& config_path,
                 result.push_back({
                     {"id", worker}, {"hashes", hashes},
                     {"hashrate_hps", worker_rates[worker]},
-                    {"active", worker < workers.size() && !state.stop.load(std::memory_order_relaxed)}
+                    {"active", worker < workers.size() && worker_rates[worker] > 0.0}
                 });
             }
             return result;
