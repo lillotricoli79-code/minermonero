@@ -212,7 +212,7 @@ int main() {
     const auto& pool = pools.front();
     ok &= check(pools.size() == 1 && pool.host == "pool.example.net" &&
                     pool.port == "3333" && pool.wallet == "test-wallet" &&
-                    pool.password == "x" && pool.worker == "rig01" &&
+                    pool.password == "x" && pool.worker.empty() &&
                     !pool.tls && pool.threads > 0,
                 "pool configuration defaults or host parsing failed");
 
