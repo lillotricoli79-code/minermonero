@@ -596,19 +596,19 @@ int run_miner(const std::filesystem::path& config_path,
                         } else if (command == "best") {
                             const auto best = state.best_snapshot();
                             std::cout << "Hash stimati: " << std::fixed << std::setprecision(2)
-                                      << best.estimated_hashes << '\\n';
+                                      << best.estimated_hashes << '\n';
                             for (std::size_t index = 0; index < best.top_difficulties.size(); ++index) {
                                 const auto& result = best.top_difficulties[index];
                                 std::cout << '#' << (index + 1) << " difficulty "
                                           << result.difficulty << " | unix "
-                                          << result.at_unix_seconds << '\\n';
+                                          << result.at_unix_seconds << '\n';
                             }
                             if (!best.top_difficulties.empty() &&
                                 best.top_difficulties.front().difficulty > 0.0) {
                                 std::cout << "Effort stimato: "
                                           << best.estimated_hashes /
                                              best.top_difficulties.front().difficulty * 100.0
-                                          << "%\\n";
+                                          << "%\n";
                             }
                         } else if (command == "workers") {
                             for (std::uint32_t id = 0; id < desired_threads->load() &&
