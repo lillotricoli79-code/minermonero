@@ -654,8 +654,8 @@ function App() {
                     <DataRow
                       key={worker.id}
                       icon={<Cpu size={15} />}
-                      label={\`Worker #\${worker.id + 1} · \${worker.active ? "attivo" : "fermo"}\`}
-                      value={\`\${formatHashrate(worker.hashrate_hps)} · \${formatCount(worker.hashes)} hash\`}
+                      label={`Worker #${worker.id + 1} · ${worker.active ? "attivo" : "fermo"}`}
+                      value={`${formatHashrate(worker.hashrate_hps)} · ${formatCount(worker.hashes)} hash`}
                     />
                   )) : (
                     <div className="chart-empty">
