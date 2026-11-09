@@ -35,6 +35,7 @@ if ($needsAdmin) {
 $backendMain = Join-Path $repoRoot "backend\src\main.py"
 $dashboardIndex = Join-Path $repoRoot "dashboard\dist\index.html"
 $minerExe = Join-Path $repoRoot "unique-rx.exe"
+$requirements = Join-Path $repoRoot "requirements.txt"
 $requiredFiles = @($backendMain, $dashboardIndex, $minerExe, $requirements)
 $missingFiles = @($requiredFiles | Where-Object { -not (Test-Path -LiteralPath $_) })
 if ($missingFiles.Count -gt 0) {
