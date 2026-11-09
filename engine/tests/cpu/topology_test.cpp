@@ -43,6 +43,21 @@ int main() {
     });
     expect(object_threads, std::min(3U, logical), "XMRig object thread profile");
 
+    const auto array_affinities = unique_rx::select_cpu_affinities({
+        {"threads", nlohmann::json::array({-1, 3})}
+    });
+    if (array_affinities != std::vector<std::int64_t>({-1, 3})) {
+        std::cerr << "XMRig array affinity profile was not decoded.\\n";
+        return 1;
+    }
+    const auto object_affinities = unique_rx::select_cpu_affinities({
+        {"threads", {{"threads", 3}, {"affinity", "0x0f"}}}
+    });
+    if (object_affinities != std::vector<std::int64_t>({0, 1, 2})) {
+        std::cerr << "XMRig affinity mask was not expanded into worker CPU IDs.\\n";
+        return 1;
+    }
+
     const auto cpu = unique_rx::cpu_summary_json();
     if (!cpu.is_object() || cpu.value("vendor", std::string()).empty() ||
         cpu.value("brand", std::string()).empty() ||
