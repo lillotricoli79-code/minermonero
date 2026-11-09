@@ -645,13 +645,13 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << "Hashrate ultimi "
                                       << std::distance(first_sample, shell_rate_history.end())
                                       << " secondi (picco " << std::fixed << std::setprecision(2)
-                                      << peak << " H/s)\\n";
+                                      << peak << " H/s)\n";
                             for (auto sample = first_sample; sample != shell_rate_history.end(); ++sample) {
                                 const double rate = *sample;
                                 const auto bars = peak > 0.0
                                     ? static_cast<std::size_t>(rate / peak * 40.0) : 0U;
                                 std::cout << std::setw(9) << std::fixed << std::setprecision(1)
-                                          << rate << " H/s | " << std::string(bars, '#') << '\\n';
+                                          << rate << " H/s | " << std::string(bars, '#') << '\n';
                             }
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
