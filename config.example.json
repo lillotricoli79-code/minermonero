@@ -1,17 +1,34 @@
 {
+  "autosave": true,
+  "background": false,
+  "colors": true,
+  "title": true,
+  "print-time": 5,
+  "health-print-time": 60,
+  "retries": 5,
+  "retry-pause": 5,
+  "user-agent": "UniqueRX/1.0",
   "cpu": {
     "enabled": true,
     "threads": 0,
     "max-threads-hint": 0,
     "huge-pages": true,
-    "jit-huge-pages": false,
-    "prefetch-mode": 1,
-    "priority": 2
+    "huge-pages-jit": false,
+    "hw-aes": null,
+    "memory-pool": true,
+    "priority": null,
+    "yield": false,
+    "asm": "auto"
   },
   "randomx": {
-    "full-memory": true,
+    "init": -1,
+    "init-avx2": -1,
+    "mode": "auto",
+    "1gb-pages": false,
+    "rdmsr": true,
     "wrmsr": false,
-    "msr-module": "msr/IntelMSR.bin"
+    "numa": true,
+    "scratchpad_prefetch_mode": 1
   },
   "pools": [
     {
@@ -21,7 +38,9 @@
       "pass": "x",
       "rig-id": "unique-rx-worker",
       "tls": false,
-      "keepalive": false
+      "keepalive": true,
+      "nicehash": false,
+      "tls-fingerprint": null
     }
   ]
 }
