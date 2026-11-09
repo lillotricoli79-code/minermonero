@@ -84,7 +84,7 @@ struct MiningState {
 
     std::shared_ptr<const MiningWork> current_work();
     void set_work(std::shared_ptr<const MiningWork> next);
-    std::uint64_t next_nonce_offset(std::uint64_t generation);
+    std::uint64_t next_nonce_offset(std::uint64_t generation, std::uint64_t count = 1);
     void report_worker_error(const std::string& error);
 };
 
