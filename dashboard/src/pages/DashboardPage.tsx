@@ -728,7 +728,7 @@ function App() {
                     <DataRow icon={<Activity size={15} />} label="Temperatura sensore" value={status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "Non disponibile"} />
                     <DataRow icon={<Cpu size={15} />} label="Huge Pages" value={status.large_pages_active == null ? "Non disponibile" : status.large_pages_active ? "Attive" : status.large_pages_requested ? "Non disponibili · fallback" : "Disattivate"} />
                     <DataRow icon={<Gauge size={15} />} label="Latenza share" value={status.pool_latency_ms == null ? "In attesa" : `${formatCount(status.pool_latency_ms)} ms`} />
-                    <DataRow icon={<RefreshCw size={15} />} label="Riconnessioni pool" value={formatCount(status.reconnects ?? 0)} />
+                    <DataRow icon={<RefreshCw size={15} />} label="Riconnessioni pool" value={status.reconnects == null ? "Non disponibile" : formatCount(status.reconnects)} />
                     <DataRow icon={<Activity size={15} />} label="Alimentazione" value={status.system?.on_battery == null ? "Non disponibile" : status.system.on_battery ? "Batteria" : "Rete elettrica"} />
                     <DataRow icon={<Gauge size={15} />} label="Potenza package" value={status.system?.package_power_watts != null ? `${status.system.package_power_watts.toFixed(1)} W` : "Non disponibile"} />
                     <DataRow
