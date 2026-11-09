@@ -1,6 +1,5 @@
 #include "stratum/stratum.hpp"
 #include "platform/socket.hpp"
-#include "logging/log.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -13,6 +12,12 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
+#ifdef _WIN32
+#else
+#include <cerrno>
+#include <sys/wait.h>
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -82,6 +87,58 @@ unsigned short reserve_closed_port() {
     return port;
 }
 
+int run_miner_process(const std::filesystem::path& executable,
+                       const std::filesystem::path& config_path) {
+#ifdef _WIN32
+    std::wstring command = L"\"" + executable.wstring() + L"\" --mine \"" +
+                           config_path.wstring() + L"\"";
+    std::vector<wchar_t> mutable_command(command.begin(), command.end());
+    mutable_command.push_back(L'\\0');
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(executable.c_str(), mutable_command.data(), nullptr, nullptr,
+                        TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+        std::cerr << "CreateProcessW failed: " << GetLastError() << '\\n';
+        return -1;
+    }
+    const DWORD wait_result = WaitForSingleObject(process.hProcess, 30000);
+    if (wait_result != WAIT_OBJECT_0) {
+        TerminateProcess(process.hProcess, 124);
+        WaitForSingleObject(process.hProcess, 5000);
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+        return 124;
+    }
+    DWORD exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    return static_cast<int>(exit_code);
+#else
+    const pid_t child = fork();
+    if (child < 0) return -1;
+    if (child == 0) {
+        const auto exe = executable.string();
+        const auto config = config_path.string();
+        execl(exe.c_str(), exe.c_str(), "--mine", config.c_str(),
+              static_cast<char*>(nullptr));
+        _exit(127);
+    }
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    int status = 0;
+    while (std::chrono::steady_clock::now() < deadline) {
+        const pid_t waited = waitpid(child, &status, WNOHANG);
+        if (waited == child) return WIFEXITED(status) ? WEXITSTATUS(status) : 128;
+        if (waited < 0 && errno != EINTR) return -1;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    kill(child, SIGKILL);
+    waitpid(child, &status, 0);
+    return 124;
+#endif
+}
+
 unsigned long long process_id() {
 #ifdef _WIN32
     return static_cast<unsigned long long>(GetCurrentProcessId());
@@ -126,7 +183,7 @@ bool read_line(Socket socket, std::string& line) {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {\n    if (argc != 2) {\n        std::cerr << "usage: loopback_test <unique-rx executable>\\n";\n        return 2;\n    }
     unique_rx::platform::NetworkRuntime network;
     const Socket listener = ::socket(AF_INET, SOCK_STREAM, 0);
     if (!unique_rx::platform::socket_valid(listener)) return 1;
@@ -366,15 +423,12 @@ int main() {
         }
     });
 
-    const int result = unique_rx::run_miner(config_path, 0);
+    // Run the real miner executable in a child process. This exercises the
+    // production CLI and keeps Windows CRT signal/console/logger state isolated
+    // from the mock-pool test harness.
+    const int result = run_miner_process(std::filesystem::path(argv[1]), config_path);
     pool.join();
     unique_rx::platform::close_socket(listener);
-
-    // The logger owns a background writer. Drain and join it before reading
-    // its file; never swap process-wide std::cout/std::cerr stream buffers while
-    // worker threads may flush them (the MSVC CRT fast-fails on that race).
-    unique_rx::logging::flush();
-    unique_rx::logging::close_file();
 
     const auto log_path = config_path.parent_path() / "unique-rx-stratum.log";
     const auto status_path = config_path.parent_path() / "unique-rx-status.json";
