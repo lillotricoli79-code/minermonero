@@ -12,8 +12,10 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <io.h>
+#include <conio.h>
 #else
 #include <unistd.h>
+#include <poll.h>
 #endif
 #include <cstdio>
 
@@ -39,6 +41,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <stop_token>
 #include <unordered_map>
 
 namespace unique_rx {
@@ -112,6 +115,7 @@ int run_miner(const std::filesystem::path& config_path,
         MiningState& state;
         ~StopWorkers() { state.stop.store(true, std::memory_order_release); }
     } stop_workers{state};
+    std::jthread shell_input_thread;
 
     using Clock = std::chrono::steady_clock;
     constexpr auto kShareResponseTimeout = std::chrono::seconds(60);
@@ -221,40 +225,81 @@ int run_miner(const std::filesystem::path& config_path,
         std::uint64_t generation = 0;
         std::uint32_t pool_threads = pools.front().threads;
         const std::uint32_t automatic_threads = pool_threads;
-        state.initialize_worker_counters(256);
-        auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
-        if (console_input_available()) {
-            std::thread([desired_threads, automatic_threads] {
-                std::string command_line;
-                std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\n";
-                while (std::getline(std::cin, command_line)) {
-                    std::istringstream input(command_line);
-                    std::string command;
-                    std::string value;
-                    input >> command;
-                    if (command == "help") {
-                        std::cout << "Comandi: threads N (1-256), threads auto\n";
-                    } else if (command == "threads" && (input >> value)) {
-                        if (value == "auto") {
-                            desired_threads->store(automatic_threads, std::memory_order_release);
-                            std::cout << "Richiesto profilo automatico: " << automatic_threads << " thread\n";
-                        } else {
-                            try {
-                                std::size_t used = 0;
-                                const auto requested = std::stoul(value, &used, 10);
-                                if (used != value.size() || requested == 0 || requested > 256) {
-                                    std::cout << "Valore non valido. Usa un numero da 1 a 256.\n";
-                                    continue;
+        state.initialize_worker_counters(2        if (console_input_available()) {
+            shell_input_thread = std::jthread(
+                [desired_threads, automatic_threads](std::stop_token stop_token) {
+                    std::string command_line;
+                    const auto process_command = [&](const std::string& line) {
+                        std::istringstream input(line);
+                        std::string command;
+                        std::string value;
+                        input >> command;
+                        if (command == "help") {
+                            std::cout << "Comandi: threads N (1-256), threads auto\n";
+                        } else if (command == "threads" && (input >> value)) {
+                            if (value == "auto") {
+                                desired_threads->store(automatic_threads, std::memory_order_release);
+                                std::cout << "Richiesto profilo automatico: "
+                                          << automatic_threads << " thread\n";
+                            } else {
+                                try {
+                                    std::size_t used = 0;
+                                    const auto requested = std::stoul(value, &used, 10);
+                                    if (used != value.size() || requested == 0 || requested > 256) {
+                                        std::cout << "Valore non valido. Usa un numero da 1 a 256.\n";
+                                        return;
+                                    }
+                                    desired_threads->store(static_cast<std::uint32_t>(requested),
+                                                            std::memory_order_release);
+                                    std::cout << "Richiesti " << requested
+                                              << " thread; applicazione in corso...\n";
+                                } catch (...) {
+                                    std::cout << "Valore non valido. Usa threads N oppure threads auto.\n";
                                 }
-                                desired_threads->store(static_cast<std::uint32_t>(requested),
-                                                        std::memory_order_release);
-                                std::cout << "Richiesti " << requested << " thread; applicazione in corso...\n";
-                            } catch (...) {
-                                std::cout << "Valore non valido. Usa threads N oppure threads auto.\n";
                             }
+                        } else if (!command.empty()) {
+                            std::cout << "Comando sconosciuto. Digita help.\n";
                         }
-                    } else if (!command.empty()) {
-                        std::cout << "Comando sconosciuto. Digita help.\n";
+                    };
+
+                    std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\n";
+                    while (!stop_token.stop_requested()) {
+                        char character = 0;
+#ifdef _WIN32
+                        if (!_kbhit()) {
+                            Sleep(50);
+                            continue;
+                        }
+                        const int key = _getch();
+                        if (key == 0 || key == 224) {
+                            (void)_getch();
+                            continue;
+                        }
+                        character = static_cast<char>(key);
+#else
+                        pollfd descriptor{};
+                        descriptor.fd = STDIN_FILENO;
+                        descriptor.events = POLLIN;
+                        const int ready = ::poll(&descriptor, 1, 50);
+                        if (ready == 0) continue;
+                        if (ready < 0) continue;
+                        if ((descriptor.revents & (POLLIN | POLLHUP)) == 0) continue;
+                        const auto count = ::read(STDIN_FILENO, &character, 1);
+                        if (count <= 0) break;
+#endif
+                        if (character == '\r' || character == '\n') {
+                            if (!command_line.empty()) process_command(command_line);
+                            command_line.clear();
+                        } else if (character == '\b' || character == 127) {
+                            if (!command_line.empty()) command_line.pop_back();
+                        } else if (character >= 32 && character <= 126 &&
+                                   command_line.size() < 128) {
+                            command_line.push_back(character);
+                        }
+                    }
+                });
+        }
+to. Digita help.\n";
                     }
                 }
             }).detach();
