@@ -71,6 +71,8 @@ type Status = {
   } | null;
   msr_active: boolean | null;
   workers: WorkerStatus[];
+  pool_latency_ms: number | null;
+  reconnects: number;
   system: { cpu_percent: number | null; process_cpu_percent: number | null; cpu_frequency_mhz: number | null; memory_used_bytes: number | null; process_memory_bytes: number | null; temperature_c: number | null; package_power_watts: number | null; on_battery: boolean | null } | null;
   full_memory: boolean | null;
   pool: string | null;
@@ -111,6 +113,8 @@ const emptyStatus: Status = {
   msr_active: null,
   system: null,
   workers: [],
+  pool_latency_ms: null,
+  reconnects: 0,
   full_memory: null,
   pool: null,
   connected: null,
@@ -718,6 +722,8 @@ function App() {
                     <DataRow icon={<Gauge size={15} />} label="Frequenza CPU" value={status.system?.cpu_frequency_mhz != null ? `${formatCount(status.system.cpu_frequency_mhz)} MHz` : "Non disponibile"} />
                     <DataRow icon={<Cpu size={15} />} label="RAM sistema / processo" value={status.system?.memory_used_bytes != null ? `${(status.system.memory_used_bytes / 1073741824).toFixed(2)} / ${status.system.process_memory_bytes != null ? (status.system.process_memory_bytes / 1073741824).toFixed(2) : "n/d"} GB` : "Non disponibile"} />
                     <DataRow icon={<Activity size={15} />} label="Temperatura sensore" value={status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "Non disponibile"} />
+                    <DataRow icon={<Gauge size={15} />} label="Latenza share" value={status.pool_latency_ms == null ? "In attesa" : `${formatCount(status.pool_latency_ms)} ms`} />
+                    <DataRow icon={<RefreshCw size={15} />} label="Riconnessioni pool" value={formatCount(status.reconnects)} />
                     <DataRow icon={<Activity size={15} />} label="Alimentazione" value={status.system?.on_battery == null ? "Non disponibile" : status.system.on_battery ? "Batteria" : "Rete elettrica"} />
                     <DataRow icon={<Gauge size={15} />} label="Potenza package" value={status.system?.package_power_watts != null ? `${status.system.package_power_watts.toFixed(1)} W` : "Non disponibile"} />
                     <DataRow
