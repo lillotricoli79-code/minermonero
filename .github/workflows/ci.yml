@@ -116,18 +116,20 @@ jobs:
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item -LiteralPath $exe -Destination $out
           Get-ChildItem -LiteralPath $build -Filter "*.dll" -File | Copy-Item -Destination $out -Force
-          $msr = Join-Path $build "msr\IntelMSR.bin"
-          if (-not (Test-Path -LiteralPath $msr)) { throw "Verified IntelMSR.bin was not copied beside the native executable." }
-          New-Item -ItemType Directory -Force -Path (Join-Path $out "msr") | Out-Null
-          Copy-Item -LiteralPath $msr -Destination (Join-Path $out "msr\IntelMSR.bin")
-          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "engine\msr\PawnIO-COPYING") -Destination (Join-Path $out "msr\COPYING")
-          $moduleHash = (Get-FileHash -LiteralPath (Join-Path $out "msr\IntelMSR.bin") -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($moduleHash -ne "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f") { throw "Packaged IntelMSR.bin SHA-256 mismatch." }
           $hash = (Get-FileHash -LiteralPath (Join-Path $out "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
-          Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ascii -Value @(
-            "$hash  unique-rx.exe",
-            "$moduleHash  msr/IntelMSR.bin"
-          )
+          $hashLines = @("$hash  unique-rx.exe")
+          $msr = Join-Path $build "msr\IntelMSR.bin"
+          if (Test-Path -LiteralPath $msr) {
+            $moduleHash = (Get-FileHash -LiteralPath $msr -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($moduleHash -ne "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f") { throw "Packaged IntelMSR.bin SHA-256 mismatch." }
+            New-Item -ItemType Directory -Force -Path (Join-Path $out "msr") | Out-Null
+            Copy-Item -LiteralPath $msr -Destination (Join-Path $out "msr\IntelMSR.bin")
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "engine\msr\PawnIO-COPYING") -Destination (Join-Path $out "msr\COPYING")
+            $hashLines += "$moduleHash  msr/IntelMSR.bin"
+          } else {
+            Write-Host "Optional MSR module not present; standard CPU package remains valid."
+          }
+          Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ascii -Value $hashLines
           $licenses = Join-Path $out "licenses"
           New-Item -ItemType Directory -Force -Path $licenses | Out-Null
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "LICENSES\XMRIG-GPL-3.0.txt") -Destination $licenses
