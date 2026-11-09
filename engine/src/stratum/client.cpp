@@ -408,14 +408,20 @@ int run_miner(const std::filesystem::path& config_path,
         std::size_t memory_pool_capacity = 0;
         if (cpu_config.contains("memory-pool") && !cpu_config["memory-pool"].is_null()) {
             const auto& memory_pool = cpu_config["memory-pool"];
+            const auto automatic_memory_pool_capacity = [&] {
+                const auto l3_bytes = cpu_summary.value("l3_cache_bytes", std::uint64_t{0});
+                const auto l3_pages = static_cast<std::size_t>(l3_bytes / (2ULL * 1024ULL * 1024ULL));
+                return std::max<std::size_t>(pool_threads, l3_pages);
+            };
             if (memory_pool.is_boolean()) {
-                memory_pool_capacity = memory_pool.get<bool>() ? pool_threads : 0;
+                memory_pool_capacity = memory_pool.get<bool>()
+                    ? automatic_memory_pool_capacity() : 0;
             } else if (memory_pool.is_number_integer()) {
                 const auto requested = memory_pool.get<std::int64_t>();
                 if (requested < -1 || requested > 256)
                     throw std::runtime_error("cpu.memory-pool must be false, true, -1, or an integer from 0 to 256");
                 memory_pool_capacity = requested <= 0
-                    ? (requested == -1 ? pool_threads : 0)
+                    ? (requested == -1 ? automatic_memory_pool_capacity() : 0)
                     : static_cast<std::size_t>(requested);
             } else {
                 throw std::runtime_error("cpu.memory-pool must be boolean or integer");
