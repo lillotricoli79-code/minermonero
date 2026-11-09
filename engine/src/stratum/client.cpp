@@ -304,6 +304,8 @@ int run_miner(const std::filesystem::path& config_path,
                 [&state, desired_threads, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
+                    std::array<std::uint64_t, 256> previous_worker_hashes{};
+                    std::array<double, 256> worker_hashrates{};
                     auto previous_sample = Clock::now();
                     double shell_hashrate = 0.0;
                     const auto process_command = [&](const std::string& line) {
@@ -391,10 +393,15 @@ int run_miner(const std::filesystem::path& config_path,
                                       << " | expired " << state.expired_shares.load()
                                       << " | dropped " << state.dropped_shares.load() << '\n';
                         } else if (command == "workers") {
-                            std::cout << "Workers configurati: " << desired_threads->load()
-                                      << " | hash totali: "
-                                      << state.hashes.load(std::memory_order_relaxed)
-                                      << " | dettaglio per-worker disponibile nel log/API\n";
+                            for (std::uint32_t id = 0; id < desired_threads->load() &&
+                                 id < worker_hashrates.size(); ++id) {
+                                std::cout << "Worker #" << id << " | "
+                                          << std::fixed << std::setprecision(2)
+                                          << worker_hashrates[id] << " H/s | hashes "
+                                          << (id < state.worker_hashes.size() && state.worker_hashes[id]
+                                              ? state.worker_hashes[id]->load(std::memory_order_relaxed) : 0)
+                                          << '\\n';
+                            }
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
                         } else if (command == "logs") {
@@ -450,8 +457,18 @@ int run_miner(const std::filesystem::path& config_path,
                         if (now - previous_sample >= std::chrono::seconds(1)) {
                             const auto hashes = state.hashes.load(std::memory_order_relaxed);
                             const auto elapsed = std::chrono::duration<double>(now - previous_sample).count();
-                            if (elapsed > 0.0) shell_hashrate =
-                                static_cast<double>(hashes - previous_hashes) / elapsed;
+                            if (elapsed > 0.0) {
+                                shell_hashrate =
+                                    static_cast<double>(hashes - previous_hashes) / elapsed;
+                                for (std::size_t id = 0; id < worker_hashrates.size(); ++id) {
+                                    if (id >= state.worker_hashes.size() || !state.worker_hashes[id]) continue;
+                                    const auto worker_hashes =
+                                        state.worker_hashes[id]->load(std::memory_order_relaxed);
+                                    worker_hashrates[id] = static_cast<double>(
+                                        worker_hashes - previous_worker_hashes[id]) / elapsed;
+                                    previous_worker_hashes[id] = worker_hashes;
+                                }
+                            }
                             previous_hashes = hashes;
                             previous_sample = now;
                         }
