@@ -15,3 +15,5 @@ CMakeFiles/
 /engine/msr/*.bin
 
 /release/
+
+/unique-rx-stratum.log*
