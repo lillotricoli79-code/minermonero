@@ -88,7 +88,8 @@ std::string hex_encode(const std::uint8_t* bytes, std::size_t length) {
 } // namespace
 
 int run_miner(const std::filesystem::path& config_path,
-              std::uint64_t maximum_hashes) {
+              std::uint64_t maximum_hashes,
+              std::uint32_t thread_override) {
     g_stop_requested = 0;
     std::signal(SIGINT, request_stop);
     std::signal(SIGTERM, request_stop);
@@ -115,7 +116,16 @@ int run_miner(const std::filesystem::path& config_path,
     try {
         std::ifstream file(config_path);
         if (!file) throw std::runtime_error("cannot open config.json");
-        const auto config = nlohmann::json::parse(file);
+        auto config = nlohmann::json::parse(file);
+        if (thread_override > 0) {
+            if (thread_override > 256)
+                throw std::invalid_argument("--threads must be between 1 and 256");
+            if (!config.contains("cpu") || !config["cpu"].is_object())
+                config["cpu"] = nlohmann::json::object();
+            config["cpu"]["threads"] = thread_override;
+            logging::info("cpu", "thread count overridden from shell: " +
+                std::to_string(thread_override));
+        }
         const auto pools = parse_pool_configs(config);
         const auto randomx_config = config.value("randomx", nlohmann::json::object());
         const bool full_memory = randomx_config.value("full-memory", true);
