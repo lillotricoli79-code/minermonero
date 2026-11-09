@@ -200,7 +200,7 @@ function App() {
         if (systemCpu != null && Number.isFinite(systemCpu)) {
           const minerCpu = nextStatus.system?.process_cpu_percent ?? null;
           setSystemHistory((current) =>
-            [...current, { at: Date.now(), system: systemCpu, miner: minerCpu }].slice(-48),
+            [...current, { at: Date.now(), system: systemCpu, miner: minerCpu }].slice(-180),
           );
         }
       }
