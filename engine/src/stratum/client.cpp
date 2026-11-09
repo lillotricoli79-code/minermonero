@@ -225,7 +225,9 @@ int run_miner(const std::filesystem::path& config_path,
         std::uint64_t generation = 0;
         std::uint32_t pool_threads = pools.front().threads;
         const std::uint32_t automatic_threads = pool_threads;
-        state.initialize_worker_counters(2        if (console_input_available()) {
+        state.initialize_worker_counters(256);
+        auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
+        if (console_input_available()) {
             shell_input_thread = std::jthread(
                 [desired_threads, automatic_threads](std::stop_token stop_token) {
                     std::string command_line;
@@ -235,34 +237,34 @@ int run_miner(const std::filesystem::path& config_path,
                         std::string value;
                         input >> command;
                         if (command == "help") {
-                            std::cout << "Comandi: threads N (1-256), threads auto\n";
+                            std::cout << "Comandi: threads N (1-256), threads auto\\n";
                         } else if (command == "threads" && (input >> value)) {
                             if (value == "auto") {
                                 desired_threads->store(automatic_threads, std::memory_order_release);
                                 std::cout << "Richiesto profilo automatico: "
-                                          << automatic_threads << " thread\n";
+                                          << automatic_threads << " thread\\n";
                             } else {
                                 try {
                                     std::size_t used = 0;
                                     const auto requested = std::stoul(value, &used, 10);
                                     if (used != value.size() || requested == 0 || requested > 256) {
-                                        std::cout << "Valore non valido. Usa un numero da 1 a 256.\n";
+                                        std::cout << "Valore non valido. Usa un numero da 1 a 256.\\n";
                                         return;
                                     }
                                     desired_threads->store(static_cast<std::uint32_t>(requested),
                                                             std::memory_order_release);
                                     std::cout << "Richiesti " << requested
-                                              << " thread; applicazione in corso...\n";
+                                              << " thread; applicazione in corso...\\n";
                                 } catch (...) {
-                                    std::cout << "Valore non valido. Usa threads N oppure threads auto.\n";
+                                    std::cout << "Valore non valido. Usa threads N oppure threads auto.\\n";
                                 }
                             }
                         } else if (!command.empty()) {
-                            std::cout << "Comando sconosciuto. Digita help.\n";
+                            std::cout << "Comando sconosciuto. Digita help.\\n";
                         }
                     };
 
-                    std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\n";
+                    std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\\n";
                     while (!stop_token.stop_requested()) {
                         char character = 0;
 #ifdef _WIN32
@@ -287,10 +289,10 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto count = ::read(STDIN_FILENO, &character, 1);
                         if (count <= 0) break;
 #endif
-                        if (character == '\r' || character == '\n') {
+                        if (character == '\\r' || character == '\\n') {
                             if (!command_line.empty()) process_command(command_line);
                             command_line.clear();
-                        } else if (character == '\b' || character == 127) {
+                        } else if (character == '\\b' || character == 127) {
                             if (!command_line.empty()) command_line.pop_back();
                         } else if (character >= 32 && character <= 126 &&
                                    command_line.size() < 128) {
@@ -298,11 +300,6 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                     }
                 });
-        }
-to. Digita help.\n";
-                    }
-                }
-            }).detach();
         }
         const auto cpu_summary = cpu_summary_json();
         // XMRig-compatible persistent scratchpad pool: false disables it,
