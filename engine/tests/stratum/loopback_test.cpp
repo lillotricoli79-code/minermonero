@@ -373,8 +373,8 @@ int main() {
         miner_log.find("new job local-job") == std::string::npos ||
         miner_log.find("share rejected") == std::string::npos ||
         miner_log.find("stale share") == std::string::npos ||
-        miner_status.find("\\"job_id\\":\\"local-job\\"") == std::string::npos ||
-        miner_status.find("\\"accepted\\":1") == std::string::npos) {
+        miner_status.find(R"("job_id":"local-job")") == std::string::npos ||
+        miner_status.find(R"("accepted":1)") == std::string::npos) {
         std::cerr << "local Stratum reconnect/login/job/share acceptance test failed"
                   << " result=" << result
                   << " server_ok=" << server_ok.load(std::memory_order_acquire)
