@@ -375,9 +375,13 @@ struct PendingShare {
                     pending.erase(pending_share);
 
                     const bool has_error = rpc_response_failed(message);
-                    // XMRig treats an error-free JSON-RPC response as accepted;
-                    // NyxRX additionally validates an explicit result.status.
-                    const bool accepted = !has_error;
+                    const auto result_status = message.contains("result") &&
+                        message["result"].is_object()
+                        ? message["result"].value("status", std::string())
+                        : std::string();
+                    const bool explicit_rejection = !result_status.empty() &&
+                        result_status != "OK" && result_status != "ok";
+                    const bool accepted = !has_error && !explicit_rejection;
                     log_event("SUBMIT_RESPONSE", message);
                     std::string error_text = has_error
                         ? (message.contains("error") && !message["error"].is_null()
@@ -506,7 +510,7 @@ std::uint64_t hash_value = 0;
                         next_keepalive = now + std::chrono::seconds(60);
                     }
                     for (auto it = pending.begin(); it != pending.end();) {
-                        if (now - it->second >= kShareResponseTimeout) {
+                        if (now - it->second.submitted_at >= kShareResponseTimeout) {
                             it = pending.erase(it);
                             state.expired_shares.fetch_add(1, std::memory_order_relaxed);
                         } else {
@@ -705,6 +709,7 @@ std::uint64_t hash_value = 0;
                     {"algorithm", "rx/0"}, {"job_id", nullptr}, {"height", nullptr}, {"job_difficulty", nullptr},
                     {"threads", pool_threads}, {"cpu", cpu_summary},
                     {"workers", collect_worker_status()},
+                    {"best", collect_best_status()},
                     {"msr_active", msr.active()}, {"full_memory", full_memory},
                     {"large_pages_requested", large_pages_requested},
                     {"large_pages_active", state.large_pages_active.load(std::memory_order_relaxed)},
