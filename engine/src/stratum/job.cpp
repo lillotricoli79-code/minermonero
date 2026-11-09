@@ -205,16 +205,19 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
             port_number == 0 || port_number > 65535) {
             throw std::invalid_argument("pool port must be an integer between 1 and 65535");
         }
-        entry.wallet = pool.at("user").get<std::string>();
+        entry.wallet = pool.contains("user") && !pool["user"].is_null()
+            ? pool["user"].get<std::string>() : std::string("x");
         if (entry.wallet.empty() ||
             entry.wallet.find_first_of("\r\n") != std::string::npos) {
             throw std::invalid_argument("pool wallet/login cannot be empty or contain newlines");
         }
-        entry.password = pool.value("pass", std::string("x"));
+        entry.password = pool.contains("pass") && !pool["pass"].is_null()
+            ? pool["pass"].get<std::string>() : std::string("x");
         if (entry.password.find_first_of("\r\n") != std::string::npos) {
             throw std::invalid_argument("pool password cannot contain newlines");
         }
-        entry.worker = pool.value("rig-id", std::string("rig01"));
+        entry.worker = pool.contains("rig-id") && !pool["rig-id"].is_null()
+            ? pool["rig-id"].get<std::string>() : std::string();
         if (pool.contains("algo") && !pool["algo"].is_null()) {
             const auto pool_algorithm = pool["algo"].get<std::string>();
             if (pool_algorithm != "rx/0" && pool_algorithm != "rx" &&
@@ -222,13 +225,15 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
                 throw std::invalid_argument("pool.algo must select RandomX rx/0");
             }
         }
-        if (pool.value("daemon", false) || pool.contains("self-select")) {
+        if ((pool.contains("daemon") && !pool["daemon"].is_null() && pool["daemon"].get<bool>()) ||
+            (pool.contains("self-select") && !pool["self-select"].is_null())) {
             throw std::invalid_argument("XMRig daemon/self-select pool modes are not supported by the RandomX Stratum engine");
         }
         if (pool.contains("socks5") && !pool["socks5"].is_null()) {
             throw std::invalid_argument("pool.socks5 proxy is not supported by the native transport");
         }
-        entry.tls = pool.value("tls", false) || scheme_tls;
+        entry.tls = (pool.contains("tls") && !pool["tls"].is_null()
+            ? pool["tls"].get<bool>() : false) || scheme_tls;
         if (pool.contains("keepalive") && !pool["keepalive"].is_null()) {
             const auto& keepalive = pool["keepalive"];
             if (keepalive.is_boolean()) {
@@ -244,13 +249,15 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
             [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
         // XMRig Pool::Pool detects NiceHash from either the explicit option
         // or the nicehash.com host suffix; preserve that behavior in C++.
-        entry.nicehash = pool.value("nicehash", false) ||
+        entry.nicehash = (pool.contains("nicehash") && !pool["nicehash"].is_null()
+            ? pool["nicehash"].get<bool>() : false) ||
             normalized_host.find("nicehash.com") != std::string::npos;
         entry.threads = cpu_threads;
         entry.cpu_affinities = select_cpu_affinities(
             config.value("cpu", nlohmann::json::object()));
-        entry.tls_fingerprint = normalize_fingerprint(
-            pool.value("tls-fingerprint", std::string()));
+        const auto fingerprint = pool.contains("tls-fingerprint") && !pool["tls-fingerprint"].is_null()
+            ? pool["tls-fingerprint"].get<std::string>() : std::string();
+        entry.tls_fingerprint = normalize_fingerprint(fingerprint);
         if (!entry.tls_fingerprint.empty() && !entry.tls) {
             throw std::invalid_argument("pool fingerprint requires TLS");
         }
