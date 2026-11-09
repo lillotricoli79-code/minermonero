@@ -57,12 +57,14 @@ int main() {
                 "best-share telemetry does not retain the ten highest difficulties");
 
     MiningState state;
-    unique_rx::core::hash_worker(state, 0, 0, 0);
+    std::atomic<bool> worker_stop{false};
+    unique_rx::core::hash_worker(state, 0, 0, 0, worker_stop);
     ok &= check(state.stop.load(), "zero worker count did not stop the miner");
     ok &= check(has_error(state, expected_error), "zero worker count error was not reported");
 
     MiningState invalid_index_state;
-    unique_rx::core::hash_worker(invalid_index_state, 2, 2, 0);
+    std::atomic<bool> invalid_worker_stop{false};
+    unique_rx::core::hash_worker(invalid_index_state, 2, 2, 0, invalid_worker_stop);
     ok &= check(invalid_index_state.stop.load(), "out-of-range worker index did not stop the miner");
     ok &= check(has_error(invalid_index_state, expected_error),
                  "out-of-range worker index error was not reported");
