@@ -828,7 +828,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  shares          accepted/rejected/stale/pending\n"
                                       << "  best            difficoltà migliori ed effort stimato\n"
                                       << "  workers         hashrate e contatori per worker\n"
-                                      << "  graph           grafico ASCII hashrate ultimi 60 secondi\n"
+                                      << "  graph           grafico hashrate ASCII ultimi 15 minuti\n"
                                       << "  cpu             CPU, core, thread e feature rilevate\n"
                                       << "  logs [N]        ultimi N log (default 30, max 200)\n"
                                       << "  pool            endpoint e opzioni pool (segreti nascosti)\n"
@@ -1004,21 +1004,36 @@ int run_miner(const std::filesystem::path& config_path,
                                           << '\n';
                             }
                         } else if (command == "graph") {
-                            const auto first_sample = shell_rate_history.size() > 60
-                                ? shell_rate_history.end() - 60 : shell_rate_history.begin();
-                            const double peak = first_sample == shell_rate_history.end()
-                                ? 0.0 : *std::max_element(first_sample, shell_rate_history.end());
-                            std::cout << "Hashrate ultimi "
-                                      << std::distance(first_sample, shell_rate_history.end())
-                                      << " secondi (picco " << std::fixed << std::setprecision(2)
-                                      << peak << " H/s)\n";
-                            for (auto sample = first_sample; sample != shell_rate_history.end(); ++sample) {
-                                const double rate = *sample;
-                                const auto bars = peak > 0.0
-                                    ? static_cast<std::size_t>(rate / peak * 40.0) : 0U;
-                                std::cout << std::setw(9) << std::fixed << std::setprecision(1)
-                                          << rate << " H/s | " << std::string(bars, '#') << '\n';
+                            const auto first_sample = shell_rate_history.size() > 900
+                                ? shell_rate_history.end() - 900 : shell_rate_history.begin();
+                            const auto sample_count = static_cast<std::size_t>(
+                                std::distance(first_sample, shell_rate_history.end()));
+                            std::array<double, 60> buckets{};
+                            double peak = 0.0;
+                            for (std::size_t bucket = 0; bucket < buckets.size(); ++bucket) {
+                                const auto first = sample_count * bucket / buckets.size();
+                                const auto last = sample_count * (bucket + 1) / buckets.size();
+                                if (last <= first) continue;
+                                double sum = 0.0;
+                                for (auto offset = first; offset < last; ++offset)
+                                    sum += *(first_sample + static_cast<std::ptrdiff_t>(offset));
+                                buckets[bucket] = sum / static_cast<double>(last - first);
+                                peak = std::max(peak, buckets[bucket]);
                             }
+                            std::cout << "Hashrate ultimi 15 minuti · picco "
+                                      << std::fixed << std::setprecision(2) << peak << " H/s\n";
+                            for (int row = 8; row >= 1; --row) {
+                                std::cout << "  | ";
+                                for (const auto rate : buckets) {
+                                    const auto level = peak > 0.0
+                                        ? static_cast<int>(std::clamp(rate / peak, 0.0, 1.0) * 8.0)
+                                        : 0;
+                                    std::cout << (level >= row ? '#' : ' ');
+                                }
+                                std::cout << '\n';
+                            }
+                            std::cout << "  +------------------------------------------------------------+\n"
+                                      << "    15m fa                                               adesso\n";
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
                         } else if (command == "logs") {
