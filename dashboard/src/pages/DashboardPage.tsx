@@ -459,7 +459,7 @@ function App() {
                 <div className="primary-actions">
                   <button
                     className="button button-start"
-                    disabled={busy || active || status.managed}
+                    disabled={busy || active || status.managed || status.state === "RICONNESSIONE" || status.state === "AVVIO"}
                     onClick={() => void runMiner("start")}
                   >
                     <Play size={15} fill="currentColor" />
@@ -467,7 +467,7 @@ function App() {
                   </button>
                   <button
                     className="button button-stop"
-                    disabled={busy || !active}
+                    disabled={busy || (!active && status.state !== "RICONNESSIONE" && status.state !== "AVVIO")}
                     onClick={() => void runMiner("stop")}
                   >
                     <Square size={13} fill="currentColor" />
