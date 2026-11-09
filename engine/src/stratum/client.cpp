@@ -228,9 +228,37 @@ int run_miner(const std::filesystem::path& config_path,
         const std::uint32_t automatic_threads = pool_threads;
         state.initialize_worker_counters(256);
         auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
+        const auto cpu_summary = cpu_summary_json();
+        // XMRig-compatible persistent scratchpad pool: false disables it,
+        // true sizes it for the active workers, and a number sets capacity.
+        std::size_t memory_pool_capacity = 0;
+        if (cpu_config.contains("memory-pool") && !cpu_config["memory-pool"].is_null()) {
+            const auto& memory_pool = cpu_config["memory-pool"];
+            if (memory_pool.is_boolean()) {
+                memory_pool_capacity = memory_pool.get<bool>() ? pool_threads : 0;
+            } else if (memory_pool.is_number_integer()) {
+                const auto requested = memory_pool.get<std::int64_t>();
+                if (requested < -1 || requested > 256)
+                    throw std::runtime_error("cpu.memory-pool must be false, true, -1, or an integer from 0 to 256");
+                memory_pool_capacity = requested <= 0
+                    ? (requested == -1 ? pool_threads : 0)
+                    : static_cast<std::size_t>(requested);
+            } else {
+                throw std::runtime_error("cpu.memory-pool must be boolean or integer");
+            }
+        }
+        rxm_set_memory_pool(memory_pool_capacity);
+        logging::info("memory", memory_pool_capacity == 0
+            ? "RandomX scratchpad memory pool disabled"
+            : "RandomX scratchpad memory pool capacity " +
+                std::to_string(memory_pool_capacity) + " pages");
+        auto started = Clock::now();
+        std::vector<std::uint64_t> worker_previous_hashes(pool_threads, 0);
+        std::vector<double> worker_rates(pool_threads, 0.0);
+        std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [&state, desired_threads, automatic_threads, &cpu_summary](std::stop_token stop_token) {
+                [&state, desired_threads, automatic_threads, &cpu_summary, started](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     auto previous_sample = Clock::now();
@@ -289,11 +317,10 @@ int run_miner(const std::filesystem::path& config_path,
                                       << " | expired " << state.expired_shares.load()
                                       << " | dropped " << state.dropped_shares.load() << '\n';
                         } else if (command == "workers") {
-                            for (std::uint32_t id = 0; id < desired_threads->load(); ++id) {
-                                const auto hashes = id < state.worker_hashes.size() && state.worker_hashes[id]
-                                    ? state.worker_hashes[id]->load(std::memory_order_relaxed) : 0;
-                                std::cout << "Worker #" << id << " | hashes " << hashes << '\n';
-                            }
+                            std::cout << "Workers configurati: " << desired_threads->load()
+                                      << " | hash totali: "
+                                      << state.hashes.load(std::memory_order_relaxed)
+                                      << " | dettaglio per-worker disponibile nel log/API\\n";
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
                         } else if (command == "logs") {
@@ -369,34 +396,7 @@ int run_miner(const std::filesystem::path& config_path,
                     }
                 });
         }
-        const auto cpu_summary = cpu_summary_json();
-        // XMRig-compatible persistent scratchpad pool: false disables it,
-        // true sizes it for the active workers, and a number sets capacity.
-        std::size_t memory_pool_capacity = 0;
-        if (cpu_config.contains("memory-pool") && !cpu_config["memory-pool"].is_null()) {
-            const auto& memory_pool = cpu_config["memory-pool"];
-            if (memory_pool.is_boolean()) {
-                memory_pool_capacity = memory_pool.get<bool>() ? pool_threads : 0;
-            } else if (memory_pool.is_number_integer()) {
-                const auto requested = memory_pool.get<std::int64_t>();
-                if (requested < -1 || requested > 256)
-                    throw std::runtime_error("cpu.memory-pool must be false, true, -1, or an integer from 0 to 256");
-                memory_pool_capacity = requested <= 0
-                    ? (requested == -1 ? pool_threads : 0)
-                    : static_cast<std::size_t>(requested);
-            } else {
-                throw std::runtime_error("cpu.memory-pool must be boolean or integer");
-            }
-        }
-        rxm_set_memory_pool(memory_pool_capacity);
-        logging::info("memory", memory_pool_capacity == 0
-            ? "RandomX scratchpad memory pool disabled"
-            : "RandomX scratchpad memory pool capacity " +
-                std::to_string(memory_pool_capacity) + " pages");
-        auto started = Clock::now();
-        std::vector<std::uint64_t> worker_previous_hashes(pool_threads, 0);
-        std::vector<double> worker_rates(pool_threads, 0.0);
-        std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
+
         // NyxRX metrics.rs MetricsSnapshot port: rates come from actual worker
         // counter deltas; no synthetic hashrate is generated for the dashboard.
         const auto collect_best_status = [&]() {
