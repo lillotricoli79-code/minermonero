@@ -226,7 +226,7 @@ int run_miner(const std::filesystem::path& config_path,
                 throw std::runtime_error("cpu.priority must be between -1 and 5");
             cpu_priority = static_cast<int>(configured_priority);
         }
-        state.cpu_priority = cpu_priority;
+        state.cpu_priority.store(cpu_priority, std::memory_order_relaxed);
         if (cpu_config.contains("yield") && !cpu_config["yield"].is_null()) {
             if (!cpu_config["yield"].is_boolean())
                 throw std::runtime_error("cpu.yield must be boolean or null");
@@ -363,6 +363,8 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  threads N       imposta worker in tempo reale (1-256)\n"
                                       << "  threads auto    ripristina il numero automatico iniziale\n"
                                       << "  set prefetch-mode N (0-3) modifica il prefetch JIT live\n"
+                                      << "  set cpu.priority -1..5 aggiorna la priorità dei worker\n"
+                                      << "  set cpu.yield on|off abilita/disabilita yield XMRig\n"
                                       << "  set huge-pages on|off (richiede riavvio)\n"
                                       << "  set randomx.mode fast|light (richiede riavvio)\n"
                                       << "  help            mostra questo aiuto\n"
@@ -408,7 +410,32 @@ int run_miner(const std::filesystem::path& config_path,
                                 } catch (...) {
                                     std::cout << "Valore prefetch-mode non valido\n";
                                 }
-                            } else if (setting == "huge-pages" || setting == "randomx.mode") {
+                            } else if (setting == "cpu.priority") {
+                                try {
+                                    std::size_t used = 0;
+                                    const int priority = std::stoi(setting_value, &used, 10);
+                                    if (used != setting_value.size() || priority < -1 || priority > 5) {
+                                        std::cout << "cpu.priority deve essere compreso tra -1 e 5\\n";
+                                    } else {
+                                        state.cpu_priority.store(priority, std::memory_order_release);
+                                        logging::info("cpu", "runtime CPU priority changed to " + std::to_string(priority));
+                                        std::cout << "Priorità richiesta; applicazione entro il prossimo blocco nonce per ogni worker.\\n";
+                                    }
+                                } catch (...) {
+                                    std::cout << "Valore cpu.priority non valido\\n";
+                                }
+                            } else if (setting == "cpu.yield") {
+                                if (setting_value == "on" || setting_value == "true" || setting_value == "1") {
+                                    state.cpu_yield.store(true, std::memory_order_release);
+                                    logging::info("cpu", "cpu.yield enabled at runtime");
+                                } else if (setting_value == "off" || setting_value == "false" || setting_value == "0") {
+                                    state.cpu_yield.store(false, std::memory_order_release);
+                                    logging::info("cpu", "cpu.yield disabled at runtime");
+                                } else {
+                                    std::cout << "cpu.yield accetta on/off\\n";
+                                }
+                            } else if (setting == "huge-pages" || setting == "randomx.mode" ||
+                                       setting == "cpu.hw-aes" || setting == "randomx.numa") {
                                 std::cout << setting << " è un'impostazione di inizializzazione RandomX: modifica config.json e riavvia il miner per applicarla.\n";
                             } else {
                                 std::cout << "Impostazione non supportata dalla shell: " << setting << '\n';
