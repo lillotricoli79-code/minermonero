@@ -477,7 +477,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  memory          profilo RandomX, pagine e prefetch\n"
                                       << "  config          configurazione XMRig (credenziali oscurate)\n"
                                       << "  threads N       imposta worker in tempo reale (1-256)\n"
-                                      << "  threads auto    ripristina il numero automatico iniziale\n"
+                                      << "  threads auto    ripristina il numero iniziale configurato\n"
                                       << "  set cpu.threads N modifica i worker in tempo reale\n"
                                       << "  set prefetch-mode N (0-3) modifica il prefetch JIT live\n"
                                       << "  set cpu.priority -1..5 aggiorna la priorità dei worker\n"
@@ -489,7 +489,7 @@ int run_miner(const std::filesystem::path& config_path,
                         } else if (command == "threads" && (input >> value)) {
                             if (value == "auto") {
                                 desired_threads->store(automatic_threads, std::memory_order_release);
-                                std::cout << "Richiesto profilo automatico: "
+                                std::cout << "Ripristino numero iniziale: "
                                           << automatic_threads << " thread\n";
                             } else {
                                 try {
