@@ -210,6 +210,8 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
         entry.nicehash = pool.value("nicehash", false) ||
             normalized_host.find("nicehash.com") != std::string::npos;
         entry.threads = cpu_threads;
+        entry.cpu_affinities = select_cpu_affinities(
+            config.value("cpu", nlohmann::json::object()));
         entry.tls_fingerprint = normalize_fingerprint(
             pool.value("tls-fingerprint", std::string()));
         if (!entry.tls_fingerprint.empty() && !entry.tls) {
