@@ -710,9 +710,13 @@ std::uint64_t hash_value = 0;
                         for (std::uint32_t worker = 0; worker < pool_threads; ++worker) {
                             auto worker_stop = std::make_shared<std::atomic<bool>>(false);
                             worker_stop_flags.push_back(worker_stop);
+                            std::optional<std::int64_t> affinity_override;
+                            if (worker < pool.cpu_affinities.size()) {
+                                affinity_override = pool.cpu_affinities[worker];
+                            }
                             workers.emplace_back(hash_worker, std::ref(state), worker,
                                                  pool_threads, maximum_hashes,
-                                                 std::ref(*worker_stop));
+                                                 std::ref(*worker_stop), affinity_override);
                         }
                     }
 
