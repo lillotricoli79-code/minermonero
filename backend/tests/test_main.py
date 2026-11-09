@@ -324,7 +324,7 @@ class MinerStatusTests(unittest.TestCase):
         self.assertIn("height", status)
         self.assertEqual(
             set(status["shares"]),
-            {"accepted", "rejected", "total", "stale", "pending", "expired", "dropped"},
+            {"found", "submitted", "accepted", "rejected", "total", "stale", "pending", "expired", "dropped"},
         )
 
     def test_native_startup_status_has_complete_telemetry_shape(self):
@@ -338,7 +338,7 @@ class MinerStatusTests(unittest.TestCase):
         status = controller.status()
         self.assertEqual(
             set(status["shares"]),
-            {"accepted", "rejected", "total", "stale", "pending", "expired", "dropped"},
+            {"found", "submitted", "accepted", "rejected", "total", "stale", "pending", "expired", "dropped"},
         )
         self.assertIsNone(status["job_id"])
         self.assertIsNone(status["height"])
