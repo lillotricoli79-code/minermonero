@@ -103,6 +103,8 @@ class MinerConfigUpdate(BaseModel):
 
     @model_validator(mode="after")
     def fingerprint_requires_tls(self):
+        if self.api_port == 8000:
+            raise ValueError("La porta 8000 è riservata al backend locale; usa una porta API diversa")
         if self.tls_fingerprint and not self.tls:
             raise ValueError("Abilita TLS quando configuri un fingerprint del certificato")
         return self
