@@ -208,14 +208,14 @@ function App() {
               hashrate: rate != null && Number.isFinite(rate) ? rate : null,
               hashrate60: rate60 != null && Number.isFinite(rate60) ? rate60 : null,
               hashrate15m: rate15m != null && Number.isFinite(rate15m) ? rate15m : null,
-            }].slice(-180),
+            }].slice(-360),
           );
         }
         const systemCpu = nextStatus.system?.cpu_percent;
         if (systemCpu != null && Number.isFinite(systemCpu)) {
           const minerCpu = nextStatus.system?.process_cpu_percent ?? null;
           setSystemHistory((current) =>
-            [...current, { at: Date.now(), system: systemCpu, miner: minerCpu }].slice(-180),
+            [...current, { at: Date.now(), system: systemCpu, miner: minerCpu }].slice(-360),
           );
         }
       }
