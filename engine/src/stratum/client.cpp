@@ -412,6 +412,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  config          configurazione XMRig (credenziali oscurate)\n"
                                       << "  threads N       imposta worker in tempo reale (1-256)\n"
                                       << "  threads auto    ripristina il numero automatico iniziale\n"
+                                      << "  set cpu.threads N modifica i worker in tempo reale\n"
                                       << "  set prefetch-mode N (0-3) modifica il prefetch JIT live\n"
                                       << "  set cpu.priority -1..5 aggiorna la priorità dei worker\n"
                                       << "  set cpu.yield on|off abilita/disabilita yield XMRig\n"
@@ -445,7 +446,22 @@ int run_miner(const std::filesystem::path& config_path,
                             std::string setting_value;
                             if (!(input >> setting >> setting_value)) {
                                 std::cout << "Uso: set prefetch-mode N | set huge-pages on|off | set randomx.mode fast|light\n";
-                            } else if (setting == "prefetch-mode") {
+                            } else if (setting == "cpu.threads") {
+                                try {
+                                    std::size_t used = 0;
+                                    const auto requested = std::stoul(setting_value, &used, 10);
+                                    if (used != setting_value.size() || requested == 0 || requested > 256) {
+                                        std::cout << "cpu.threads deve essere compreso tra 1 e 256\\n";
+                                    } else {
+                                        desired_threads->store(static_cast<std::uint32_t>(requested),
+                                                                std::memory_order_release);
+                                        logging::info("cpu", "runtime cpu.threads set to " + std::to_string(requested));
+                                    }
+                                } catch (...) {
+                                    std::cout << "Valore cpu.threads non valido\\n";
+                                }
+                            } else if (setting == "prefetch-mode" ||
+                                       setting == "randomx.scratchpad_prefetch_mode") {
                                 try {
                                     std::size_t used = 0;
                                     const int mode = std::stoi(setting_value, &used, 10);
@@ -485,7 +501,7 @@ int run_miner(const std::filesystem::path& config_path,
                                     std::cout << "cpu.yield accetta on/off\n";
                                 }
                             } else if (setting == "huge-pages" || setting == "randomx.mode" ||
-                                       setting == "cpu.hw-aes" || setting == "randomx.numa") {
+                                       setting == "cpu.hw-aes" || setting == "cpu.memory-pool" || setting == "randomx.numa" || setting == "randomx.1gb-pages") {
                                 std::cout << setting << " è un'impostazione di inizializzazione RandomX: modifica config.json e riavvia il miner per applicarla.\n";
                             } else {
                                 std::cout << "Impostazione non supportata dalla shell: " << setting << '\n';
