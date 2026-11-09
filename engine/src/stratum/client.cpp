@@ -505,7 +505,8 @@ int run_miner(const std::filesystem::path& config_path,
                                 {"memory_used_bytes", optional_number(system_sample.memory_used_bytes)},
                                 {"process_memory_bytes", optional_number(system_sample.process_memory_bytes)},
                                 {"temperature_c", optional_number(system_sample.temperature_c)},
-                                {"package_power_watts", optional_number(system_sample.package_power_watts)}
+                                {"package_power_watts", optional_number(system_sample.package_power_watts)},
+                                {"on_battery", system_sample.on_battery ? nlohmann::json(*system_sample.on_battery) : nlohmann::json(nullptr)}
                             }},
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},
                         };
@@ -630,7 +631,8 @@ int run_miner(const std::filesystem::path& config_path,
                         {"memory_used_bytes", reconnect_optional(reconnect_system.memory_used_bytes)},
                         {"process_memory_bytes", reconnect_optional(reconnect_system.process_memory_bytes)},
                         {"temperature_c", reconnect_optional(reconnect_system.temperature_c)},
-                        {"package_power_watts", reconnect_optional(reconnect_system.package_power_watts)}
+                        {"package_power_watts", reconnect_optional(reconnect_system.package_power_watts)},
+                        {"on_battery", reconnect_system.on_battery ? nlohmann::json(*reconnect_system.on_battery) : nlohmann::json(nullptr)}
                     }},
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
                 };
