@@ -5,7 +5,7 @@
 
 // C++ system-sampling adaptation of NyxRX TelemetrySampler / PowerSampler.
 // CPU thermal-zone selection/EMA is adapted from XMRMiner TemperatureMonitor.kt,
-// william43243/XMR-minning-apk (Copyright (C) 2024 XMRMiner contributors), GPL-3.0;
+// william43243/XMR-minning-apk at 131d20e363e41491ece6086e9e72fcbdc5edddcb (Copyright (C) 2024 XMRMiner contributors), GPL-3.0;
 // see LICENSES/XMR-MINER-GPL-3.0.txt.
 // Upstream: MaleficentAd1803/nyxrx, crates/own-randomx-miner/src/telemetry.rs
 // License: MIT; attribution and license text are retained in LICENSES/NYXRX-MIT.txt.
