@@ -731,19 +731,39 @@ int run_miner(const std::filesystem::path& config_path,
                         line("CORE / WORKER", std::to_string(cpu_summary.value("physical_cores", 0U)) +
                             " fisici | " + std::to_string(cpu_summary.value("logical_threads", 0U)) +
                             " logici | " + std::to_string(desired_threads->load()) + " worker");
+                        std::ostringstream worker_summary;
+                        const auto visible_workers = std::min<std::size_t>(
+                            desired_threads->load(), std::min<std::size_t>(worker_hashrates.size(), 4));
+                        for (std::size_t id = 0; id < visible_workers; ++id) {
+                            if (id != 0) worker_summary << " | ";
+                            worker_summary << 'W' << id << ' ' << rate_text(worker_hashrates[id]);
+                        }
+                        line("WORKER RATE", worker_summary.str().empty() ? "in inizializzazione" : worker_summary.str());
                         std::cout << "  -------------------------------------------------------------------------------\n";
                         std::cout << "  HASHRATE  10s " << std::setw(16) << rate_text(average_rate(10))
                                   << "  60s " << std::setw(16) << rate_text(average_rate(60))
                                   << "  15m " << rate_text(average_rate(900)) << '\n';
-                        const auto graph_begin = shell_rate_history.size() > 48
-                            ? shell_rate_history.end() - 48 : shell_rate_history.begin();
-                        const double graph_peak = graph_begin == shell_rate_history.end()
-                            ? 0.0 : *std::max_element(graph_begin, shell_rate_history.end());
-                        std::cout << "  TREND     ";
+                        const auto graph_begin = shell_rate_history.size() > 900
+                            ? shell_rate_history.end() - 900 : shell_rate_history.begin();
+                        const auto graph_count = static_cast<std::size_t>(
+                            std::distance(graph_begin, shell_rate_history.end()));
+                        std::array<double, 60> graph_buckets{};
+                        double graph_peak = 0.0;
+                        for (std::size_t bucket = 0; bucket < graph_buckets.size(); ++bucket) {
+                            const auto first = graph_count * bucket / graph_buckets.size();
+                            const auto last = graph_count * (bucket + 1) / graph_buckets.size();
+                            if (last <= first) continue;
+                            double sum = 0.0;
+                            for (auto offset = first; offset < last; ++offset)
+                                sum += *(graph_begin + static_cast<std::ptrdiff_t>(offset));
+                            graph_buckets[bucket] = sum / static_cast<double>(last - first);
+                            graph_peak = std::max(graph_peak, graph_buckets[bucket]);
+                        }
+                        std::cout << "  TREND 15m ";
                         static constexpr char graph_levels[] = " .:-=+*#@";
-                        for (auto it = graph_begin; it != shell_rate_history.end(); ++it) {
+                        for (const auto rate : graph_buckets) {
                             const auto level = graph_peak > 0.0
-                                ? static_cast<std::size_t>(std::clamp(*it / graph_peak, 0.0, 1.0) * 8.0)
+                                ? static_cast<std::size_t>(std::clamp(rate / graph_peak, 0.0, 1.0) * 8.0)
                                 : 0U;
                             std::cout << graph_levels[level];
                         }
@@ -758,7 +778,9 @@ int run_miner(const std::filesystem::path& config_path,
                                   << " | expired " << state.expired_shares.load()
                                   << " | lost " << state.dropped_shares.load() << '\n';
                         line("POOL", active_pool.host + ":" + active_pool.port +
-                            (active_pool.tls ? " | TLS" : " | TCP"));
+                            (active_pool.tls ? " | TLS" : " | TCP") +
+                            (active_pool.keepalive ? " | keepalive" : ""));
+                        line("CONNESSIONE", work ? "connesso · job attivo" : "attesa job / riconnessione");
                         line("JOB / HEIGHT", work ? work->job.id + " / " +
                             (work->job.height ? std::to_string(*work->job.height) : "n/d")
                             : std::string("in attesa del job"));
@@ -775,8 +797,9 @@ int run_miner(const std::filesystem::path& config_path,
                                   << "  EVENTI RECENTI\n";
                         for (const auto& entry : logging::recent_entries(4)) {
                             std::string message = entry.message;
-                            if (message.size() > 88) message.resize(88);
-                            std::cout << "  [" << entry.level << "] " << message << '\n';
+                            if (message.size() > 76) message.resize(76);
+                            std::cout << "  [" << entry.timestamp << "] " << entry.level
+                                      << ' ' << entry.category << ' ' << message << '\n';
                         }
                         std::cout << "  -------------------------------------------------------------------------------\n"
                                   << "  COMANDO > " << command_line << std::flush;
