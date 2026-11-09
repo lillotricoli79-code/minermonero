@@ -26,6 +26,14 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/*
+ * RxMiner-derived JIT additions: BMI2 RORX code emission and runtime-selectable
+ * dataset prefetch instructions (NTA/T0/disabled). Adapted from
+ * c0mm4nd/rxminer, commit 5fe52dde2650c623fd0472804152a94711889dce.
+ * These additions are MIT-licensed; the underlying RandomX source remains
+ * BSD-3-Clause. See LICENSES/RXMINER-MIT.txt and the upstream RandomX header.
+ */
+
 #include <stdexcept>
 #include <cstring>
 #include <climits>
