@@ -581,8 +581,19 @@ int run_miner(const std::filesystem::path& config_path,
                             }
                         } else if (command == "status") {
                             const auto hashes = state.hashes.load(std::memory_order_relaxed);
+                            const auto average_rate = [&](std::size_t window) {
+                                const auto count = std::min(window, shell_rate_history.size());
+                                if (count == 0) return 0.0;
+                                double total = 0.0;
+                                auto it = shell_rate_history.end() - static_cast<std::ptrdiff_t>(count);
+                                for (; it != shell_rate_history.end(); ++it) total += *it;
+                                return total / static_cast<double>(count);
+                            };
                             std::cout << "Hashrate: " << std::fixed << std::setprecision(2)
-                                      << shell_hashrate << " H/s | total hashes: " << hashes
+                                      << shell_hashrate << " H/s | 10s " << average_rate(10)
+                                      << " | 60s " << average_rate(60)
+                                      << " | 15m " << average_rate(900)
+                                      << " | total hashes: " << hashes
                                       << " | workers: " << desired_threads->load()
                                       << " | reconnects: " << state.reconnects.load()
                                       << " | share latency: "
@@ -627,16 +638,20 @@ int run_miner(const std::filesystem::path& config_path,
                                           << '\n';
                             }
                         } else if (command == "graph") {
-                            const double peak = shell_rate_history.empty()
-                                ? 0.0 : *std::max_element(shell_rate_history.begin(), shell_rate_history.end());
-                            std::cout << "Hashrate ultimi " << shell_rate_history.size()
+                            const auto first_sample = shell_rate_history.size() > 60
+                                ? shell_rate_history.end() - 60 : shell_rate_history.begin();
+                            const double peak = first_sample == shell_rate_history.end()
+                                ? 0.0 : *std::max_element(first_sample, shell_rate_history.end());
+                            std::cout << "Hashrate ultimi "
+                                      << std::distance(first_sample, shell_rate_history.end())
                                       << " secondi (picco " << std::fixed << std::setprecision(2)
-                                      << peak << " H/s)\n";
-                            for (const double rate : shell_rate_history) {
+                                      << peak << " H/s)\\n";
+                            for (auto sample = first_sample; sample != shell_rate_history.end(); ++sample) {
+                                const double rate = *sample;
                                 const auto bars = peak > 0.0
                                     ? static_cast<std::size_t>(rate / peak * 40.0) : 0U;
                                 std::cout << std::setw(9) << std::fixed << std::setprecision(1)
-                                          << rate << " H/s | " << std::string(bars, '#') << '\n';
+                                          << rate << " H/s | " << std::string(bars, '#') << '\\n';
                             }
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
@@ -711,7 +726,7 @@ int run_miner(const std::filesystem::path& config_path,
                                     previous_worker_hashes[id] = worker_hashes;
                                 }
                                 shell_rate_history.push_back(shell_hashrate);
-                                if (shell_rate_history.size() > 60) shell_rate_history.pop_front();
+                                if (shell_rate_history.size() > 900) shell_rate_history.pop_front();
                             }
                             previous_hashes = hashes;
                             previous_sample = now;
