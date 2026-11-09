@@ -122,6 +122,14 @@ bool write_status_snapshot(const std::filesystem::path& path,
     }
 }
 
+std::uint64_t current_process_id() noexcept {
+#ifdef _WIN32
+    return static_cast<std::uint64_t>(GetCurrentProcessId());
+#else
+    return static_cast<std::uint64_t>(::getpid());
+#endif
+}
+
 std::uint64_t available_physical_memory_bytes() noexcept {
 #ifdef _WIN32
     MEMORYSTATUSEX status{};
@@ -545,6 +553,8 @@ int run_miner(const std::filesystem::path& config_path,
             const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
             if (issued <= 0 || now_ms - issued > 15000 || issued - now_ms > 5000) return;
+            const auto target_pid = request.value("target_pid", std::uint64_t{0});
+            if (target_pid != 0 && target_pid != current_process_id()) return;
             const auto command = request.value("command", std::string());
             if (command == "stop") {
                 logging::info("dashboard", "graceful stop requested by local dashboard");
@@ -1433,6 +1443,7 @@ std::uint64_t hash_value = 0;
                         status["timestamp_unix_ms"] =
                             std::chrono::duration_cast<std::chrono::milliseconds>(
                                 std::chrono::system_clock::now().time_since_epoch()).count();
+                        status["pid"] = current_process_id();
                         (void)write_status_snapshot(status_path, status);
                         if (machine_status_channel_required()) {
                             std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
@@ -1630,6 +1641,7 @@ std::uint64_t hash_value = 0;
                 reconnect_status["timestamp_unix_ms"] =
                     std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now().time_since_epoch()).count();
+                reconnect_status["pid"] = current_process_id();
                 (void)write_status_snapshot(status_path, reconnect_status);
                 if (machine_status_channel_required()) {
                     std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
