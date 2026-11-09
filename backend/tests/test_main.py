@@ -173,20 +173,28 @@ class ConfigValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             MinerConfigUpdate(prefetch_mode=4)
         with self.assertRaises(ValidationError):
+            MinerConfigUpdate(priority=6)
+        with self.assertRaises(ValidationError):
+            MinerConfigUpdate(priority=-2)
+        with self.assertRaises(ValidationError):
+            MinerConfigUpdate(priority=True)
+        with self.assertRaises(ValidationError):
             MinerConfigUpdate(tls_fingerprint="aa" * 32)
 
     def test_randomx_settings_round_trip_through_dashboard_config(self):
         saved = apply_config_update(
             {"http": {"port": 18088}, "pools": []},
-            MinerConfigUpdate(huge_pages=False, jit_huge_pages=True, prefetch_mode=2),
+            MinerConfigUpdate(huge_pages=False, jit_huge_pages=True, prefetch_mode=2, priority=3),
         )
         self.assertFalse(saved["cpu"]["huge-pages"])
         self.assertTrue(saved["cpu"]["jit-huge-pages"])
         self.assertEqual(saved["cpu"]["prefetch-mode"], 2)
+        self.assertEqual(saved["cpu"]["priority"], 3)
         public = public_config(saved)
         self.assertFalse(public["huge_pages"])
         self.assertTrue(public["jit_huge_pages"])
         self.assertEqual(public["prefetch_mode"], 2)
+        self.assertEqual(public["priority"], 3)
 
     def test_updates_only_the_native_xmrig_config(self):
         current = {
