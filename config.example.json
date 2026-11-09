@@ -19,7 +19,7 @@
   },
   "cpu": {
     "enabled": true,
-    "threads": { "intensity": 1, "threads": 0, "affinity": -1 },
+    "rx": { "intensity": 1, "threads": 0, "affinity": -1 },
     "max-threads-hint": 100,
     "huge-pages": true,
     "huge-pages-jit": false,
