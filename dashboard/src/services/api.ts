@@ -12,7 +12,7 @@ export async function request<T>(
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(
-      payload.detail ?? `Richiesta fallita (${response.status})`,
+      payload.detail ?? `Richiesta fallita (${response.status}) su /api${path}`,
     );
   }
   return payload as T;
