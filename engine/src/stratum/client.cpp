@@ -595,6 +595,8 @@ int run_miner(const std::filesystem::path& config_path,
                         } else if (command == "memory") {
                             std::cout << "RandomX mode: " << (full_memory ? "fast/full dataset" : "light/cache")
                                       << " | huge pages richieste: " << (large_pages_requested ? "si" : "no")
+                                      << " | allocazione large pages: "
+                                      << (state.large_pages_active.load(std::memory_order_relaxed) ? "attiva" : "non attiva/non confermata")
                                       << " | JIT huge pages: " << (jit_huge_pages ? "si" : "no")
                                       << " | prefetch mode: " << runtime_prefetch_mode->load(std::memory_order_relaxed)
                                       << " | MSR: " << msr_status
