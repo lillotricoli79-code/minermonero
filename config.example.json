@@ -10,14 +10,14 @@
   "user-agent": "UniqueRX/1.0",
   "cpu": {
     "enabled": true,
-    "threads": 0,
-    "max-threads-hint": 0,
+    "threads": { "intensity": 1, "threads": 0, "affinity": -1 },
+    "max-threads-hint": 100,
     "huge-pages": true,
     "huge-pages-jit": false,
     "hw-aes": null,
-    "memory-pool": true,
+    "memory-pool": 0,
     "priority": null,
-    "yield": false,
+    "yield": true,
     "asm": "auto"
   },
   "randomx": {
