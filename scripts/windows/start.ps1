@@ -41,31 +41,38 @@ if (-not (Test-Path -LiteralPath $backendMain)) {
     exit $LASTEXITCODE
 }
 
+$bundledPython = Join-Path $repoRoot "python\python.exe"
 $venvDir = Join-Path $repoRoot ".venv"
 $pythonExe = Join-Path $venvDir "Scripts\python.exe"
 $requirements = Join-Path $repoRoot "requirements.txt"
-if (-not (Test-Path -LiteralPath $pythonExe)) {
-    New-Item -ItemType Directory -Path $venvDir -Force | Out-Null
-    $launcher = Get-Command py -ErrorAction SilentlyContinue
-    if ($launcher) {
-        & $launcher.Source -3 -m venv $venvDir
-    } else {
-        $basePython = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $basePython) { throw "Python 3 non trovato. Installa Python 3 e riprova." }
-        & $basePython.Source -m venv $venvDir
+if (Test-Path -LiteralPath $bundledPython) {
+    # Release package: use its self-contained Python runtime and dependencies.
+    $pythonExe = $bundledPython
+} else {
+    if (-not (Test-Path -LiteralPath $pythonExe)) {
+        New-Item -ItemType Directory -Path $venvDir -Force | Out-Null
+        $launcher = Get-Command py -ErrorAction SilentlyContinue
+        if ($launcher) {
+            & $launcher.Source -3 -m venv $venvDir
+        } else {
+            $basePython = Get-Command python -ErrorAction SilentlyContinue
+            if (-not $basePython) { throw "Python 3 non trovato. Questo pacchetto non contiene il runtime Python." }
+            & $basePython.Source -m venv $venvDir
+        }
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $pythonExe)) {
+            throw "Creazione ambiente Python non riuscita."
+        }
     }
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $pythonExe)) {
-        throw "Creazione ambiente Python non riuscita."
+    & $pythonExe -c "import fastapi, uvicorn, pydantic" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Installazione dipendenze backend nell'ambiente del progetto..."
+        & $pythonExe -m pip install -r $requirements
+        if ($LASTEXITCODE -ne 0) { throw "Installazione dipendenze backend non riuscita." }
     }
-}
-& $pythonExe -c "import fastapi, uvicorn, pydantic" 2>$null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Installazione dipendenze backend nell'ambiente del progetto..."
-    & $pythonExe -m pip install -r $requirements
-    if ($LASTEXITCODE -ne 0) { throw "Installazione dipendenze backend non riuscita." }
 }
 & $pythonExe -c "import fastapi, uvicorn, pydantic"
-if ($LASTEXITCODE -ne 0) { throw "Dipendenze backend non disponibili nell'ambiente .venv." }
+if ($LASTEXITCODE -ne 0) { throw "Dipendenze backend non disponibili nel runtime incluso." }
+
 New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 $health = $null
 try { $health = Invoke-RestMethod -Uri "$api/api/health" -TimeoutSec 2 } catch {}
