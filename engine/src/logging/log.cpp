@@ -8,6 +8,7 @@
 #include <deque>
 #include <fstream>
 #include <iomanip>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -160,7 +161,7 @@ void open_file(State& s, const std::filesystem::path& path) {
 }
 
 void rotate_if_needed(State& s, const Config& config) {
-    if (!s.file.is_open() || s.path.empty() || config.max_file_bytes == 0) return;
+    if (!s.file.is_open() || s.path.empty() || config.max_file_bytes == 0 || config.retained_files == 0) return;
     s.file.flush();
     if (!s.file) {
         note_io_error(s, "flush before rotation failed");
@@ -445,16 +446,14 @@ std::vector<Entry> recent_entries(std::size_t limit, Level minimum_level,
     if (limit == 0) return result;
     result.reserve(std::min(limit, s.history.size()));
     for (auto it = s.history.rbegin(); it != s.history.rend() && result.size() < limit; ++it) {
-        const auto found = std::find_if(
-            std::begin(std::array{Level::Trace, Level::Debug, Level::Info,
-                                  Level::Warning, Level::Error, Level::Fatal}),
-            std::end(std::array{Level::Trace, Level::Debug, Level::Info,
-                                Level::Warning, Level::Error, Level::Fatal}),
-            [&](Level value) { return it->level == level_name(value); });
-        if (found == std::end(std::array{Level::Trace, Level::Debug, Level::Info,
-                                         Level::Warning, Level::Error, Level::Fatal}))
-            continue;
-        if (*found < minimum_level) continue;
+        Level entry_level = Level::Off;
+        if (it->level == "TRACE") entry_level = Level::Trace;
+        else if (it->level == "DEBUG") entry_level = Level::Debug;
+        else if (it->level == "INFO") entry_level = Level::Info;
+        else if (it->level == "WARN") entry_level = Level::Warning;
+        else if (it->level == "ERROR") entry_level = Level::Error;
+        else if (it->level == "FATAL") entry_level = Level::Fatal;
+        if (entry_level < minimum_level || entry_level == Level::Off) continue;
         if (!category.empty() && it->category != category) continue;
         result.push_back(*it);
     }
