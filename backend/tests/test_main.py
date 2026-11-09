@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from backend.src.shell_log import ShellLog
 
 from backend.src.main import (
+    DEFAULTS,
     MinerConfigUpdate,
     MinerController,
     apply_config_update,
@@ -25,6 +26,11 @@ from backend.src.main import (
 
 
 class ShellLogTests(unittest.TestCase):
+    def test_new_default_configuration_keeps_msr_disabled(self):
+        self.assertFalse(DEFAULTS["randomx"]["wrmsr"])
+        self.assertEqual(MinerConfigUpdate().msr_mode, "off")
+        self.assertEqual(public_config(DEFAULTS)["msr_mode"], "off")
+
     def test_writes_utf8_shell_output_to_persistent_file(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "logs" / "shell.log"
