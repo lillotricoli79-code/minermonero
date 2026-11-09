@@ -309,9 +309,13 @@ int main() {
                 }
                 second_session_ok = true;
 
-                // Stop only after the second authenticated session has submitted
-                // the three result classes. Continue servicing the miner's orderly
-                // two-second queue drain until it closes the socket.
+                // Allow the miner's network loop to consume all three replies and
+                // publish a fresh structured status snapshot before requesting shutdown.
+                // Without this grace period SIGINT can race the final submit response.
+                std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+
+                // Continue servicing the miner's orderly two-second queue drain
+                // until it closes the socket.
                 std::raise(SIGINT);
                 line.clear();
                 while (read_line(client, line)) {
@@ -350,19 +354,32 @@ int main() {
     std::cerr.rdbuf(previous_error);
     pool.join();
     unique_rx::platform::close_socket(listener);
+
+    // Human-readable logger output is intentionally routed to the rotating
+    // log file when stdout is reserved for UNIQUE_RX_STATUS JSON telemetry.
+    const auto log_path = config_path.parent_path() / "unique-rx-stratum.log";
+    std::ifstream log_file(log_path, std::ios::binary);
+    std::ostringstream log_contents;
+    if (log_file) log_contents << log_file.rdbuf();
+    const std::string miner_log = log_contents.str();
+    const std::string miner_status = miner_output.str();
+
     std::filesystem::remove(config_path);
+    std::filesystem::remove(log_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
-        miner_output.str().find("switching pool") == std::string::npos ||
-        miner_output.str().find("disconnected") == std::string::npos ||
-        miner_output.str().find("pool login accepted") == std::string::npos ||
-        miner_output.str().find("new job local-job") == std::string::npos ||
-        miner_output.str().find("share accepted") == std::string::npos ||
-        miner_output.str().find("share rejected") == std::string::npos ||
-        miner_output.str().find("stale share") == std::string::npos) {
+        miner_log.find("switching pool") == std::string::npos ||
+        miner_log.find("disconnected") == std::string::npos ||
+        miner_log.find("pool login accepted") == std::string::npos ||
+        miner_log.find("new job local-job") == std::string::npos ||
+        miner_log.find("share rejected") == std::string::npos ||
+        miner_log.find("stale share") == std::string::npos ||
+        miner_status.find("\\"job_id\\":\\"local-job\\"") == std::string::npos ||
+        miner_status.find("\\"accepted\\":1") == std::string::npos) {
         std::cerr << "local Stratum reconnect/login/job/share acceptance test failed"
                   << " result=" << result
                   << " server_ok=" << server_ok.load(std::memory_order_acquire)
-                  << "\n--- miner stdout ---\n" << miner_output.str()
+                  << "\n--- miner log ---\n" << miner_log
+                  << "\n--- miner status stdout ---\n" << miner_status
                   << "\n--- miner stderr ---\n" << miner_errors.str()
                   << "\n";
         return 1;
