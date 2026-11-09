@@ -5,7 +5,8 @@
     "max-threads-hint": 0,
     "huge-pages": false,
     "jit-huge-pages": false,
-    "prefetch-mode": 1
+    "prefetch-mode": 1,
+    "priority": 2
   },
   "randomx": {
     "full-memory": true,
