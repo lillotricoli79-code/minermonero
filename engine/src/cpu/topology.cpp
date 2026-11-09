@@ -552,4 +552,82 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
     return selected;
 }
 
+
+std::vector<std::int64_t> select_cpu_affinities(const nlohmann::json& cpu_config) {
+    std::vector<std::int64_t> result;
+    if (!cpu_config.contains("threads")) return result;
+    const auto& configured = cpu_config["threads"];
+    if (configured.is_array()) {
+        result.reserve(configured.size());
+        for (const auto& thread : configured) {
+            std::int64_t affinity = -1;
+            if (thread.is_number_integer()) {
+                affinity = thread.get<std::int64_t>();
+            } else if (thread.is_array() && thread.size() >= 2 &&
+                       thread[1].is_number_integer()) {
+                affinity = thread[1].get<std::int64_t>();
+            } else {
+                throw std::invalid_argument("cpu.threads array contains an invalid XMRig thread entry");
+            }
+            if (affinity < -1)
+                throw std::invalid_argument("cpu.threads affinity must be -1 or a non-negative CPU index");
+            result.push_back(affinity);
+        }
+        return result;
+    }
+    if (!configured.is_object()) return result;
+
+    std::uint64_t count = 0;
+    if (configured.contains("threads")) {
+        const auto& value = configured["threads"];
+        if (value.is_number_unsigned()) count = value.get<std::uint64_t>();
+        else if (value.is_number_integer()) {
+            const auto signed_count = value.get<std::int64_t>();
+            if (signed_count < 0) throw std::invalid_argument("cpu.threads.threads cannot be negative");
+            count = static_cast<std::uint64_t>(signed_count);
+        } else {
+            throw std::invalid_argument("cpu.threads.threads must be an integer");
+        }
+    }
+    if (count > 256) throw std::invalid_argument("cpu.threads.threads cannot exceed 256");
+    if (count == 0) return result;
+
+    std::int64_t mask = -1;
+    if (configured.contains("affinity")) {
+        const auto& value = configured["affinity"];
+        if (value.is_number_integer()) {
+            mask = value.get<std::int64_t>();
+        } else if (value.is_string()) {
+            const auto text = value.get<std::string>();
+            const auto hex_prefix = text.find("0x");
+            const auto start = hex_prefix == std::string::npos ? 0 : hex_prefix + 2;
+            const int base = hex_prefix == std::string::npos ? 10 : 16;
+            if (start >= text.size()) throw std::invalid_argument("cpu.threads.affinity mask is empty");
+            std::size_t used = 0;
+            try {
+                mask = std::stoll(text.substr(start), &used, base);
+            } catch (...) {
+                throw std::invalid_argument("cpu.threads.affinity mask is invalid");
+            }
+            if (used != text.size() - start)
+                throw std::invalid_argument("cpu.threads.affinity mask is invalid");
+        } else {
+            throw std::invalid_argument("cpu.threads.affinity must be an integer or mask string");
+        }
+    }
+    if (mask < -1) throw std::invalid_argument("cpu.threads.affinity must be -1 or a non-negative mask");
+    result.reserve(static_cast<std::size_t>(count));
+    if (mask == -1) {
+        result.assign(static_cast<std::size_t>(count), -1);
+        return result;
+    }
+    const auto bits = static_cast<std::uint64_t>(mask);
+    for (std::uint64_t bit = 0; bit < 64 && result.size() < count; ++bit) {
+        if ((bits & (std::uint64_t{1} << bit)) != 0)
+            result.push_back(static_cast<std::int64_t>(bit));
+    }
+    while (result.size() < count) result.push_back(-1);
+    return result;
+}
+
 } // namespace unique_rx
