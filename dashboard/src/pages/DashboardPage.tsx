@@ -70,6 +70,7 @@ type Status = {
     features: { aes: boolean; ssse3: boolean; avx2: boolean; vaes: boolean; bmi2: boolean };
   } | null;
   msr_active: boolean | null;
+  msr_status?: string | null;
   workers?: WorkerStatus[];
   best?: BestStatus | null;
   job_difficulty?: number | null;
@@ -756,13 +757,7 @@ function App() {
                     <DataRow
                       icon={<LockKeyhole size={15} />}
                       label="Ottimizzazione MSR"
-                      value={
-                        status.msr_active === true
-                          ? "Attiva"
-                          : status.msr_active === false
-                            ? "Non attiva"
-                            : "Non disponibile"
-                      }
+                      value={status.msr_status || (status.msr_active === true ? "Attiva" : status.msr_active === false ? "Non attiva" : "Non disponibile")}
                     />
                     <DataRow
                       icon={<LockKeyhole size={15} />}
