@@ -32,22 +32,20 @@ Riferimenti già individuati:
 - **RxMiner**: riferimento per idee e implementazioni CPU/Stratum/MSR; verificare la licenza MIT e conservare attribuzioni e avvisi quando si riutilizza codice.
 - **NyxRX**: riferimento per rilevamento hardware, core fisici, cache e NUMA; verificare e rispettare la licenza MIT per ogni porzione eventualmente portata.
 - **XMRig**: sorgente di integrazione per componenti reali di CPU, RandomX, MSR, Stratum, pool, TLS, strategie e gestione miner; licenza GPL-3.0. Se il codice XMRig viene incorporato o collegato nel miner distribuito, trattare l'opera combinata secondo gli obblighi GPL applicabili: mantenere copyright e licenza, rendere disponibile il corrispondente sorgente completo e le modifiche, rispettare gli obblighi di distribuzione e verificare la compatibilità delle altre componenti. Non rimuovere o aggirare tali obblighi.
-- **XMR-Miner**: non copiare codice finché non è individuata una licenza esplicita che autorizzi il riutilizzo.
+- **XMR-Miner**: copiare codice e funzioni.
 
 ### Log e telemetria: attribuzioni e limiti
 
 - **RxMiner** (c0mm4nd/rxminer, MIT): riferimento per output console, file append, livelli, colori e diagnostica di rete. Unique RX mantiene un logger C++ proprio; la rotazione dei file (8 MiB, tre archivi) è un'implementazione indipendente, non una copia del logger Rust.
-- **NyxRX** (MaleficentAd1803/nyxrx, MIT secondo il README del progetto): riferimento funzionale per log rotanti, telemetria multi-finestra, stato pool/share e diagnostica MSR. Le funzioni vengono implementate nel motore esistente; non è stato importato il suo TUI o il suo backend.
-- **XMRig** (GPL-3.0): riferimento di compatibilità per protocollo e comportamento operativo. Non è stato copiato il suo sottosistema logger né codice GPL nel motore distribuito; le funzioni di diagnostica sono implementate indipendentemente. Un'integrazione futura di codice XMRig richiederebbe una revisione completa degli obblighi GPL.
+- **NyxRX** (MaleficentAd1803/nyxrx, MIT secondo il README del progetto): riferimento funzionale per log rotanti, telemetria multi-finestra, funzioni-grafici piu regolatore thread e  stato pool/share e diagnostica MSR. Le funzioni vengono implementate nel motore esistente; non è stato importato il suo TUI o il suo backend.
+- **XMRig** (GPL-3.0): prendere spunto dal suo log.
 - **XMR-Miner**: il nome da solo non identifica un repository/licenza verificabile. Nessun codice o logger viene attribuito o copiato da questo progetto finché non è identificata la sorgente esatta e una licenza compatibile.
 - **RandomX upstream** (BSD-3-Clause): riferimento per la correttezza del motore e dei vettori hash, non una sorgente di messaggi shell di un miner.
 
 La shell nativa emette messaggi con timestamp, livello e categoria; il file unique-rx-stratum.log viene mantenuto accanto alla configurazione e ruota automaticamente. La dashboard acquisisce l'output reale del processo e i record UNIQUE_RX_STATUS; non genera hash rate o share sintetiche.
 
 Regole:
-- “Open source” non significa assenza di condizioni: verificare la licenza di ogni sorgente.
-- L'integrazione può comprendere interi moduli o sottosistemi upstream quando sono necessari al funzionamento del mix e la licenza lo consente. Non copiare repository alla cieca: selezionare i componenti necessari, collegarli realmente all'applicazione, conservarne gli avvisi e verificare dipendenze e obblighi di distribuzione.
-- Per ogni codice portato, registrare provenienza, autore/copyright, licenza e modifiche; includere i file di licenza e gli avvisi richiesti.
+- L'integrazione può comprendere interi moduli o sottosistemi upstream quando sono necessari al funzionamento del mix . selezionare i componenti necessari, collegarli realmente all'applicazione, conservarne gli avvisi e verificare dipendenze.
 - Non attribuire al progetto funzionalità o prestazioni di un miner di riferimento che non siano state effettivamente integrate e testate.
 
 ## 4. Algoritmo e motore RandomX
@@ -113,7 +111,7 @@ Il percorso comune `engine/src/msr/transaction.hpp` è usato dai backend Linux e
 La pipeline deve essere completa e funzionare con pool reali compatibili con il protocollo supportato.
 
 Flusso obbligatorio:
-1. configurazione endpoint, porta, wallet/username, password, TLS e opzioni pool;
+1. configurazione endpoint, porta, wallet/username, password, TLS e opzioni pool;uguale a xmrig.
 2. connessione e gestione timeout;
 3. handshake/login e ricezione risposta;
 4. ricezione, parsing e validazione dei job;
@@ -183,7 +181,7 @@ La configurazione principale prevista è `config.json` nella radice, salvo che i
 - Non ridurre artificialmente il motore a pochi file: RandomX, worker, CPU, MSR, Stratum, trasporto, configurazione e test devono essere organizzati in moduli coerenti.
 - Tenere separati motore, backend, dashboard, script, test e licenze.
 - Non spostare o rinominare moduli senza aggiornare tutti i riferimenti CMake, include, test, script e workflow.
-- Mantenere gli avvisi di licenza accanto ai componenti derivati.
+Per ogni codice portato, registrare provenienza, autore/copyright, licenza e modifiche; includere i file di licenza e gli avvisi richiesti.
 
 ## 11. Piattaforme e compilazione
 
@@ -207,7 +205,7 @@ Script operativi aggiunti (da verificare nella fase finale):
 
 ## 12. Test obbligatori
 
-A ogni modifica eseguire i test pertinenti e aggiungerne quando manca copertura.
+ non fare test se non e tutto completo.
 
 Copertura minima:
 - vettori hash RandomX e confronto con implementazione di riferimento;
@@ -235,7 +233,7 @@ Il progetto è completato soltanto quando:
 - Stratum robusto con test dei diversi esiti;
 - dashboard collegata ai dati reali;
 - build e test Linux e Windows riusciti;
-- licenze e attribuzioni rispettate;
+- procedere senza fermarsi fino al completamento.compilare e testare exe prodotto chiedere la configuazione all'utente.
 - script di avvio, arresto, diagnostica e compilazione presenti e verificati;
 - benchmark ripetibili disponibili.
 
