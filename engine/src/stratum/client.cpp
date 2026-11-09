@@ -1466,41 +1466,70 @@ std::uint64_t hash_value = 0;
                 const auto reconnect_optional = [](const auto& value) -> nlohmann::json {
                     return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
                 };
-                const nlohmann::json reconnect_status = {
-                    {"state", "RICONNESSIONE"}, {"managed", true},
-                    {"error", error.what()},
-                    {"hashrate", {{"10s", nullptr}, {"60s", nullptr}, {"15m", nullptr}}},
-                    {"shares", {{"found", state.found.load()},
-                                 {"submitted", state.submitted.load()},
-                                 {"accepted", state.accepted.load()},
-                                 {"rejected", state.rejected.load()},
-                                 {"stale", state.stale_shares.load()},
-                                 {"expired", state.expired_shares.load()},
-                                 {"dropped", state.dropped_shares.load()},
-                                 {"pending", 0},
-                                 {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
-                    {"uptime_seconds", reconnect_uptime},
-                    {"algorithm", "rx/0"}, {"job_id", nullptr}, {"height", nullptr}, {"job_difficulty", nullptr},
-                    {"threads", pool_threads}, {"cpu_priority", state.cpu_priority}, {"cpu", cpu_summary},
-                    {"workers", collect_worker_status()},
-                    {"best", collect_best_status()},
-                    {"msr_active", msr.active()}, {"msr_status", msr_status}, {"full_memory", full_memory},
-                    {"large_pages_requested", large_pages_requested},
-                    {"large_pages_active", state.large_pages_active.load(std::memory_order_relaxed)},
-                    {"system", {
-                        {"cpu_percent", reconnect_optional(reconnect_system.system_cpu_percent)},
-                        {"process_cpu_percent", reconnect_optional(reconnect_system.process_cpu_percent)},
-                        {"cpu_frequency_mhz", reconnect_optional(reconnect_system.cpu_frequency_mhz)},
-                        {"memory_used_bytes", reconnect_optional(reconnect_system.memory_used_bytes)},
-                        {"process_memory_bytes", reconnect_optional(reconnect_system.process_memory_bytes)},
-                        {"temperature_c", reconnect_optional(reconnect_system.temperature_c)},
-                        {"package_power_watts", reconnect_optional(reconnect_system.package_power_watts)},
-                        {"on_battery", reconnect_system.on_battery.has_value() ? nlohmann::json(static_cast<bool>(reconnect_system.on_battery.value())) : nlohmann::json(nullptr)}
-                    }},
-                    {"pool", pool.host + ":" + pool.port}, {"connected", false},
-                    {"pool_latency_ms", state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0 ? nlohmann::json(state.last_share_latency_ms.load(std::memory_order_relaxed)) : nlohmann::json(nullptr)},
-                    {"reconnects", state.reconnects.load(std::memory_order_relaxed)},
-                };
+                nlohmann::json reconnect_status = nlohmann::json::object();
+                reconnect_status["state"] = "RICONNESSIONE";
+                reconnect_status["managed"] = true;
+                reconnect_status["error"] = error.what();
+                reconnect_status["hashrate"] = nlohmann::json::object({
+                    {"10s", nullptr}, {"60s", nullptr}, {"15m", nullptr}
+                });
+                nlohmann::json reconnect_shares = nlohmann::json::object();
+                reconnect_shares["found"] = state.found.load();
+                reconnect_shares["submitted"] = state.submitted.load();
+                reconnect_shares["accepted"] = state.accepted.load();
+                reconnect_shares["rejected"] = state.rejected.load();
+                reconnect_shares["stale"] = state.stale_shares.load();
+                reconnect_shares["expired"] = state.expired_shares.load();
+                reconnect_shares["dropped"] = state.dropped_shares.load();
+                reconnect_shares["pending"] = 0;
+                reconnect_shares["total"] = state.accepted.load() + state.rejected.load() +
+                                            state.stale_shares.load();
+                reconnect_status["shares"] = std::move(reconnect_shares);
+                reconnect_status["uptime_seconds"] = reconnect_uptime;
+                reconnect_status["algorithm"] = "rx/0";
+                reconnect_status["job_id"] = nullptr;
+                reconnect_status["height"] = nullptr;
+                reconnect_status["job_difficulty"] = nullptr;
+                reconnect_status["threads"] = pool_threads;
+                reconnect_status["cpu_priority"] = state.cpu_priority;
+                reconnect_status["cpu"] = cpu_summary;
+                reconnect_status["workers"] = collect_worker_status();
+                reconnect_status["best"] = collect_best_status();
+                reconnect_status["msr_active"] = msr.active();
+                reconnect_status["msr_status"] = msr_status;
+                reconnect_status["full_memory"] = full_memory;
+                reconnect_status["large_pages_requested"] = large_pages_requested;
+                reconnect_status["large_pages_active"] =
+                    state.large_pages_active.load(std::memory_order_relaxed);
+                nlohmann::json reconnect_system_json = nlohmann::json::object();
+                reconnect_system_json["cpu_percent"] =
+                    reconnect_optional(reconnect_system.system_cpu_percent);
+                reconnect_system_json["process_cpu_percent"] =
+                    reconnect_optional(reconnect_system.process_cpu_percent);
+                reconnect_system_json["cpu_frequency_mhz"] =
+                    reconnect_optional(reconnect_system.cpu_frequency_mhz);
+                reconnect_system_json["memory_used_bytes"] =
+                    reconnect_optional(reconnect_system.memory_used_bytes);
+                reconnect_system_json["process_memory_bytes"] =
+                    reconnect_optional(reconnect_system.process_memory_bytes);
+                reconnect_system_json["temperature_c"] =
+                    reconnect_optional(reconnect_system.temperature_c);
+                reconnect_system_json["package_power_watts"] =
+                    reconnect_optional(reconnect_system.package_power_watts);
+                reconnect_system_json["on_battery"] =
+                    reconnect_system.on_battery.has_value()
+                        ? nlohmann::json(reconnect_system.on_battery.value())
+                        : nlohmann::json(nullptr);
+                reconnect_status["system"] = std::move(reconnect_system_json);
+                reconnect_status["pool"] = pool.host + ":" + pool.port;
+                reconnect_status["connected"] = false;
+                const auto reconnect_latency =
+                    state.last_share_latency_ms.load(std::memory_order_relaxed);
+                reconnect_status["pool_latency_ms"] =
+                    reconnect_latency >= 0 ? nlohmann::json(reconnect_latency)
+                                           : nlohmann::json(nullptr);
+                reconnect_status["reconnects"] =
+                    state.reconnects.load(std::memory_order_relaxed);
                 if (machine_status_channel_required()) {
                     std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
                 }
