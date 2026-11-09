@@ -579,7 +579,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << shell_hashrate << " H/s | total hashes: " << hashes
                                       << " | workers: " << desired_threads->load()
                                       << " | reconnects: " << state.reconnects.load()
-                                      << " | pool latency: "
+                                      << " | share latency: "
                                       << (state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0
                                           ? std::to_string(state.last_share_latency_ms.load(std::memory_order_relaxed)) + " ms"
                                           : std::string("n/a"))
