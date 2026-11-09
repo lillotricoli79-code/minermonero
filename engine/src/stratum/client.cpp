@@ -477,6 +477,7 @@ int run_miner(const std::filesystem::path& config_path,
         }
         state.initialize_worker_counters(256);
         auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
+        auto active_pool_index = std::make_shared<std::atomic<std::size_t>>(0);
         auto runtime_prefetch_mode = std::make_shared<std::atomic<int>>(prefetch_mode);
         const auto cpu_summary = cpu_summary_json();
         // XMRig-compatible persistent scratchpad pool: false disables it,
@@ -531,7 +532,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [&state, desired_threads, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started](std::stop_token stop_token) {
+                [&state, desired_threads, active_pool_index, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     std::array<std::uint64_t, 256> previous_worker_hashes{};
@@ -680,6 +681,8 @@ int run_miner(const std::filesystem::path& config_path,
                                       << " | 15m " << average_rate(900)
                                       << " | total hashes: " << hashes
                                       << " | workers: " << desired_threads->load()
+                                      << " | pool: " << pools[std::min(active_pool_index->load(std::memory_order_relaxed), pools.size() - 1)].host
+                                      << ':' << pools[std::min(active_pool_index->load(std::memory_order_relaxed), pools.size() - 1)].port
                                       << " | reconnects: " << state.reconnects.load()
                                       << " | share latency: "
                                       << (state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0
@@ -753,7 +756,9 @@ int run_miner(const std::filesystem::path& config_path,
                         } else if (command == "pool") {
                             for (std::size_t index = 0; index < pools.size(); ++index) {
                                 const auto& endpoint = pools[index];
-                                std::cout << (index == 0 ? "Pool primario: " : "Pool failover: ")
+                                const auto active_index = active_pool_index->load(std::memory_order_relaxed);
+                                std::cout << (index == active_index ? "[ATTIVA] " :
+                                              index == 0 ? "Pool primario: " : "Pool failover: ")
                                           << endpoint.host << ':' << endpoint.port
                                           << " | TLS " << (endpoint.tls ? "on" : "off")
                                           << " | keepalive " << (endpoint.keepalive ? "on" : "off")
@@ -1501,6 +1506,7 @@ std::uint64_t hash_value = 0;
                 ++pool_failures;
                 if (retries_per_pool == 0 || pool_failures >= retries_per_pool) {
                     pool_index = (pool_index + 1) % pools.size();
+                    active_pool_index->store(pool_index, std::memory_order_release);
                     pool_failures = 0;
                     logging::warning("net", "retry limit reached; switching to next configured pool");
                 }
