@@ -958,7 +958,8 @@ std::uint64_t hash_value = 0;
                                 {"height", job.height ? nlohmann::json(*job.height)
                                                       : nlohmann::json(nullptr)}});
                             install_job(std::move(job));
-                            retry_delay = std::chrono::seconds(1);
+                            pool_failures = 0;
+                            retry_delay = std::chrono::seconds(retry_pause_seconds);
                         } else if (message.contains("id")) {
                             record_share_response(message);
                         }
@@ -1260,7 +1261,7 @@ std::uint64_t hash_value = 0;
                 logging::warning("net", "switching pool; retrying in " +
                     std::to_string(retry_delay.count()) + "s");
                 ++pool_failures;
-                if (pool_failures > retries_per_pool) {
+                if (retries_per_pool == 0 || pool_failures >= retries_per_pool) {
                     pool_index = (pool_index + 1) % pools.size();
                     pool_failures = 0;
                     logging::warning("net", "retry limit reached; switching to next configured pool");
