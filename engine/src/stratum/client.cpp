@@ -173,10 +173,35 @@ int run_miner(const std::filesystem::path& config_path,
         rxm_set_prefetch_mode(prefetch_mode);
         std::uint64_t generation = 0;
         const auto pool_threads = pools.front().threads;
+        state.initialize_worker_counters(pool_threads);
         const auto cpu_summary = cpu_summary_json();
         // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
         rxm_set_memory_pool(pool_threads);
         auto started = Clock::now();
+        std::vector<std::uint64_t> worker_previous_hashes(pool_threads, 0);
+        std::vector<double> worker_rates(pool_threads, 0.0);
+        std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
+        const auto collect_worker_status = [&]() {
+            nlohmann::json result = nlohmann::json::array();
+            const auto sample_time = Clock::now();
+            for (std::uint32_t worker = 0; worker < pool_threads; ++worker) {
+                const auto hashes = state.worker_hashes[worker]->load(std::memory_order_relaxed);
+                const auto elapsed = std::chrono::duration<double>(
+                    sample_time - worker_sample_times[worker]).count();
+                if (elapsed >= 0.2) {
+                    worker_rates[worker] = static_cast<double>(
+                        hashes - worker_previous_hashes[worker]) / elapsed;
+                    worker_previous_hashes[worker] = hashes;
+                    worker_sample_times[worker] = sample_time;
+                }
+                result.push_back({
+                    {"id", worker}, {"hashes", hashes},
+                    {"hashrate_hps", worker_rates[worker]},
+                    {"active", worker < workers.size() && !state.stop.load(std::memory_order_relaxed)}
+                });
+            }
+            return result;
+        };
         logging::info("init", "==============================================================");
         logging::info("init", "                 UNIQUE-RX  |  RANDOMX MINER");
         logging::info("init", "==============================================================");
@@ -497,6 +522,7 @@ int run_miner(const std::filesystem::path& config_path,
                                 ? nlohmann::json(*work->job.height)
                                 : nlohmann::json(nullptr)},
                             {"threads", pool_threads}, {"cpu", cpu_summary},
+                            {"workers", collect_worker_status()},
                             {"msr_active", msr.active()}, {"full_memory", full_memory},
                             {"system", {
                                 {"cpu_percent", optional_number(system_sample.system_cpu_percent)},
@@ -623,6 +649,7 @@ int run_miner(const std::filesystem::path& config_path,
                     {"uptime_seconds", reconnect_uptime},
                     {"algorithm", "rx/0"}, {"job_id", nullptr}, {"height", nullptr},
                     {"threads", pool_threads}, {"cpu", cpu_summary},
+                    {"workers", collect_worker_status()},
                     {"msr_active", msr.active()}, {"full_memory", full_memory},
                     {"system", {
                         {"cpu_percent", reconnect_optional(reconnect_system.system_cpu_percent)},
