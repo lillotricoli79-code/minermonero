@@ -183,7 +183,11 @@ bool read_line(Socket socket, std::string& line) {
 
 } // namespace
 
-int main(int argc, char** argv) {\n    if (argc != 2) {\n        std::cerr << "usage: loopback_test <unique-rx executable>\\n";\n        return 2;\n    }
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        std::cerr << "usage: loopback_test <unique-rx executable>\\n";
+        return 2;
+    }
     unique_rx::platform::NetworkRuntime network;
     const Socket listener = ::socket(AF_INET, SOCK_STREAM, 0);
     if (!unique_rx::platform::socket_valid(listener)) return 1;
