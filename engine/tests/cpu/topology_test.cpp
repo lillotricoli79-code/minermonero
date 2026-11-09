@@ -32,6 +32,16 @@ int main() {
     expect(limit_cpu_threads_by_quota(8, 0, 100000), 8, "unlimited quota");
     expect(limit_cpu_threads_by_quota(8, 100000, 0), 8, "invalid quota period");
 
+    const auto logical = unique_rx::detected_logical_threads();
+    const auto array_threads = unique_rx::select_cpu_threads({
+        {"enabled", true}, {"threads", nlohmann::json::array({0, 1})}
+    });
+    expect(array_threads, std::min(2U, logical), "XMRig array thread profile");
+    const auto object_threads = unique_rx::select_cpu_threads({
+        {"enabled", true}, {"threads", {{"threads", 3}, {"affinity", "0x0f"}, {"intensity", 1}}}
+    });
+    expect(object_threads, std::min(3U, logical), "XMRig object thread profile");
+
     const auto cpu = unique_rx::cpu_summary_json();
     if (!cpu.is_object() || cpu.value("vendor", std::string()).empty() ||
         cpu.value("brand", std::string()).empty() ||
