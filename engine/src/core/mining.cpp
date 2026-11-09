@@ -12,6 +12,14 @@ bool hash_meets_target(const Hash& hash, std::uint64_t target) noexcept {
     return value < target;
 }
 
+void MiningState::initialize_worker_counters(std::uint32_t count) {
+    worker_hashes.clear();
+    worker_hashes.reserve(count);
+    for (std::uint32_t worker = 0; worker < count; ++worker) {
+        worker_hashes.push_back(std::make_shared<std::atomic<std::uint64_t>>(0));
+    }
+}
+
 std::shared_ptr<const MiningWork> MiningState::current_work() {
     std::lock_guard lock(work_mutex);
     return work;
