@@ -602,6 +602,10 @@ int run_miner(const std::filesystem::path& config_path,
                 }
                 const auto reconnect_uptime =
                     std::chrono::duration_cast<std::chrono::seconds>(Clock::now() - started).count();
+                const auto reconnect_system = system_telemetry.sample();
+                const auto reconnect_optional = [](const auto& value) -> nlohmann::json {
+                    return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
+                };
                 const nlohmann::json reconnect_status = {
                     {"state", "RICONNESSIONE"}, {"managed", true},
                     {"error", error.what()},
@@ -619,6 +623,15 @@ int run_miner(const std::filesystem::path& config_path,
                     {"algorithm", "rx/0"}, {"job_id", nullptr}, {"height", nullptr},
                     {"threads", pool_threads}, {"cpu", cpu_summary},
                     {"msr_active", msr.active()}, {"full_memory", full_memory},
+                    {"system", {
+                        {"cpu_percent", reconnect_optional(reconnect_system.system_cpu_percent)},
+                        {"process_cpu_percent", reconnect_optional(reconnect_system.process_cpu_percent)},
+                        {"cpu_frequency_mhz", reconnect_optional(reconnect_system.cpu_frequency_mhz)},
+                        {"memory_used_bytes", reconnect_optional(reconnect_system.memory_used_bytes)},
+                        {"process_memory_bytes", reconnect_optional(reconnect_system.process_memory_bytes)},
+                        {"temperature_c", reconnect_optional(reconnect_system.temperature_c)},
+                        {"package_power_watts", reconnect_optional(reconnect_system.package_power_watts)}
+                    }},
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
                 };
                 if (machine_status_channel_required()) {
