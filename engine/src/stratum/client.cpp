@@ -63,6 +63,14 @@ bool machine_status_channel_required() {
 #endif
 }
 
+bool console_input_available() {
+#ifdef _WIN32
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return ::isatty(STDIN_FILENO) != 0;
+#endif
+}
+
 void request_stop(int) {
     g_stop_requested = 1;
 }
@@ -99,6 +107,7 @@ int run_miner(const std::filesystem::path& config_path,
     telemetry::SystemTelemetry system_telemetry;
     MiningState state;
     std::vector<std::jthread> workers;
+    std::vector<std::shared_ptr<std::atomic<bool>>> worker_stop_flags;
     struct StopWorkers {
         MiningState& state;
         ~StopWorkers() { state.stop.store(true, std::memory_order_release); }
@@ -210,8 +219,46 @@ int run_miner(const std::filesystem::path& config_path,
             throw std::runtime_error("cpu.prefetch-mode/randomx.scratchpad_prefetch_mode must be between 0 and 3");
         rxm_set_prefetch_mode(prefetch_mode);
         std::uint64_t generation = 0;
-        const auto pool_threads = pools.front().threads;
-        state.initialize_worker_counters(pool_threads);
+        std::uint32_t pool_threads = pools.front().threads;
+        const std::uint32_t automatic_threads = pool_threads;
+        state.initialize_worker_counters(256);
+        auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
+        if (console_input_available()) {
+            std::thread([desired_threads, automatic_threads] {
+                std::string command_line;
+                std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\\n";
+                while (std::getline(std::cin, command_line)) {
+                    std::istringstream input(command_line);
+                    std::string command;
+                    std::string value;
+                    input >> command;
+                    if (command == "help") {
+                        std::cout << "Comandi: threads N (1-256), threads auto\\n";
+                    } else if (command == "threads" && (input >> value)) {
+                        if (value == "auto") {
+                            desired_threads->store(automatic_threads, std::memory_order_release);
+                            std::cout << "Richiesto profilo automatico: " << automatic_threads << " thread\\n";
+                        } else {
+                            try {
+                                std::size_t used = 0;
+                                const auto requested = std::stoul(value, &used, 10);
+                                if (used != value.size() || requested == 0 || requested > 256) {
+                                    std::cout << "Valore non valido. Usa un numero da 1 a 256.\\n";
+                                    continue;
+                                }
+                                desired_threads->store(static_cast<std::uint32_t>(requested),
+                                                        std::memory_order_release);
+                                std::cout << "Richiesti " << requested << " thread; applicazione in corso...\\n";
+                            } catch (...) {
+                                std::cout << "Valore non valido. Usa threads N oppure threads auto.\\n";
+                            }
+                        }
+                    } else if (!command.empty()) {
+                        std::cout << "Comando sconosciuto. Digita help.\\n";
+                    }
+                }
+            }).detach();
+        }
         const auto cpu_summary = cpu_summary_json();
         // XMRig-compatible persistent scratchpad pool: false disables it,
         // true sizes it for the active workers, and a number sets capacity.
@@ -584,10 +631,39 @@ std::uint64_t hash_value = 0;
 
                     const auto work = state.current_work();
                     if (!work || session_id.empty()) continue;
+
+                    const auto requested_threads = desired_threads->load(std::memory_order_acquire);
+                    const auto allowed_threads = std::max(1U, detected_logical_threads());
+                    const auto effective_requested = std::min(requested_threads, allowed_threads);
+                    if (effective_requested != pool_threads) {
+                        for (const auto& flag : worker_stop_flags) {
+                            flag->store(true, std::memory_order_release);
+                        }
+                        for (auto& worker : workers) {
+                            if (worker.joinable()) worker.join();
+                        }
+                        workers.clear();
+                        worker_stop_flags.clear();
+                        pool_threads = effective_requested;
+                        worker_previous_hashes.resize(pool_threads, 0);
+                        worker_rates.resize(pool_threads, 0.0);
+                        worker_sample_times.resize(pool_threads, Clock::now());
+                        logging::info("cpu", "live thread regulator applied: " +
+                            std::to_string(pool_threads) + " worker(s)");
+                        if (requested_threads > allowed_threads) {
+                            logging::warning("cpu", "requested thread count limited to " +
+                                std::to_string(allowed_threads) +
+                                " processors available to this process");
+                        }
+                    }
+
                     if (workers.empty()) {
                         for (std::uint32_t worker = 0; worker < pool_threads; ++worker) {
+                            auto worker_stop = std::make_shared<std::atomic<bool>>(false);
+                            worker_stop_flags.push_back(worker_stop);
                             workers.emplace_back(hash_worker, std::ref(state), worker,
-                                                 pool_threads, maximum_hashes);
+                                                 pool_threads, maximum_hashes,
+                                                 std::ref(*worker_stop));
                         }
                     }
 
