@@ -79,6 +79,9 @@ struct MiningState {
 
     mutable std::mutex work_mutex;
     std::shared_ptr<const MiningWork> work;
+    // Workers poll this cheap atomic revision and take work_mutex only when a
+    // new job/connection state is published, never once per RandomX hash.
+    std::atomic<std::uint64_t> work_revision{0};
 
     std::mutex share_mutex;
     std::deque<Share> shares;
