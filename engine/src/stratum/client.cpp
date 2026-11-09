@@ -168,6 +168,10 @@ int run_miner(const std::filesystem::path& config_path,
         std::shared_ptr<randomx_dataset> dataset;
         auto flags = randomx_get_flags();
         const auto cpu_config = config.value("cpu", nlohmann::json::object());
+        const auto cpu_priority = cpu_config.value("priority", 2);
+        if (cpu_priority < -1 || cpu_priority > 5)
+            throw std::runtime_error("cpu.priority must be between -1 and 5");
+        state.cpu_priority = cpu_priority;
         const bool large_pages_requested = cpu_config.value("huge-pages", false);
         if (large_pages_requested) flags |= RANDOMX_FLAG_LARGE_PAGES;
         // Explicit JIT huge pages are optional and fall back to normal pages
