@@ -247,14 +247,14 @@ int run_miner(const std::filesystem::path& config_path,
             else throw std::runtime_error("randomx.mode must be auto, fast, or light");
         }
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
-        const bool msr_explicitly_disabled =
-            (wrmsr.is_boolean() && !wrmsr.get<bool>()) ||
-            (wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() < 0);
+        // XMRig defaults wrmsr to false. Keep MSR writes opt-in; never apply a
+        // preset merely because the option is absent from an imported config.
+        const bool msr_enabled = wrmsr.is_boolean() && wrmsr.get<bool>();
+        const bool msr_explicitly_disabled = !msr_enabled;
         if (!wrmsr.is_null() && !wrmsr.is_boolean() &&
             !(wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() < 0)) {
             throw std::runtime_error(
-                "Native engine accepts automatic MSR tuning only; custom register "
-                "writes are intentionally unsupported.");
+                "Native engine supports wrmsr=false or true (CPU preset); custom XMRig MSR register lists require the external XMRig backend.");
         }
         MsrManager msr(randomx_config.value("msr-module", std::string()));
         std::string msr_status;
@@ -335,11 +335,13 @@ int run_miner(const std::filesystem::path& config_path,
         if (cpu_config.contains("asm") && !cpu_config["asm"].is_null()) {
             logging::info("config", "cpu.asm accepted; RandomX upstream dispatch selects the supported native code path automatically");
         }
+        bool cpu_yield = true; // XMRig CpuConfig default.
         if (cpu_config.contains("yield") && !cpu_config["yield"].is_null()) {
             if (!cpu_config["yield"].is_boolean())
                 throw std::runtime_error("cpu.yield must be boolean or null");
-            state.cpu_yield.store(cpu_config["yield"].get<bool>(), std::memory_order_relaxed);
+            cpu_yield = cpu_config["yield"].get<bool>();
         }
+        state.cpu_yield.store(cpu_yield, std::memory_order_relaxed);
 
         // XMRig enables RandomX large pages by default. Keep an explicit false
         // opt-out, but do not silently disable this important optimization.
