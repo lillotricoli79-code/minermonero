@@ -1011,7 +1011,7 @@ std::uint64_t hash_value = 0;
                             {"height", work->job.height
                                 ? nlohmann::json(*work->job.height)
                                 : nlohmann::json(nullptr)},
-                            {"threads", pool_threads}, {"cpu_priority", state.cpu_priority}, {"cpu", cpu_summary},
+                            {"threads", pool_threads}, {"cpu_priority", state.cpu_priority.load(std::memory_order_relaxed)}, {"cpu", cpu_summary},
                             {"workers", collect_worker_status()},
                             {"best", collect_best_status()},
                             {"msr_active", msr.active()}, {"msr_status", msr_status}, {"full_memory", full_memory},
