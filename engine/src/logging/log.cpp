@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <ctime>
 #include <deque>
+#include <exception>
 #include <fstream>
 #include <iomanip>
 #include <future>
