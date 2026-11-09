@@ -143,14 +143,32 @@ jobs:
           Add-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ascii -Value "$sourceHash  unique-rx-source.zip"
           git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $out "SOURCE-COMMIT.txt") -Encoding ascii
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "config.example.json") -Destination (Join-Path $out "config.example.json")
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "requirements.txt") -Destination $out
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "backend") -Destination $out -Recurse
+          $dashboardOut = Join-Path $out "dashboard\dist"
+          New-Item -ItemType Directory -Force -Path $dashboardOut | Out-Null
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "dashboard\dist\*") -Destination $dashboardOut -Recurse -Force
           $launcherDir = Join-Path $out "scripts\windows"
           New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
-          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "scripts\windows\start.bat") -Destination $launcherDir
-          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "scripts\windows\start.ps1") -Destination $launcherDir
+          foreach ($script in @("start.bat","start.ps1","stop.bat","stop.ps1","diagnose.bat","diagnose.ps1")) {
+            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "scripts\windows\$script") -Destination $launcherDir
+          }
           Set-Content -LiteralPath (Join-Path $out "start.bat") -Encoding ascii -Value @(
             "@echo off",
             "setlocal",
             'call "%~dp0scripts\windows\start.bat" %*',
+            "exit /b %errorlevel%"
+          )
+          Set-Content -LiteralPath (Join-Path $out "stop.bat") -Encoding ascii -Value @(
+            "@echo off",
+            "setlocal",
+            'call "%~dp0scripts\windows\stop.bat" %*',
+            "exit /b %errorlevel%"
+          )
+          Set-Content -LiteralPath (Join-Path $out "diagnose.bat") -Encoding ascii -Value @(
+            "@echo off",
+            "setlocal",
+            'call "%~dp0scripts\windows\diagnose.bat" %*',
             "exit /b %errorlevel%"
           )
           "Portable miner, matching source, licenses and optional MSR launcher staged: $out"
