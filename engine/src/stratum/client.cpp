@@ -278,6 +278,13 @@ int run_miner(const std::filesystem::path& config_path,
                             continue;
                         }
                         character = static_cast<char>(key);
+                        if (key == 13) {
+                            std::cout << '\\n' << std::flush;
+                        } else if (key == 8) {
+                            std::cout << "\\b \\b" << std::flush;
+                        } else if (key >= 32 && key <= 126) {
+                            std::cout << character << std::flush;
+                        }
 #else
                         pollfd descriptor{};
                         descriptor.fd = STDIN_FILENO;
