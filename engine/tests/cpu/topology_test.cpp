@@ -41,7 +41,20 @@ int main() {
     const auto object_threads = unique_rx::select_cpu_threads({
         {"enabled", true}, {"threads", {{"threads", 3}, {"affinity", "0x0f"}, {"intensity", 1}}}
     });
-    expect(object_threads, std::min(3U, logical), "XMRig object thread profile");
+    expect(object_threads, std::min(3U, logical), "legacy UNIQUE RX object thread profile");
+
+    const auto xmrig_rx_object_threads = unique_rx::select_cpu_threads({
+        {"enabled", true}, {"rx", {{"threads", 2}, {"affinity", "0x03"}, {"intensity", 1}}}
+    });
+    expect(xmrig_rx_object_threads, std::min(2U, logical), "native XMRig cpu.rx object profile");
+    const auto xmrig_rx_array_threads = unique_rx::select_cpu_threads({
+        {"enabled", true}, {"rx", nlohmann::json::array({0, nlohmann::json::array({1, 2})})}
+    });
+    expect(xmrig_rx_array_threads, std::min(2U, logical), "native XMRig cpu.rx array profile");
+    const auto rx_null_fallback_threads = unique_rx::select_cpu_threads({
+        {"enabled", true}, {"rx", nullptr}, {"threads", 2}
+    });
+    expect(rx_null_fallback_threads, std::min(2U, logical), "null rx falls back to legacy thread profile");
 
     const auto array_affinities = unique_rx::select_cpu_affinities({
         {"threads", nlohmann::json::array({-1, 3})}
@@ -55,6 +68,14 @@ int main() {
     });
     if (object_affinities != std::vector<std::int64_t>({0, 1, 2})) {
         std::cerr << "XMRig affinity mask was not expanded into worker CPU IDs.\n";
+        return 1;
+    }
+
+    const auto xmrig_rx_affinities = unique_rx::select_cpu_affinities({
+        {"rx", {{"threads", 3}, {"affinity", "0x0d"}}}
+    });
+    if (xmrig_rx_affinities != std::vector<std::int64_t>({0, 2, 3})) {
+        std::cerr << "Native XMRig cpu.rx affinity mask was not expanded.\\n";
         return 1;
     }
 
