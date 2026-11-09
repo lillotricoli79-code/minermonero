@@ -131,6 +131,10 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     std::shared_ptr<const MiningWork> pending_work;
     std::vector<std::uint8_t> blob;
     std::uint64_t exhausted_generation = 0;
+    std::uint64_t nonce_block_generation = 0;
+    std::uint64_t nonce_block_next = 0;
+    std::uint64_t nonce_block_end = 0;
+    constexpr std::uint64_t kNonceReservationSize = 256;
     std::uint32_t pending_nonce = 0;
     bool pipeline_active = false;
     Hash hash{};
@@ -234,15 +238,27 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             }
             active_work = work;
 
-            // Allocate unique nonce offsets atomically across all workers.
-            // This permits changing the worker count at runtime without
-            // restarting the Stratum job or reusing already-tested nonces.
-            const auto nonce_offset = state.next_nonce_offset(work->generation);
-            if (nonce_offset >= nonce_space(work->job)) {
-                flush_pending();
-                exhausted_generation = work->generation;
-                continue;
+            // Each worker reserves a small disjoint nonce range. Hashes
+            // inside the range require no shared atomic operation; new ranges
+            // remain unique when the worker count changes at runtime.
+            if (nonce_block_generation != work->generation ||
+                nonce_block_next >= nonce_block_end) {
+                nonce_block_generation = work->generation;
+                nonce_block_next = 0;
+                nonce_block_end = 0;
+                const auto block_start = state.next_nonce_offset(
+                    work->generation, kNonceReservationSize);
+                if (block_start == UINT64_MAX ||
+                    block_start >= nonce_space(work->job)) {
+                    flush_pending();
+                    exhausted_generation = work->generation;
+                    continue;
+                }
+                nonce_block_next = block_start;
+                nonce_block_end = block_start + std::min(
+                    kNonceReservationSize, nonce_space(work->job) - block_start);
             }
+            const auto nonce_offset = nonce_block_next++;
             const auto nonce = nonce_at_offset(work->job, nonce_offset);
             write_nonce(blob, nonce);
 
