@@ -51,6 +51,7 @@ struct MiningState {
     std::atomic<bool> stop{false};
     std::atomic<int> cpu_priority{-1};
     std::atomic<bool> cpu_yield{false};
+    std::atomic<bool> cpu_numa_enabled{true};
     std::atomic<std::uint64_t> hashes{0};
     std::atomic<std::uint64_t> found{0};
     std::atomic<std::uint64_t> submitted{0};
