@@ -589,6 +589,9 @@ p {
 }
 
 .shell-panel {
+  min-height: 760px;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--line, rgba(255,255,255,.10));
   border-radius: 16px;
   overflow: hidden;
@@ -609,11 +612,12 @@ p {
 .shell-panel-head { border-bottom: 1px solid rgba(255,255,255,.08); }
 .shell-panel-head > div { display:flex; align-items:center; gap:9px; color:#d8e1e8; }
 .shell-output {
-  min-height: 360px;
-  max-height: 58vh;
+  flex: 1;
+  min-height: 560px;
+  max-height: 74vh;
   overflow: auto;
   margin: 0;
-  padding: 20px;
+  padding: 24px;
   color: #c8d5df;
   font: 13px/1.75 ui-monospace, SFMono-Regular, Consolas, monospace;
   white-space: pre-wrap;
@@ -640,7 +644,8 @@ p {
 .shell-hint { border-top:1px solid rgba(255,255,255,.06); font-size:10px; letter-spacing:.04em; text-transform:none; }
 @media (max-width: 700px) {
   .shell-panel-head, .shell-hint { align-items:flex-start; flex-direction:column; }
-  .shell-output { min-height:260px; }
+  .shell-panel { min-height: 540px; }
+  .shell-output { min-height: 360px; max-height: 62vh; }
   .shell-input-row { padding:12px; gap:8px; }
   .shell-input-row .button { padding-inline:10px; }
 }
