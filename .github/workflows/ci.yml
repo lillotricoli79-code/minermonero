@@ -80,24 +80,6 @@ jobs:
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-openssl
 
-      - name: Download and verify official PawnIO Intel MSR module
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $archive = Join-Path $env:RUNNER_TEMP "pawnio-0.2.11.zip"
-          $extract = Join-Path $env:RUNNER_TEMP "pawnio-0.2.11"
-          Invoke-WebRequest -Uri "https://github.com/namazso/PawnIO.Modules/releases/download/0.2.11/release_0_2_11.zip" -OutFile $archive
-          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
-          $module = Get-ChildItem -LiteralPath $extract -Filter "IntelMSR.bin" -File -Recurse | Select-Object -First 1
-          if (-not $module) { throw "IntelMSR.bin not found in official PawnIO 0.2.11 release." }
-          $actual = (Get-FileHash -LiteralPath $module.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected = "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f"
-          if ($actual -ne $expected) { throw "IntelMSR.bin SHA-256 mismatch: $actual" }
-          $destination = Join-Path $env:GITHUB_WORKSPACE "engine\msr\IntelMSR.bin"
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
-          Copy-Item -LiteralPath $module.FullName -Destination $destination -Force
-          "Official PawnIO IntelMSR 0.2.11 verified: $actual"
-
       - name: Build miner, run native tests, backend tests and dashboard
         shell: pwsh
         run: |
