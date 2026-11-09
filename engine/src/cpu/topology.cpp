@@ -434,8 +434,13 @@ std::uint32_t recommended_cpu_threads(std::uint32_t logical_threads,
     physical_cores = std::clamp(physical_cores, 1U, logical_threads);
     const auto hint = std::min(max_threads_hint, 100U);
     if (hint == 0) return physical_cores;
+
+    // XMRig's max-threads-hint is a utilization hint for automatic profiles,
+    // not a request to spawn that percentage of SMT/logical processors.
+    // RandomX's automatic profile starts from physical cores, then applies
+    // the shared-L3 limit in select_cpu_threads().
     return std::clamp(static_cast<std::uint32_t>(
-        std::lround(logical_threads * (hint / 100.0))), 1U, logical_threads);
+        std::lround(physical_cores * (hint / 100.0))), 1U, physical_cores);
 }
 
 std::uint32_t limit_cpu_threads_by_quota(std::uint32_t requested,
@@ -484,7 +489,7 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
         selected = recommended_cpu_threads(
             logical_threads, physical_cores, max_threads_hint);
     }
-    if (!explicit_thread_count && max_threads_hint == 0) {
+    if (!explicit_thread_count) {
         constexpr std::uint64_t randomx_l3_per_thread = 2ULL * 1024ULL * 1024ULL;
         if (const auto l3 = available_l3_cache_bytes()) {
             const auto cache_threads = static_cast<std::uint32_t>(
