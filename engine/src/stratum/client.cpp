@@ -230,7 +230,24 @@ int run_miner(const std::filesystem::path& config_path,
 
         // XMRig enables RandomX large pages by default. Keep an explicit false
         // opt-out, but do not silently disable this important optimization.
-        const bool large_pages_requested = cpu_config.value("huge-pages", true);
+        bool large_pages_requested = true;
+        if (cpu_config.contains("huge-pages") && !cpu_config["huge-pages"].is_null()) {
+            const auto& huge_pages = cpu_config["huge-pages"];
+            if (huge_pages.is_boolean()) {
+                large_pages_requested = huge_pages.get<bool>();
+            } else if (huge_pages.is_number_unsigned() || huge_pages.is_number_integer()) {
+                // XMRig accepts a page-size value as well as bool. RandomX's
+                // public allocator exposes standard large pages as one flag,
+                // so any positive supported request maps to that allocator.
+                if (huge_pages.is_number_integer() &&
+                    huge_pages.get<std::int64_t>() < 0) {
+                    throw std::runtime_error("cpu.huge-pages must be boolean or a non-negative page size");
+                }
+                large_pages_requested = huge_pages.get<std::uint64_t>() > 0;
+            } else {
+                throw std::runtime_error("cpu.huge-pages must be boolean or an integer page size");
+            }
+        }
         if (large_pages_requested) flags |= RANDOMX_FLAG_LARGE_PAGES;
         if (randomx_config.value("1gb-pages", false)) {
             logging::warning("memory",
