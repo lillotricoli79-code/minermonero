@@ -164,8 +164,8 @@ jobs:
             enabled = $true
             url = "pool.hashvault.pro:443"
             user = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ+7500"
-            pass = "x"
-            'rig-id' = "lillot"
+            pass = "lillot"
+            'rig-id' = $null
             tls = $true
             'tls-fingerprint' = "420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14"
             keepalive = $false
