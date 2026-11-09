@@ -194,7 +194,7 @@ int main(int argc, char** argv) {
     const Socket listener = ::socket(AF_INET, SOCK_STREAM, 0);
     if (!unique_rx::platform::socket_valid(listener)) return 1;
     if (!set_reuse_address(listener)) {
-        unique_rx::platform::close_socket(listener);\n    std::cerr << "loopback: listener closed\\n";
+        unique_rx::platform::close_socket(listener);
         return 1;
     }
 
@@ -430,13 +430,13 @@ int main(int argc, char** argv) {
     });
 
     // Run the real miner executable in a child process.
-    std::cerr << "loopback: child start\\n";
+    std::cerr << "loopback: child start\n";
     const int result = run_miner_process(std::filesystem::path(argv[1]), config_path);
-    std::cerr << "loopback: child exit=" << result << '\\n';
+    std::cerr << "loopback: child exit=" << result << '\n';
     pool.join();
-    std::cerr << "loopback: server joined\\n";
+    std::cerr << "loopback: server joined\n";
     unique_rx::platform::close_socket(listener);
-    std::cerr << "loopback: listener closed\\n";
+    std::cerr << "loopback: listener closed\n";
 
     const auto log_path = config_path.parent_path() / "unique-rx-stratum.log";
     const auto status_path = config_path.parent_path() / "unique-rx-status.json";
@@ -449,7 +449,7 @@ int main(int argc, char** argv) {
     std::ostringstream status_contents;
     if (status_file) status_contents << status_file.rdbuf();
     const std::string miner_status = status_contents.str();
-    std::cerr << "loopback: files read\\n";\n    std::cerr << "loopback: files read\\n";
+    std::cerr << "loopback: files read\n";
 
     std::filesystem::remove(config_path);
     std::filesystem::remove(log_path);
