@@ -144,7 +144,9 @@ jobs:
           git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $out "SOURCE-COMMIT.txt") -Encoding ascii
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "config.example.json") -Destination (Join-Path $out "config.example.json")
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "requirements.txt") -Destination $out
-          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "backend") -Destination $out -Recurse
+          $backendOut = Join-Path $out "backend"
+          New-Item -ItemType Directory -Force -Path $backendOut | Out-Null
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "backend\*") -Destination $backendOut -Recurse -Force
           $dashboardOut = Join-Path $out "dashboard\dist"
           New-Item -ItemType Directory -Force -Path $dashboardOut | Out-Null
           Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE "dashboard\dist\*") -Destination $dashboardOut -Recurse -Force
