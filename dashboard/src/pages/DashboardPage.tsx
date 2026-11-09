@@ -25,6 +25,7 @@ import {
 import {
   Area,
   AreaChart,
+  Line,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -89,7 +90,7 @@ type MinerConfig = {
   msr_mode: "auto" | "off" | "fast" | "custom";
   api_port: number;
 };
-type ChartPoint = { at: number; hashrate: number };
+type ChartPoint = { at: number; hashrate: number | null; hashrate60: number | null; hashrate15m: number | null };
 type SystemChartPoint = { at: number; system: number; miner: number | null };
 type LogItem = { id: number; time: number; message: string; engine?: string };
 
@@ -183,9 +184,16 @@ function App() {
         const nextStatus = statusResult.value;
         setStatus(nextStatus);
         const rate = nextStatus.hashrate["10s"];
-        if (rate != null && Number.isFinite(rate)) {
+        const rate60 = nextStatus.hashrate["60s"];
+        const rate15m = nextStatus.hashrate["15m"];
+        if ([rate, rate60, rate15m].some((value) => value != null && Number.isFinite(value))) {
           setHistory((current) =>
-            [...current, { at: Date.now(), hashrate: rate }].slice(-48),
+            [...current, {
+              at: Date.now(),
+              hashrate: rate != null && Number.isFinite(rate) ? rate : null,
+              hashrate60: rate60 != null && Number.isFinite(rate60) ? rate60 : null,
+              hashrate15m: rate15m != null && Number.isFinite(rate15m) ? rate15m : null,
+            }].slice(-180),
           );
         }
         const systemCpu = nextStatus.system?.cpu_percent;
@@ -479,7 +487,7 @@ function App() {
                     <h2>Andamento hashrate</h2>
                   </div>
                   <div className="chart-legend">
-                    <i /> Hashrate 10s <span>ULTIMI CAMPIONI</span>
+                    <i /> Medie 10s · 60s · 15m <span>ULTIMI CAMPIONI</span>
                   </div>
                 </div>
                 <div className="chart-frame">
@@ -537,9 +545,9 @@ function App() {
                           labelFormatter={(value) =>
                             new Date(Number(value)).toLocaleTimeString("it-IT")
                           }
-                          formatter={(value) => [
+                          formatter={(value, name) => [
                             formatHashrate(Number(value)),
-                            "Hashrate",
+                            name === "hashrate60" ? "Media 60s" : name === "hashrate15m" ? "Media 15m" : "Media 10s",
                           ]}
                           contentStyle={{
                             border: "1px solid #dfe8e3",
@@ -557,6 +565,8 @@ function App() {
                           dot={false}
                           isAnimationActive={false}
                         />
+                        <Line type="monotone" dataKey="hashrate60" name="Media 60s" stroke="#4385b5" strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls />
+                        <Line type="monotone" dataKey="hashrate15m" name="Media 15m" stroke="#d28b42" strokeWidth={1.8} dot={false} isAnimationActive={false} connectNulls />
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
