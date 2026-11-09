@@ -196,6 +196,14 @@ int run_miner(const std::filesystem::path& config_path,
     // Open the persistent engine log before CPU/MSR initialization so early
     // hardware and configuration diagnostics are recorded as well.
     logging::set_file(config_path.parent_path() / "unique-rx-stratum.log");
+    // The asynchronous logger owns a writer thread. Always drain and join it
+    // before run_miner returns, including CLI process shutdown and exceptions.
+    struct CloseLoggerOnExit {
+        ~CloseLoggerOnExit() {
+            logging::flush();
+            logging::close_file();
+        }
+    } close_logger_on_exit;
     const auto status_path = config_path.parent_path() / "unique-rx-status.json";
     const auto command_path = config_path.parent_path() / "unique-rx-command.json";
 
