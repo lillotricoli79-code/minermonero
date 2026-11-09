@@ -234,9 +234,9 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             }
             active_work = work;
 
-            // Partition the complete 32-bit nonce ring by worker. The
-            // partition offset, not base+offset, determines exhaustion:
-            // pool jobs can start at any nonce and addition must wrap.
+            // Allocate unique nonce offsets atomically across all workers.
+            // This permits changing the worker count at runtime without
+            // restarting the Stratum job or reusing already-tested nonces.
             const auto nonce_offset = state.next_nonce_offset(work->generation);
             if (nonce_offset >= nonce_space(work->job)) {
                 flush_pending();
