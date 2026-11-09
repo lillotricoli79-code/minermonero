@@ -96,9 +96,16 @@ int run_miner_process(const std::filesystem::path& executable,
     mutable_command.push_back(L'\\0');
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+    startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
     PROCESS_INFORMATION process{};
+    std::cerr << "loopback launching miner: " << executable.string()
+              << " config=" << config_path.string()
+              << " config_exists=" << std::filesystem::exists(config_path) << '\\n';
     if (!CreateProcessW(executable.c_str(), mutable_command.data(), nullptr, nullptr,
-                        TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+                        TRUE, 0, nullptr, nullptr, &startup, &process)) {
         std::cerr << "CreateProcessW failed: " << GetLastError() << '\\n';
         return -1;
     }
