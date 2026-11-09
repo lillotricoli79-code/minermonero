@@ -962,7 +962,7 @@ function App() {
                       <div className="rx-best-row" key={`${entry.at_unix_seconds}-${index}`}>
                         <span>{index + 1}</span>
                         <strong>{entry.difficulty.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</strong>
-                        <span>{status.best?.effort_percent != null && index === 0 ? status.best.effort_percent.toFixed(2) + "%" : "—"}</span>
+                        <span>{status.best?.estimated_hashes != null && entry.difficulty > 0 ? (status.best.estimated_hashes / entry.difficulty * 100).toFixed(2) + "%" : "—"}</span>
                         <span>{Math.max(0, Math.floor(Date.now() / 1000 - entry.at_unix_seconds))}s</span>
                       </div>
                     ))}
