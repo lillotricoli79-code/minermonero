@@ -187,6 +187,7 @@ int run_miner(const std::filesystem::path& config_path,
         ~StopWorkers() { state.stop.store(true, std::memory_order_release); }
     } stop_workers{state};
     std::jthread shell_input_thread;
+    std::jthread status_heartbeat_thread;
 
     using Clock = std::chrono::steady_clock;
     constexpr auto kShareResponseTimeout = std::chrono::seconds(60);
@@ -597,6 +598,20 @@ int run_miner(const std::filesystem::path& config_path,
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
         (void)write_status_snapshot(status_path, startup_status);
+        // Keep the snapshot fresh while slow RandomX dataset initialization or
+        // pool connection is in progress. The heartbeat stops with this process.
+        status_heartbeat_thread = std::jthread(
+            [status_path](std::stop_token stop_token) {
+                while (!stop_token.stop_requested()) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    if (stop_token.stop_requested()) break;
+                    std::error_code error;
+                    if (std::filesystem::exists(status_path, error) && !error) {
+                        std::filesystem::last_write_time(
+                            status_path, std::filesystem::file_time_type::clock::now(), error);
+                    }
+                }
+            });
         // XMRig-compatible persistent scratchpad pool: false disables it,
         // true sizes it for the active workers, and a number sets capacity.
         const auto automatic_memory_pool_capacity = [&] {
