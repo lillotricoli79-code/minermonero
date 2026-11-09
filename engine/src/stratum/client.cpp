@@ -227,6 +227,11 @@ int run_miner(const std::filesystem::path& config_path,
             cpu_priority = static_cast<int>(configured_priority);
         }
         state.cpu_priority = cpu_priority;
+        if (cpu_config.contains("yield") && !cpu_config["yield"].is_null()) {
+            if (!cpu_config["yield"].is_boolean())
+                throw std::runtime_error("cpu.yield must be boolean or null");
+            state.cpu_yield.store(cpu_config["yield"].get<bool>(), std::memory_order_relaxed);
+        }
 
         // XMRig enables RandomX large pages by default. Keep an explicit false
         // opt-out, but do not silently disable this important optimization.
@@ -272,6 +277,21 @@ int run_miner(const std::filesystem::path& config_path,
         std::uint64_t generation = 0;
         std::uint32_t pool_threads = pools.front().threads;
         const std::uint32_t automatic_threads = pool_threads;
+        std::uint32_t dataset_init_threads = pool_threads;
+        if (randomx_config.contains("init") && !randomx_config["init"].is_null()) {
+            if (!randomx_config["init"].is_number_integer())
+                throw std::runtime_error("randomx.init must be an integer");
+            const auto requested = randomx_config["init"].get<std::int64_t>();
+            if (requested < -1 || requested > 256)
+                throw std::runtime_error("randomx.init must be -1 (auto) or between 0 and 256");
+            if (requested > 0)
+                dataset_init_threads = std::min(static_cast<std::uint32_t>(requested),
+                                                detected_logical_threads());
+        }
+        if (randomx_config.contains("init-avx2") &&
+            !randomx_config["init-avx2"].is_null()) {
+            logging::info("config", "randomx.init-avx2 recognized; RandomX upstream selects the available AVX2 dataset initializer automatically");
+        }
         state.initialize_worker_counters(256);
         auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
         auto runtime_prefetch_mode = std::make_shared<std::atomic<int>>(prefetch_mode);
@@ -671,7 +691,7 @@ struct PendingShare {
                     logging::info("memory", "initializing full RandomX dataset");
                     std::cout << "Initializing RandomX full dataset..." << std::flush;
                     next_dataset = create_randomx_dataset(
-                        next_cache, pool_threads, next_flags);
+                        next_cache, dataset_init_threads, next_flags);
                     std::cout << " ready\n";
                     logging::info("memory", "full RandomX dataset ready");
                 }
