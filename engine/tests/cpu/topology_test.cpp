@@ -47,14 +47,14 @@ int main() {
         {"threads", nlohmann::json::array({-1, 3})}
     });
     if (array_affinities != std::vector<std::int64_t>({-1, 3})) {
-        std::cerr << "XMRig array affinity profile was not decoded.\\n";
+        std::cerr << "XMRig array affinity profile was not decoded.\n";
         return 1;
     }
     const auto object_affinities = unique_rx::select_cpu_affinities({
         {"threads", {{"threads", 3}, {"affinity", "0x0f"}}}
     });
     if (object_affinities != std::vector<std::int64_t>({0, 1, 2})) {
-        std::cerr << "XMRig affinity mask was not expanded into worker CPU IDs.\\n";
+        std::cerr << "XMRig affinity mask was not expanded into worker CPU IDs.\n";
         return 1;
     }
 
