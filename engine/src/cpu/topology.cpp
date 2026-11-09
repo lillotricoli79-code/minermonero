@@ -560,7 +560,7 @@ std::vector<std::int64_t> select_cpu_affinities(const nlohmann::json& cpu_config
     std::vector<std::int64_t> result;
     // Match XMRig's RandomX profile key first; legacy UNIQUE RX
     // configurations using "threads" remain accepted.
-    const char* profile_key = cpu_config.contains("rx") ? "rx" : "threads";
+    const char* profile_key = cpu_config.contains("rx") && !cpu_config["rx"].is_null() ? "rx" : "threads";
     if (!cpu_config.contains(profile_key)) return result;
     const auto& configured = cpu_config[profile_key];
     if (configured.is_array()) {
