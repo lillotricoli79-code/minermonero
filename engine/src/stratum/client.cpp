@@ -140,9 +140,26 @@ int run_miner(const std::filesystem::path& config_path,
             logging::info("cpu", "thread count overridden from shell: " +
                 std::to_string(thread_override));
         }
+        // Accept the same top-level algorithm and RandomX mode fields used by
+        // XMRig config.json. This engine intentionally implements rx/0 only.
+        if (config.contains("algo") && !config["algo"].is_null()) {
+            const auto algorithm = config["algo"].get<std::string>();
+            if (algorithm != "rx/0" && algorithm != "rx" &&
+                algorithm != "randomx" && algorithm != "randomx/0") {
+                throw std::runtime_error("unsupported algo '" + algorithm +
+                                         "': UNIQUE RX supports RandomX rx/0 only");
+            }
+        }
         const auto pools = parse_pool_configs(config);
         const auto randomx_config = config.value("randomx", nlohmann::json::object());
-        const bool full_memory = randomx_config.value("full-memory", true);
+        bool full_memory = randomx_config.value("full-memory", true);
+        if (randomx_config.contains("mode") && !randomx_config["mode"].is_null()) {
+            const auto mode = randomx_config["mode"].get<std::string>();
+            if (mode == "fast") full_memory = true;
+            else if (mode == "light") full_memory = false;
+            else if (mode != "auto")
+                throw std::runtime_error("randomx.mode must be auto, fast, or light");
+        }
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
         const bool msr_explicitly_disabled =
             (wrmsr.is_boolean() && !wrmsr.get<bool>()) ||
@@ -192,6 +209,14 @@ int run_miner(const std::filesystem::path& config_path,
         std::shared_ptr<randomx_dataset> dataset;
         auto flags = randomx_get_flags();
         const auto cpu_config = config.value("cpu", nlohmann::json::object());
+        if (cpu_config.contains("hw-aes") && !cpu_config["hw-aes"].is_null()) {
+            if (!cpu_config["hw-aes"].is_boolean())
+                throw std::runtime_error("cpu.hw-aes must be boolean or null");
+            if (!cpu_config["hw-aes"].get<bool>()) {
+                flags &= ~RANDOMX_FLAG_HARD_AES;
+                logging::info("cpu", "hardware AES disabled by XMRig-compatible cpu.hw-aes setting");
+            }
+        }
         int cpu_priority = -1; // XMRig-compatible null/default: leave OS priority unchanged.
         if (cpu_config.contains("priority") && !cpu_config["priority"].is_null()) {
             if (!cpu_config["priority"].is_number_integer())
@@ -207,6 +232,10 @@ int run_miner(const std::filesystem::path& config_path,
         // opt-out, but do not silently disable this important optimization.
         const bool large_pages_requested = cpu_config.value("huge-pages", true);
         if (large_pages_requested) flags |= RANDOMX_FLAG_LARGE_PAGES;
+        if (randomx_config.value("1gb-pages", false)) {
+            logging::warning("memory",
+                "randomx.1gb-pages is recognized but this RandomX backend exposes only standard large-page allocation; 1 GiB pages are not claimed or forced");
+        }
 
         // Accept both the README's legacy key and XMRig's native spelling.
         const bool jit_huge_pages = cpu_config.contains("huge-pages-jit")
