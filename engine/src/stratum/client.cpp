@@ -44,6 +44,9 @@
 #include <thread>
 #include <stop_token>
 #include <unordered_map>
+#ifdef __linux__
+#include <sys/sysinfo.h>
+#endif
 
 namespace unique_rx {
 namespace {
@@ -72,6 +75,21 @@ bool console_input_available() {
     return _isatty(_fileno(stdin)) != 0;
 #else
     return ::isatty(STDIN_FILENO) != 0;
+#endif
+}
+
+std::uint64_t available_physical_memory_bytes() noexcept {
+#ifdef _WIN32
+    MEMORYSTATUSEX status{};
+    status.dwLength = sizeof(status);
+    return GlobalMemoryStatusEx(&status) ? status.ullAvailPhys : 0;
+#elif defined(__linux__)
+    struct sysinfo info{};
+    if (::sysinfo(&info) != 0) return 0;
+    return static_cast<std::uint64_t>(info.freeram) *
+           static_cast<std::uint64_t>(info.mem_unit);
+#else
+    return 0;
 #endif
 }
 
@@ -205,10 +223,27 @@ int run_miner(const std::filesystem::path& config_path,
         bool full_memory = randomx_config.value("full-memory", true);
         if (randomx_config.contains("mode") && !randomx_config["mode"].is_null()) {
             const auto mode = randomx_config["mode"].get<std::string>();
-            if (mode == "fast") full_memory = true;
-            else if (mode == "light") full_memory = false;
-            else if (mode != "auto")
+            if (mode == "fast") {
+                full_memory = true;
+            } else if (mode == "light") {
+                full_memory = false;
+            } else if (mode == "auto") {
+                const auto available = available_physical_memory_bytes();
+                const auto dataset_bytes =
+                    static_cast<std::uint64_t>(randomx_dataset_item_count()) * 64ULL;
+                const auto scratchpad_bytes =
+                    static_cast<std::uint64_t>(pools.front().threads) * 2ULL * 1024ULL * 1024ULL;
+                constexpr std::uint64_t reserve_bytes = 512ULL * 1024ULL * 1024ULL;
+                const auto required = dataset_bytes + scratchpad_bytes + reserve_bytes;
+                full_memory = available != 0 && available >= required;
+                logging::info("memory", "RandomX auto mode selected " +
+                    std::string(full_memory ? "fast/full dataset" : "light/cache") +
+                    " | available RAM " + std::to_string(available / (1024ULL * 1024ULL)) +
+                    " MiB | estimated fast requirement " +
+                    std::to_string(required / (1024ULL * 1024ULL)) + " MiB");
+            } else {
                 throw std::runtime_error("randomx.mode must be auto, fast, or light");
+            }
         }
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
         const bool msr_explicitly_disabled =
