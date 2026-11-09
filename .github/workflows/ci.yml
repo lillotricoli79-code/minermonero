@@ -155,7 +155,13 @@ jobs:
           $config.randomx.mode = "fast"
           if ($config.randomx.PSObject.Properties["full-memory"]) { $config.randomx.PSObject.Properties.Remove("full-memory") }
           $config.randomx.wrmsr = $false
-          $config.randomx.'msr-module' = "msr/IntelMSR.bin"
+          # msr-module is a UNIQUE RX extension, not present in stock XMRig configs.
+          # Add it safely because ConvertFrom-Json objects reject assignment to absent keys.
+          if (-not $config.randomx.PSObject.Properties["msr-module"]) {
+            $config.randomx | Add-Member -NotePropertyName "msr-module" -NotePropertyValue "msr/IntelMSR.bin"
+          } else {
+            $config.randomx.'msr-module' = "msr/IntelMSR.bin"
+          }
           $config.pools = @([pscustomobject]@{
             enabled = $true
             url = "pool.hashvault.pro:443"
