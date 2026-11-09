@@ -515,11 +515,17 @@ class MinerController:
             }
         snapshot = read_native_status_snapshot()
         if snapshot is not None:
+            snapshot_state = snapshot.get("state")
+            visible_state = (
+                snapshot_state
+                if snapshot_state == "AVVIO"
+                else "ATTIVO" if snapshot.get("connected") else "RICONNESSIONE"
+            )
             return {
                 **snapshot,
-                "state": "ATTIVO" if snapshot.get("connected") else "RICONNESSIONE",
+                "state": visible_state,
                 "managed": False,
-                "error": None,
+                "error": snapshot.get("error"),
             }
         try:
             summary = self.read_summary(load_config())
@@ -838,8 +844,13 @@ class MinerController:
             return {"command": command, "restart": False, "lines": ["Richiesta di avvio inviata al miner nativo/backend."]}
 
         if verb == "stop" and len(parts) == 1:
+            external = not bool(status.get("managed"))
             self.stop()
-            return {"command": command, "restart": False, "lines": ["Arresto controllato completato."]}
+            message = (
+                "Richiesta di arresto graduale inviata al motore C++."
+                if external else "Arresto controllato completato."
+            )
+            return {"command": command, "restart": False, "lines": [message]}
 
         if verb == "diagnose" and len(parts) == 1:
             cpu = status.get("cpu") or {}
