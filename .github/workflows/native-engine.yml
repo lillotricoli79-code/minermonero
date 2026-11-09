@@ -34,11 +34,23 @@ jobs:
       - name: Run native tests
         run: ctest --test-dir build --output-on-failure
 
-      - name: Upload Linux miner executable
+      - name: Stage Linux miner with corresponding source and licenses
+        run: |
+          set -euo pipefail
+          out="release/unique-rx-linux-x64"
+          mkdir -p "$out/licenses"
+          cp build/unique-rx "$out/unique-rx"
+          cp README.md "$out/README.md"
+          cp LICENSES/XMRIG-GPL-3.0.txt LICENSES/RXMINER-MIT.txt LICENSES/NYXRX-MIT.txt "$out/licenses/"
+          cp engine/src/randomx/upstream/LICENSE "$out/licenses/RANDOMX-BSD-3-CLAUSE.txt"
+          git archive --format=zip --output="$out/unique-rx-source.zip" HEAD
+          git rev-parse HEAD > "$out/SOURCE-COMMIT.txt"
+
+      - name: Upload Linux miner and corresponding source
         uses: actions/upload-artifact@v4
         with:
           name: unique-rx-linux-x64
-          path: build/unique-rx
+          path: release/unique-rx-linux-x64/
           if-no-files-found: error
 
   windows:
@@ -84,6 +96,22 @@ jobs:
             throw "OpenSSL runtime DLLs were not found in $opensslBin"
           }
           Copy-Item -LiteralPath $dlls.FullName -Destination "build/Release" -Force
+
+      - name: Package Windows miner with corresponding source and licenses
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $out = Join-Path $env:GITHUB_WORKSPACE "build\Release"
+          $licenses = Join-Path $out "licenses"
+          New-Item -ItemType Directory -Force -Path $licenses | Out-Null
+          Copy-Item -LiteralPath "README.md" -Destination $out
+          Copy-Item -LiteralPath "LICENSES\XMRIG-GPL-3.0.txt" -Destination $licenses
+          Copy-Item -LiteralPath "LICENSES\RXMINER-MIT.txt" -Destination $licenses
+          Copy-Item -LiteralPath "LICENSES\NYXRX-MIT.txt" -Destination $licenses
+          Copy-Item -LiteralPath "engine\src\randomx\upstream\LICENSE" -Destination (Join-Path $licenses "RANDOMX-BSD-3-CLAUSE.txt")
+          git archive --format=zip "--output=$(Join-Path $out 'unique-rx-source.zip')" HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Unable to package corresponding source revision." }
+          git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $out "SOURCE-COMMIT.txt") -Encoding ascii
 
       - name: Upload Windows miner executable and runtime
         uses: actions/upload-artifact@v4
