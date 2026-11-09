@@ -101,6 +101,32 @@ std::optional<std::uint64_t> read_cpu_frequency_mhz() {
 #endif
     return std::nullopt;
 }
+std::optional<bool> read_on_battery() {
+#ifdef _WIN32
+    SYSTEM_POWER_STATUS status{};
+    if (GetSystemPowerStatus(&status) != 0 && status.ACLineStatus != 255)
+        return status.ACLineStatus == 0;
+#elif defined(__linux__)
+    const std::filesystem::path root("/sys/class/power_supply");
+    std::error_code ec;
+    bool has_battery = false;
+    for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
+        if (ec) break;
+        std::ifstream type_file(entry.path() / "type");
+        std::string type;
+        if (!(type_file >> type)) continue;
+        if (type == "Battery") has_battery = true;
+        if (type == "Mains" || type == "USB" || type == "USB_C") {
+            std::ifstream online_file(entry.path() / "online");
+            int online = -1;
+            if (online_file >> online && online == 1) return false;
+        }
+    }
+    if (has_battery) return true;
+#endif
+    return std::nullopt;
+}
+
 } // namespace
 
 struct SystemTelemetry::Impl {
@@ -203,6 +229,7 @@ SystemSample SystemTelemetry::sample() {
     result.cpu_frequency_mhz=read_cpu_frequency_mhz();
     result.temperature_c=read_temperature();
     result.package_power_watts=impl_->package_power();
+    result.on_battery=read_on_battery();
     impl_->previous_at=std::chrono::steady_clock::now();
     return result;
 }
