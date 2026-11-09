@@ -133,23 +133,12 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             ? state.worker_hashes[worker_id].get() : nullptr;
     WorkerCounterPublisher counter_publisher{
         &state, published_worker_counter, &local_worker_hashes, &unpublished_hashes};
-    const bool affinity_disabled = affinity_override && *affinity_override < 0;
     const bool pinned = affinity_override
         ? (*affinity_override >= 0 &&
            platform::pin_current_thread_by_id(static_cast<std::uint32_t>(*affinity_override)))
         : platform::pin_current_thread(worker_id);
     int applied_priority = state.cpu_priority.load(std::memory_order_relaxed);
-    const bool priority_applied = platform::set_current_thread_priority(applied_priority);
-    const std::string priority_message = applied_priority == -1
-        ? "; OS priority left unchanged"
-        : priority_applied ? "; priority applied"
-                           : "; priority unchanged (permission or platform limit)";
-    const std::string affinity_message = pinned
-        ? " started; CPU affinity pinned"
-        : affinity_disabled ? " started; CPU affinity disabled by profile"
-                            : " started; affinity unavailable";
-    logging::info("cpu", "worker #" + std::to_string(worker_id) +
-        affinity_message + priority_message);
+    (void)platform::set_current_thread_priority(applied_priority);
     // Scratchpad mappings are reused only by workers on the same NUMA node.
     const int allocator_node = state.cpu_numa_enabled.load(std::memory_order_relaxed) && pinned
         ? (affinity_override
