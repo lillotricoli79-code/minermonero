@@ -97,7 +97,7 @@ int main() {
     std::vector<std::thread> producers;
     producers.reserve(producer_count);
     for (int producer = 0; producer < producer_count; ++producer) {
-        producers.emplace_back([producer] {
+        producers.emplace_back([producer, messages_per_producer] {
             for (int index = 0; index < messages_per_producer; ++index) {
                 unique_rx::logging::info("concurrent",
                     "producer=" + std::to_string(producer) +
