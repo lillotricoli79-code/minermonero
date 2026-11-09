@@ -73,7 +73,7 @@ std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
             if (hash_meets_target(hash, latest_work->job.target)) {
                 if (state.shares.size() < kMaximumQueuedShares) {
                     state.shares.push_back({
-                        latest_work->generation, latest_work->job.id, nonce, hash});
+                        latest_work->generation, latest_work->job.id, nonce, hash, latest_work->job.target});
                 } else {
                     state.dropped_shares.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -201,6 +201,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                         work->full_memory ? nullptr : work->cache.get(),
                         work->full_memory ? work->dataset.get() : nullptr));
                     if (vm) {
+                        state.large_pages_active.store(false, std::memory_order_relaxed);
                         std::cerr << "RandomX worker scratchpad huge pages unavailable; "
                                      "using standard pages.\n";
                     }
