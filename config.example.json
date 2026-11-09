@@ -2,7 +2,6 @@
   "autosave": true,
   "background": false,
   "colors": true,
-  "verbose": false,
   "title": true,
   "print-time": 5,
   "health-print-time": 60,
