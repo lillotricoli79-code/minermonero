@@ -1237,6 +1237,27 @@ int run_miner(const std::filesystem::path& config_path,
         logging::info("memory", full_memory ? "full dataset mode" : "light cache mode");
         auto last_console_speed = started;
         auto last_health_print = started;
+        std::string last_share_issue;
+        auto last_share_issue_at = Clock::time_point::min();
+        std::uint64_t suppressed_share_issues = 0;
+        const auto log_share_issue = [&](const std::string& message) {
+            const auto now = Clock::now();
+            if (message != last_share_issue ||
+                last_share_issue_at == Clock::time_point::min() ||
+                now - last_share_issue_at >= std::chrono::seconds(60)) {
+                std::string record = message;
+                if (suppressed_share_issues != 0) {
+                    record += " (" + std::to_string(suppressed_share_issues) +
+                        " eventi ripetuti soppressi)";
+                }
+                logging::warning("cpu", record);
+                last_share_issue = message;
+                last_share_issue_at = now;
+                suppressed_share_issues = 0;
+            } else {
+                ++suppressed_share_issues;
+            }
+        };
         const auto log_event = [&](const std::string& event,
                                    const nlohmann::json& details) {
             if (event == "CONNECTED") {
@@ -1275,27 +1296,6 @@ int run_miner(const std::filesystem::path& config_path,
         };
         auto last_sample_time = started;
         std::deque<std::pair<Clock::time_point, std::uint64_t>> samples;
-        std::string last_share_issue;
-        auto last_share_issue_at = Clock::time_point::min();
-        std::uint64_t suppressed_share_issues = 0;
-        const auto log_share_issue = [&](const std::string& message) {
-            const auto now = Clock::now();
-            if (message != last_share_issue ||
-                last_share_issue_at == Clock::time_point::min() ||
-                now - last_share_issue_at >= std::chrono::seconds(60)) {
-                std::string record = message;
-                if (suppressed_share_issues != 0) {
-                    record += " (" + std::to_string(suppressed_share_issues) +
-                        " eventi ripetuti soppressi)";
-                }
-                logging::warning("cpu", record);
-                last_share_issue = message;
-                last_share_issue_at = now;
-                suppressed_share_issues = 0;
-            } else {
-                ++suppressed_share_issues;
-            }
-        };
 struct PendingShare {
             Clock::time_point submitted_at;
             double actual_difficulty = 0.0;
