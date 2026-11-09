@@ -274,6 +274,34 @@ def read_native_status_snapshot(max_age_seconds: float = 8.0) -> dict[str, Any] 
     return payload
 
 
+def queue_native_command(command: str, value: int | str | None = None) -> None:
+    """Atomically enqueue a short-lived command for the standalone C++ engine."""
+    payload: dict[str, Any] = {
+        "command": command,
+        "timestamp_unix_ms": int(time.time() * 1000),
+    }
+    if value is not None:
+        payload["value"] = value
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=ROOT,
+            prefix=".unique-rx-command.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            json.dump(payload, temporary, separators=(",", ":"))
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, ROOT / "unique-rx-command.json")
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+
+
 def is_loopback(host: str) -> bool:
     host = host.strip("[]").lower()
     if host == "localhost":
@@ -680,7 +708,16 @@ class MinerController:
             process = self.process
             if process is None or process.poll() is not None:
                 self.process = None
-                raise HTTPException(status_code=409, detail="Nessun miner avviato da questa dashboard")
+                process = None
+        if process is None:
+            if read_native_status_snapshot() is not None:
+                try:
+                    queue_native_command("stop")
+                except OSError as exc:
+                    raise HTTPException(status_code=500, detail=f"Impossibile inviare l'arresto al miner nativo: {exc}") from exc
+                self._log("Richiesta di arresto graduale inviata al miner nativo avviato esternamente.")
+                return
+            raise HTTPException(status_code=409, detail="Nessun miner attivo rilevato.")
         try:
             if os.name == "nt":
                 process.send_signal(signal.CTRL_BREAK_EVENT)
@@ -784,7 +821,30 @@ class MinerController:
             if len(parts) != 2:
                 raise HTTPException(status_code=400, detail="Uso: threads N oppure threads auto")
             if not status.get("managed") or not self.is_running():
-                raise HTTPException(status_code=409, detail="Avvia prima il miner dalla dashboard.")
+                if read_native_status_snapshot() is None:
+                    raise HTTPException(status_code=409, detail="Avvia prima il miner.")
+                value = parts[1].lower()
+                if value == "auto":
+                    requested_value: int | str = "auto"
+                    label = "automatici"
+                else:
+                    try:
+                        requested_value = int(value, 10)
+                    except ValueError as exc:
+                        raise HTTPException(status_code=400, detail="Usa un intero tra 1 e 256 oppure auto.") from exc
+                    if not 1 <= requested_value <= 256:
+                        raise HTTPException(status_code=400, detail="Il numero di thread deve essere tra 1 e 256.")
+                    label = str(requested_value)
+                try:
+                    queue_native_command("threads", requested_value)
+                except OSError as exc:
+                    raise HTTPException(status_code=500, detail=f"Impossibile inviare il comando thread al miner: {exc}") from exc
+                self._log(f"Richiesta regolazione a {label} thread inviata al miner nativo esterno.")
+                return {"command": command, "restart": False, "lines": [
+                    "Comando thread inviato al motore C++.",
+                    "config.json non è stato modificato.",
+                    "Il nuovo numero effettivo sarà confermato dalla telemetria.",
+                ]}
             with self.lock:
                 engine_kind = self.engine_kind
             if engine_kind != "unique-rx":
