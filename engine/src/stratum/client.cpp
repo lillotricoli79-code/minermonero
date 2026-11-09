@@ -1038,7 +1038,8 @@ std::uint64_t hash_value = 0;
                     }
                     if (pool.keepalive && !session_id.empty() && now >= next_keepalive) {
                         transport.send_json(make_keepalive_request(next_id++, session_id));
-                        next_keepalive = now + std::chrono::seconds(60);
+                        next_keepalive = now + std::chrono::seconds(
+                            pool.keepalive_seconds == 0 ? 60U : pool.keepalive_seconds);
                     }
                     for (auto it = pending.begin(); it != pending.end();) {
                         if (now - it->second.submitted_at >= kShareResponseTimeout) {
