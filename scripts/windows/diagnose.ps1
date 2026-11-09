@@ -26,6 +26,7 @@ if (Test-Path -LiteralPath $pythonExe) {
 $cmake = Get-Command cmake -ErrorAction SilentlyContinue
 if ($cmake) { & $cmake.Source --version | Select-Object -First 1 } else { Write-Warning "CMake non trovato." }
 $bins = @(
+    (Join-Path $repoRoot "unique-rx.exe"),
     (Join-Path $repoRoot "engine\build\unique-rx.exe"),
     (Join-Path $repoRoot "engine\build-mingw-ninja\unique-rx.exe"),
     (Join-Path $repoRoot "engine\build-mingw-make\unique-rx.exe"),
