@@ -89,9 +89,11 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
         auto* item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(storage.data());
         if (GetLogicalProcessorInformationEx(RelationProcessorCore, item, &bytes)) {
             DWORD offset = 0;
-            while (offset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) <= bytes) {
+            while (offset < bytes) {
                 item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(storage.data() + offset);
-                if (item->Size == 0 || offset + item->Size > bytes) break;
+                if (bytes - offset < sizeof(DWORD) * 2 ||
+                    item->Size < sizeof(DWORD) * 2 ||
+                    item->Size > bytes - offset) break;
                 if (item->Relationship == RelationProcessorCore) {
                     std::vector<std::pair<WORD, DWORD>> siblings;
                     WORD node = 0;
