@@ -529,7 +529,9 @@ int run_miner(const std::filesystem::path& config_path,
                                     } else {
                                         rxm_set_prefetch_mode(mode);
                                         runtime_prefetch_mode->store(mode, std::memory_order_release);
-                                        logging::info("cpu", "runtime prefetch mode changed to " + std::to_string(mode));
+                                        state.vm_config_generation.fetch_add(1, std::memory_order_acq_rel);
+                                        logging::info("cpu", "runtime prefetch mode changed to " + std::to_string(mode) +
+                                            "; RandomX worker VMs will rebuild with the new JIT setting");
                                         std::cout << "Prefetch mode applicato: " << mode << '\n';
                                     }
                                 } catch (...) {
