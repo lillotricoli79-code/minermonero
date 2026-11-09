@@ -195,6 +195,8 @@ def find_native_engine(root: Path = ROOT) -> Path | None:
     # recently produced project binary instead of silently launching an
     # older engine just because its directory has higher search priority.
     candidates = [
+        root / "unique-rx",
+        root / "unique-rx.exe",
         root / "engine" / "build" / "unique-rx",
         root / "engine" / "build" / "unique-rx.exe",
         root / "engine" / "build-mingw" / "unique-rx.exe",
