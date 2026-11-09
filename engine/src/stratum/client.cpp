@@ -335,11 +335,15 @@ int run_miner(const std::filesystem::path& config_path,
                     const auto parsed_id = parse_rpc_response_id(message);
                     if (!parsed_id) return;
                     const std::uint64_t response_id = *parsed_id;
-                    if (pending.find(response_id) == pending.end()) {
+                    const auto pending_share = pending.find(response_id);
+                    if (pending_share == pending.end()) {
                         log_event("UNMATCHED_RESPONSE", message);
                         return;
                     }
-                    pending.erase(response_id);
+                    const auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        Clock::now() - pending_share->second).count();
+                    state.last_share_latency_ms.store(latency_ms, std::memory_order_relaxed);
+                    pending.erase(pending_share);
 
                     const bool has_error = rpc_response_failed(message);
                     // XMRig treats an error-free JSON-RPC response as accepted;
@@ -535,6 +539,8 @@ int run_miner(const std::filesystem::path& config_path,
                                 {"on_battery", system_sample.on_battery ? nlohmann::json(*system_sample.on_battery) : nlohmann::json(nullptr)}
                             }},
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},
+                            {"pool_latency_ms", state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0 ? nlohmann::json(state.last_share_latency_ms.load(std::memory_order_relaxed)) : nlohmann::json(nullptr)},
+                            {"reconnects", state.reconnects.load(std::memory_order_relaxed)},
                         };
                         if (machine_status_channel_required()) {
                             std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
@@ -611,6 +617,7 @@ int run_miner(const std::filesystem::path& config_path,
                 }
             } catch (const std::exception& error) {
                 if (state.stop.load(std::memory_order_acquire) || g_stop_requested) break;
+                state.reconnects.fetch_add(1, std::memory_order_relaxed);
                 log_event("POOL_EXCEPTION", {{"host", pool.host}, {"port", pool.port},
                                              {"error", error.what()}});
                 state.set_work(nullptr);
@@ -662,6 +669,8 @@ int run_miner(const std::filesystem::path& config_path,
                         {"on_battery", reconnect_system.on_battery ? nlohmann::json(*reconnect_system.on_battery) : nlohmann::json(nullptr)}
                     }},
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
+                    {"pool_latency_ms", state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0 ? nlohmann::json(state.last_share_latency_ms.load(std::memory_order_relaxed)) : nlohmann::json(nullptr)},
+                    {"reconnects", state.reconnects.load(std::memory_order_relaxed)},
                 };
                 if (machine_status_channel_required()) {
                     std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
