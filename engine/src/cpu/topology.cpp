@@ -161,10 +161,12 @@ std::optional<std::uint64_t> available_l3_cache_bytes() {
         if (GetLogicalProcessorInformationEx(RelationCache, item, &bytes)) {
             std::uint64_t total = 0;
             DWORD offset = 0;
-            while (offset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) <= bytes) {
+            while (offset < bytes) {
                 item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(
                     storage.data() + offset);
-                if (item->Size == 0 || offset + item->Size > bytes) break;
+                if (bytes - offset < sizeof(DWORD) * 2 ||
+                    item->Size < sizeof(DWORD) * 2 ||
+                    item->Size > bytes - offset) break;
                 if (item->Relationship == RelationCache &&
                     item->Cache.Level == 3 && item->Cache.CacheSize != 0) {
                     total += item->Cache.CacheSize;
@@ -252,10 +254,12 @@ std::uint32_t available_physical_cores(std::uint32_t logical_fallback) {
         if (GetLogicalProcessorInformationEx(RelationProcessorCore, item, &bytes)) {
             std::uint32_t count = 0;
             DWORD offset = 0;
-            while (offset + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) <= bytes) {
+            while (offset < bytes) {
                 item = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(
                     storage.data() + offset);
-                if (item->Size == 0 || offset + item->Size > bytes) break;
+                if (bytes - offset < sizeof(DWORD) * 2 ||
+                    item->Size < sizeof(DWORD) * 2 ||
+                    item->Size > bytes - offset) break;
                 if (item->Relationship == RelationProcessorCore) {
                     bool visible = false;
                     for (WORD group = 0; group < item->Processor.GroupCount; ++group) {
