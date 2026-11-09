@@ -463,7 +463,7 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
     bool explicit_thread_count = false;
     // XMRig stores the RandomX worker profile under "rx" (CpuThreads
     // profile); retain the older UNIQUE RX "threads" alias for compatibility.
-    const char* profile_key = cpu_config.contains("rx") ? "rx" : "threads";
+    const char* profile_key = cpu_config.contains("rx") && !cpu_config["rx"].is_null() ? "rx" : "threads";
     if (cpu_config.contains(profile_key) && !cpu_config[profile_key].is_null()) {
         const auto& configured = cpu_config[profile_key];
         std::uint64_t requested = 0;
