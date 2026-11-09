@@ -25,6 +25,7 @@
 #include "platform/linux_cpu_set.hpp"
 #include <pthread.h>
 #include <sched.h>
+#include <sys/resource.h>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -257,6 +258,52 @@ inline bool pin_current_thread(std::uint32_t logical_cpu) noexcept {
         return linux_cpu::pin_current_thread(processors[logical_cpu]);
 #else
         (void)logical_cpu;
+        return false;
+#endif
+    } catch (...) {
+        return false;
+    }
+}
+
+// XMRig Platform_unix.cpp / Platform_win.cpp priority mapping (GPL-3.0;
+// see LICENSES/XMRIG-GPL-3.0.txt). Priority -1 preserves the OS default.
+inline bool set_current_thread_priority(int priority) noexcept {
+    if (priority == -1) return true;
+    try {
+#ifdef _WIN32
+        int native_priority = THREAD_PRIORITY_IDLE;
+        switch (priority) {
+        case 1: native_priority = THREAD_PRIORITY_BELOW_NORMAL; break;
+        case 2: native_priority = THREAD_PRIORITY_NORMAL; break;
+        case 3: native_priority = THREAD_PRIORITY_ABOVE_NORMAL; break;
+        case 4: native_priority = THREAD_PRIORITY_HIGHEST; break;
+        case 5: native_priority = THREAD_PRIORITY_TIME_CRITICAL; break;
+        default: return false;
+        }
+        return SetThreadPriority(GetCurrentThread(), native_priority) != 0;
+#elif defined(__linux__)
+        int nice_value = 19;
+        switch (priority) {
+        case 0: nice_value = 19; break;
+        case 1: nice_value = 5; break;
+        case 2: nice_value = 0; break;
+        case 3: nice_value = -5; break;
+        case 4: nice_value = -10; break;
+        case 5: nice_value = -15; break;
+        default: return false;
+        }
+        const bool nice_applied = setpriority(PRIO_PROCESS, 0, nice_value) == 0;
+#ifdef SCHED_IDLE
+        if (priority == 0) {
+            sched_param parameters{};
+            if (sched_setscheduler(0, SCHED_IDLE, &parameters) != 0) {
+                (void)sched_setscheduler(0, SCHED_BATCH, &parameters);
+            }
+        }
+#endif
+        return nice_applied;
+#else
+        (void)priority;
         return false;
 #endif
     } catch (...) {
