@@ -189,6 +189,7 @@ int run_miner(const std::filesystem::path& config_path,
     // hardware and configuration diagnostics are recorded as well.
     logging::set_file(config_path.parent_path() / "unique-rx-stratum.log");
     const auto status_path = config_path.parent_path() / "unique-rx-status.json";
+    const auto command_path = config_path.parent_path() / "unique-rx-command.json";
 
     try {
         std::ifstream file(config_path);
@@ -521,6 +522,52 @@ int run_miner(const std::filesystem::path& config_path,
         }
         state.initialize_worker_counters(256);
         auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
+        // A tiny local file-based control channel lets the dashboard operate
+        // a miner launched independently by the preserved main BAT.
+        const auto consume_dashboard_command = [&] {
+            std::error_code exists_error;
+            if (!std::filesystem::exists(command_path, exists_error) || exists_error) return;
+            nlohmann::json request;
+            try {
+                std::ifstream input(command_path, std::ios::binary);
+                if (!input) return;
+                input >> request;
+            } catch (...) {
+                std::error_code ignored;
+                std::filesystem::remove(command_path, ignored);
+                logging::warning("dashboard", "ignored unreadable local control request");
+                return;
+            }
+            std::error_code ignored;
+            std::filesystem::remove(command_path, ignored);
+            if (!request.is_object()) return;
+            const auto issued = request.value("timestamp_unix_ms", std::int64_t{0});
+            const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            if (issued <= 0 || now_ms - issued > 15000 || issued - now_ms > 5000) return;
+            const auto command = request.value("command", std::string());
+            if (command == "stop") {
+                logging::info("dashboard", "graceful stop requested by local dashboard");
+                state.stop.store(true, std::memory_order_release);
+            } else if (command == "threads") {
+                const auto value = request.value("value", nlohmann::json());
+                if (value.is_string() && value.get<std::string>() == "auto") {
+                    desired_threads->store(automatic_threads, std::memory_order_release);
+                    logging::info("cpu", "dashboard restored automatic worker count: " +
+                        std::to_string(automatic_threads));
+                } else if (value.is_number_integer()) {
+                    const auto requested = value.get<std::int64_t>();
+                    if (requested >= 1 && requested <= 256) {
+                        desired_threads->store(static_cast<std::uint32_t>(requested),
+                                                std::memory_order_release);
+                        logging::info("cpu", "dashboard requested " +
+                            std::to_string(requested) + " worker(s)");
+                    } else {
+                        logging::warning("cpu", "dashboard thread request outside 1..256 ignored");
+                    }
+                }
+            }
+        };
         auto active_pool_index = std::make_shared<std::atomic<std::size_t>>(0);
         auto runtime_prefetch_mode = std::make_shared<std::atomic<int>>(prefetch_mode);
         const auto cpu_summary = cpu_summary_json();
@@ -1220,6 +1267,7 @@ std::uint64_t hash_value = 0;
                 };
 
                 while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
+                    consume_dashboard_command();
                     for (const auto& line : transport.read_lines(2)) {
                         const auto message = nlohmann::json::parse(line);
                         if (is_job_notification(message)) {
@@ -1253,6 +1301,7 @@ std::uint64_t hash_value = 0;
                             record_share_response(message);
                         }
                     }
+                    consume_dashboard_command();
 
                     const auto now = Clock::now();
                     if (session_id.empty() && now >= login_deadline) {
