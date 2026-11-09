@@ -55,6 +55,7 @@ class MinerConfigUpdate(BaseModel):
     worker: str = "rig01"
     password: str | None = None
     threads: int = Field(default=0, ge=0, le=256)
+    priority: int = Field(default=2, ge=-1, le=5)
     huge_pages: bool = False
     jit_huge_pages: bool = False
     prefetch_mode: int = Field(default=1, ge=0, le=3)
@@ -747,6 +748,9 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
         if explicit_threads > 0
         else round((os.cpu_count() or 1) * thread_hint / 100) if thread_hint else 0
     )
+    priority = cpu.get("priority", 2)
+    if isinstance(priority, bool) or not isinstance(priority, int) or not -1 <= priority <= 5:
+        priority = 2
     huge_pages = cpu.get("huge-pages", False)
     if not isinstance(huge_pages, bool):
         huge_pages = False
@@ -762,6 +766,7 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
         "worker": pool.get("rig-id", "rig01"),
         "password_set": bool(pool.get("pass", "")),
         "threads": threads,
+        "priority": priority,
         "huge_pages": huge_pages,
         "jit_huge_pages": jit_huge_pages,
         "prefetch_mode": prefetch_mode,
@@ -798,6 +803,7 @@ def apply_config_update(current: dict[str, Any], update: MinerConfigUpdate) -> d
         pool["pass"] = update.password
     cpu = dict(result.get("cpu") or {})
     cpu["enabled"] = True
+    cpu["priority"] = update.priority
     if update.threads > 0:
         # The native engine clamps this exact request to CPUs available to the process
         # and to container quotas; do not approximate it as a percentage.
