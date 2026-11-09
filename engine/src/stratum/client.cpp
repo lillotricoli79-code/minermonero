@@ -410,7 +410,11 @@ int run_miner(const std::filesystem::path& config_path,
         if (cpu_config.contains("memory-pool") && !cpu_config["memory-pool"].is_null()) {
             const auto& memory_pool = cpu_config["memory-pool"];
             const auto automatic_memory_pool_capacity = [&] {
-                const auto l3_bytes = cpu_summary.value("l3_cache_bytes", std::uint64_t{0});
+                std::uint64_t l3_bytes = 0;
+                if (cpu_summary.contains("l3_cache_bytes") &&
+                    cpu_summary["l3_cache_bytes"].is_number()) {
+                    l3_bytes = cpu_summary["l3_cache_bytes"].get<std::uint64_t>();
+                }
                 const auto l3_pages = static_cast<std::size_t>(l3_bytes / (2ULL * 1024ULL * 1024ULL));
                 return std::max<std::size_t>(pool_threads, l3_pages);
             };
