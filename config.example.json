@@ -8,6 +8,15 @@
   "retries": 5,
   "retry-pause": 5,
   "user-agent": "UniqueRX/1.0",
+  "log-file": "unique-rx-stratum.log",
+  "api": { "id": null, "worker-id": null },
+  "http": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 0,
+    "access-token": null,
+    "restricted": true
+  },
   "cpu": {
     "enabled": true,
     "threads": { "intensity": 1, "threads": 0, "affinity": -1 },
