@@ -190,7 +190,7 @@ private:
         }
         ssl_ = SSL_new(context_);
         if (ssl_ == nullptr) throw std::runtime_error("TLS session creation failed");
-        if (SSL_set_tlsext_host_name(ssl_, config.host.c_str()) != 1) {
+        if (config.sni && SSL_set_tlsext_host_name(ssl_, config.host.c_str()) != 1) {
             throw std::runtime_error("cannot set TLS server name for pool");
         }
         if (config.tls_fingerprint.empty() &&
