@@ -500,8 +500,13 @@ int run_miner(const std::filesystem::path& config_path,
                                 } else {
                                     std::cout << "cpu.yield accetta on/off\n";
                                 }
-                            } else if (setting == "huge-pages" || setting == "randomx.mode" ||
-                                       setting == "cpu.hw-aes" || setting == "cpu.memory-pool" || setting == "randomx.numa" || setting == "randomx.1gb-pages") {
+                            } else if (setting == "huge-pages" || setting == "cpu.huge-pages" ||
+                                       setting == "randomx.mode" || setting == "cpu.hw-aes" ||
+                                       setting == "cpu.huge-pages-jit" || setting == "cpu.memory-pool" ||
+                                       setting == "cpu.asm" || setting == "randomx.numa" ||
+                                       setting == "randomx.1gb-pages" || setting == "randomx.init" ||
+                                       setting == "randomx.init-avx2" || setting == "randomx.rdmsr" ||
+                                       setting == "randomx.wrmsr" || setting == "pools") {
                                 std::cout << setting << " è un'impostazione di inizializzazione RandomX: modifica config.json e riavvia il miner per applicarla.\n";
                             } else {
                                 std::cout << "Impostazione non supportata dalla shell: " << setting << '\n';
