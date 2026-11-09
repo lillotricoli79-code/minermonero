@@ -429,12 +429,14 @@ int main(int argc, char** argv) {
         }
     });
 
-    // Run the real miner executable in a child process. This exercises the
-    // production CLI and keeps Windows CRT signal/console/logger state isolated
-    // from the mock-pool test harness.
-    std::cerr << "loopback: child start\\n";\n    const int result = run_miner_process(std::filesystem::path(argv[1]), config_path);\n    std::cerr << "loopback: child exit=" << result << '\\n';
-    pool.join();\n    std::cerr << "loopback: server joined\\n";
+    // Run the real miner executable in a child process.
+    std::cerr << "loopback: child start\\n";
+    const int result = run_miner_process(std::filesystem::path(argv[1]), config_path);
+    std::cerr << "loopback: child exit=" << result << '\\n';
+    pool.join();
+    std::cerr << "loopback: server joined\\n";
     unique_rx::platform::close_socket(listener);
+    std::cerr << "loopback: listener closed\\n";
 
     const auto log_path = config_path.parent_path() / "unique-rx-stratum.log";
     const auto status_path = config_path.parent_path() / "unique-rx-status.json";
@@ -446,7 +448,8 @@ int main(int argc, char** argv) {
     std::ifstream status_file(status_path, std::ios::binary);
     std::ostringstream status_contents;
     if (status_file) status_contents << status_file.rdbuf();
-    const std::string miner_status = status_contents.str();\n    std::cerr << "loopback: files read\\n";
+    const std::string miner_status = status_contents.str();
+    std::cerr << "loopback: files read\\n";\n    std::cerr << "loopback: files read\\n";
 
     std::filesystem::remove(config_path);
     std::filesystem::remove(log_path);
