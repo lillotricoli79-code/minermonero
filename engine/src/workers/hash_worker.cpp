@@ -101,7 +101,8 @@ struct WorkerCounterPublisher {
 // and per-worker nonce stream, integrated with UniqueRX generation-safe work
 // handoff and bounded share queue. GPL-3.0; see LICENSES/XMRIG-GPL-3.0.txt.
 void hash_worker(MiningState& state, std::uint32_t worker_id,
-                 std::uint32_t worker_count, std::uint64_t maximum_hashes) {
+                 std::uint32_t worker_count, std::uint64_t maximum_hashes,
+                 std::atomic<bool>& worker_stop) {
     if (worker_count == 0 || worker_id >= worker_count) {
         state.report_worker_error("invalid CPU worker index or worker count");
         return;
@@ -129,7 +130,6 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     std::shared_ptr<const MiningWork> active_work;
     std::shared_ptr<const MiningWork> pending_work;
     std::vector<std::uint8_t> blob;
-    std::uint64_t cursor = 0;
     std::uint64_t exhausted_generation = 0;
     std::uint32_t pending_nonce = 0;
     bool pipeline_active = false;
@@ -155,7 +155,8 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     };
 
     try {
-        while (!state.stop.load(std::memory_order_acquire)) {
+        while (!state.stop.load(std::memory_order_acquire) &&
+               !worker_stop.load(std::memory_order_acquire)) {
             const auto work = state.current_work();
             if (!work) {
                 flush_pending();
@@ -230,15 +231,13 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
 
             if (job_changed) {
                 blob = work->job.blob;
-                cursor = 0;
             }
             active_work = work;
 
             // Partition the complete 32-bit nonce ring by worker. The
             // partition offset, not base+offset, determines exhaustion:
             // pool jobs can start at any nonce and addition must wrap.
-            const auto nonce_offset = static_cast<std::uint64_t>(worker_id) +
-                cursor * static_cast<std::uint64_t>(worker_count);
+            const auto nonce_offset = state.next_nonce_offset(work->generation);
             if (nonce_offset >= nonce_space(work->job)) {
                 flush_pending();
                 exhausted_generation = work->generation;
@@ -264,7 +263,6 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
 
             pending_work = work;
             pending_nonce = nonce;
-            ++cursor;
         }
 
         if (maximum_hashes == 0 ||
