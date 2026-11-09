@@ -59,6 +59,16 @@ if(BUILD_TESTING)
     COMMAND unique-rx --mine config.json 18446744073709551616)
   set_tests_properties(unique-rx-cli-rejects-overflow-max-hashes PROPERTIES WILL_FAIL TRUE)
 
+  add_test(NAME unique-rx-cli-rejects-zero-threads
+    COMMAND unique-rx --mine config.json --threads 0)
+  set_tests_properties(unique-rx-cli-rejects-zero-threads PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME unique-rx-cli-rejects-too-many-threads
+    COMMAND unique-rx --mine config.json --threads 257)
+  set_tests_properties(unique-rx-cli-rejects-too-many-threads PROPERTIES WILL_FAIL TRUE)
+  add_test(NAME unique-rx-cli-rejects-invalid-threads
+    COMMAND unique-rx --mine config.json --threads invalid)
+  set_tests_properties(unique-rx-cli-rejects-invalid-threads PROPERTIES WILL_FAIL TRUE)
+
   add_executable(unique-rx-cpu-topology-tests tests/cpu/topology_test.cpp src/cpu/topology.cpp)
   target_compile_features(unique-rx-cpu-topology-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-cpu-topology-tests PRIVATE src "${randomx_SOURCE_DIR}/src")
