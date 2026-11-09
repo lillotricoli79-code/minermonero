@@ -173,6 +173,12 @@ int run_miner(const std::filesystem::path& config_path,
                 throw std::runtime_error("colors must be boolean");
             logger_config.colored_output = config["colors"].get<bool>();
         }
+        if (config.contains("verbose") && !config["verbose"].is_null()) {
+            if (!config["verbose"].is_boolean())
+                throw std::runtime_error("verbose must be boolean");
+            if (config["verbose"].get<bool>())
+                logger_config.minimum_level = logging::Level::Debug;
+        }
         logging::configure(logger_config);
         if (config.contains("background") && !config["background"].is_null() &&
             config["background"].get<bool>())
