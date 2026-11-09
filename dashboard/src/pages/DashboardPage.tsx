@@ -1007,6 +1007,7 @@ function App() {
                     <div className="rx-detail-row"><span>UNIQUE RX</span><strong>{status.system?.process_cpu_percent != null ? `${status.system.process_cpu_percent.toFixed(1)}%` : "—"}</strong></div>
                     <div className="rx-detail-row"><span>FREQUENCY</span><strong>{status.system?.cpu_frequency_mhz != null ? `${Math.round(status.system.cpu_frequency_mhz)} MHz` : "—"}</strong></div>
                     <div className="rx-detail-row"><span>TEMPERATURE</span><strong>{status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "n/a"}</strong></div>
+                    <div className="rx-detail-row"><span>SYSTEM RAM</span><strong>{status.system?.memory_used_bytes != null ? `${(status.system.memory_used_bytes / 1073741824).toFixed(1)} GiB used` : "—"}</strong></div>
                     <div className="rx-detail-row"><span>PROCESS RAM</span><strong>{status.system?.process_memory_bytes != null ? `${(status.system.process_memory_bytes / 1048576).toFixed(0)} MiB` : "—"}</strong></div>
                   </article>
                 </div>
@@ -1057,7 +1058,7 @@ function App() {
                 <article className="rx-card rx-terminal-card">
                   <div className="rx-card-title">OPERATOR TERMINAL <span>COMANDI LIVE · CONFIG IN SOLA LETTURA</span></div>
                   <div className="rx-command-shortcuts">
-                    {["help", "status", "diagnose", "workers", "shares", "graph", "pool", "logs 20"].map((command) => (
+                    {["help", "status", "diagnose", "workers", "shares", "graph", "pool", "threads auto", `threads ${Math.max(1, (status.threads ?? 1) - 1)}`, `threads ${Math.min(256, (status.threads ?? 1) + 1)}`, "logs 20"].map((command) => (
                       <button type="button" key={command} onClick={() => setShellCommand(command)}>{command}</button>
                     ))}
                   </div>
