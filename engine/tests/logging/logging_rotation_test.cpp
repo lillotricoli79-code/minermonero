@@ -4,6 +4,8 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 #include <system_error>
 
 int main() {
@@ -76,6 +78,61 @@ int main() {
     std::filesystem::remove_all(directory, error);
     if (!passed) return 1;
 
-    std::cout << "Bounded rotating file logger passed.\n";
+    const auto async_path = directory / "async.log";
+    unique_rx::logging::Config async_config;
+    async_config.minimum_level = unique_rx::logging::Level::Trace;
+    async_config.queue_capacity = 2048;
+    async_config.max_file_bytes = 0;
+    async_config.console_output = false;
+    async_config.colored_output = false;
+    const auto dropped_before = unique_rx::logging::dropped_messages();
+    if (!unique_rx::logging::initialize(async_path, async_config)) {
+        std::cerr << "cannot initialize asynchronous logger\\n";
+        std::filesystem::remove_all(directory, error);
+        return 1;
+    }
+
+    constexpr int producer_count = 4;
+    constexpr int messages_per_producer = 250;
+    std::vector<std::thread> producers;
+    producers.reserve(producer_count);
+    for (int producer = 0; producer < producer_count; ++producer) {
+        producers.emplace_back([producer] {
+            for (int index = 0; index < messages_per_producer; ++index) {
+                unique_rx::logging::info("concurrent",
+                    "producer=" + std::to_string(producer) +
+                    " message=" + std::to_string(index));
+            }
+        });
+    }
+    for (auto& producer : producers) producer.join();
+    unique_rx::logging::flush();
+    const auto entries = unique_rx::logging::recent_entries(
+        producer_count * messages_per_producer,
+        unique_rx::logging::Level::Info, "concurrent");
+    unique_rx::logging::close_file();
+
+    std::size_t persisted_lines = 0;
+    {
+        std::ifstream file(async_path);
+        std::string line;
+        while (std::getline(file, line)) ++persisted_lines;
+    }
+    const bool async_passed =
+        entries.size() == static_cast<std::size_t>(producer_count * messages_per_producer) &&
+        persisted_lines == static_cast<std::size_t>(producer_count * messages_per_producer) &&
+        unique_rx::logging::dropped_messages() == dropped_before;
+    if (!async_passed) {
+        std::cerr << "asynchronous multi-producer logger test failed"
+                  << " history=" << entries.size()
+                  << " persisted=" << persisted_lines
+                  << " dropped_delta="
+                  << (unique_rx::logging::dropped_messages() - dropped_before)
+                  << '\\n';
+    }
+    std::filesystem::remove_all(directory, error);
+    if (!async_passed) return 1;
+
+    std::cout << "Bounded rotating and asynchronous multi-producer logger passed.\\n";
     return 0;
 }
