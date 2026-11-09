@@ -678,7 +678,7 @@ function App() {
                     <DataRow icon={<Activity size={15} />} label="CPU sistema / miner" value={status.system?.cpu_percent != null ? `${status.system.cpu_percent.toFixed(1)}% / ${status.system.process_cpu_percent != null ? status.system.process_cpu_percent.toFixed(1) : "n/d"}%` : "Non disponibile"} />
                     <DataRow icon={<Gauge size={15} />} label="Frequenza CPU" value={status.system?.cpu_frequency_mhz != null ? `${formatCount(status.system.cpu_frequency_mhz)} MHz` : "Non disponibile"} />
                     <DataRow icon={<Cpu size={15} />} label="RAM sistema / processo" value={status.system?.memory_used_bytes != null ? `${(status.system.memory_used_bytes / 1073741824).toFixed(2)} / ${status.system.process_memory_bytes != null ? (status.system.process_memory_bytes / 1073741824).toFixed(2) : "n/d"} GB` : "Non disponibile"} />
-                    <DataRow icon={<Activity size={15} />} label="Temperatura CPU" value={status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "Non disponibile"} />
+                    <DataRow icon={<Activity size={15} />} label="Temperatura sensore" value={status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "Non disponibile"} />
                     <DataRow icon={<Gauge size={15} />} label="Potenza package" value={status.system?.package_power_watts != null ? `${status.system.package_power_watts.toFixed(1)} W` : "Non disponibile"} />
                     <DataRow
                       icon={<Zap size={15} />}
