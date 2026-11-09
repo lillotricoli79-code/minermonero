@@ -89,13 +89,8 @@ class MinerConfigUpdate(BaseModel):
             raise ValueError("Valore non valido")
         return value
 
-    @field_validator("api_port")
-    @classmethod
-    def api_port_not_backend_port(cls, value: int) -> int:
-        if value == 8000:
-            raise ValueError("La porta 8000 è riservata al backend locale")
-        return value
-
+    # The native engine uses the integrated backend for telemetry and does
+    # not bind a separate HTTP listener. Preserve XMRig-compatible http.port.
     @field_validator("tls_fingerprint")
     @classmethod
     def valid_tls_fingerprint(cls, value: str) -> str:
@@ -142,8 +137,6 @@ def load_config() -> dict[str, Any]:
         or not 1024 <= configured_api_port <= 65535
     ):
         raise ValueError("config.json: la porta API deve essere un intero tra 1024 e 65535")
-    if configured_api_port == 8000:
-        raise ValueError("config.json: la porta 8000 è riservata al backend locale")
     if not config["http"].get("access-token"):
         config["http"]["access-token"] = secrets.token_urlsafe(32)
         save_config(config)
