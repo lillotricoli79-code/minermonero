@@ -64,8 +64,14 @@ int main(int argc, char** argv) {
             }
             while (index < argc) {
                 const std::string_view option(argv[index++]);
-                if ((option == "--threads" || option == "--max-hashes") && index >= argc) {
-                    throw std::invalid_argument(std::string(option) + " requires a value");
+                if (option == "--threads" || option == "--max-hashes") {
+                    if (index >= argc)
+                        throw std::invalid_argument(std::string(option) + " requires a value");
+                } else if (!option.starts_with("--")) {
+                    if (maximum_hashes != 0)
+                        throw std::invalid_argument("maximum hashes specified more than once");
+                    maximum_hashes = parse_unsigned64(std::string(option).c_str(), 0);
+                    continue;
                 }
                 if (option == "--threads") {
                     const auto value = parse_unsigned(argv[index++], 0);
