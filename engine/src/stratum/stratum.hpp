@@ -66,6 +66,7 @@ struct PoolConfig {
     std::string worker;
     std::string tls_fingerprint;
     std::uint32_t threads = 1;
+    std::vector<std::int64_t> cpu_affinities;
     bool tls = false;
     bool keepalive = false;
     bool nicehash = false;
