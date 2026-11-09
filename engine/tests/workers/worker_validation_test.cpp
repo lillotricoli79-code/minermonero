@@ -60,6 +60,8 @@ int main() {
     auto first_work = std::make_shared<unique_rx::core::MiningWork>();
     first_work->generation = 41;
     nonce_state.set_work(first_work);
+    ok &= check(nonce_state.work_revision.load(std::memory_order_acquire) == 1,
+                "work publication did not advance the worker-visible revision");
     const auto range_a = nonce_state.next_nonce_offset(41, 256);
     const auto range_b = nonce_state.next_nonce_offset(41, 256);
     ok &= check(range_a == 0 && range_b == 256,
@@ -69,6 +71,8 @@ int main() {
     auto second_work = std::make_shared<unique_rx::core::MiningWork>();
     second_work->generation = 42;
     nonce_state.set_work(second_work);
+    ok &= check(nonce_state.work_revision.load(std::memory_order_acquire) == 2,
+                "new job publication did not advance the worker-visible revision");
     ok &= check(nonce_state.next_nonce_offset(41) == UINT64_MAX &&
                 nonce_state.next_nonce_offset(42) == 0,
                 "nonce allocator did not reset safely for a new job generation");
