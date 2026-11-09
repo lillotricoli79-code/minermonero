@@ -45,6 +45,10 @@ struct MiningState {
     std::atomic<std::uint64_t> expired_shares{0};
     std::atomic<std::uint64_t> dropped_shares{0};
 
+    // NyxRX Metrics::register_thread port: real counters per hashing worker.
+    std::vector<std::shared_ptr<std::atomic<std::uint64_t>>> worker_hashes;
+    void initialize_worker_counters(std::uint32_t count);
+
     mutable std::mutex work_mutex;
     std::shared_ptr<const MiningWork> work;
 
