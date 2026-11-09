@@ -56,6 +56,8 @@ struct MiningState {
     std::atomic<std::uint64_t> hashes{0};
     std::atomic<std::uint64_t> found{0};
     std::atomic<std::uint64_t> submitted{0};
+    // Real outstanding Stratum submissions, shared with the native operator shell.
+    std::atomic<std::uint64_t> pending{0};
     std::atomic<std::uint64_t> accepted{0};
     std::atomic<std::uint64_t> rejected{0};
     std::atomic<std::uint64_t> stale_shares{0};
