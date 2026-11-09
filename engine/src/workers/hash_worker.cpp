@@ -38,48 +38,61 @@ inline constexpr std::size_t kMaximumQueuedShares = 8192;
 
 std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
                              std::uint64_t& local_worker_hashes,
+                             std::uint64_t& unpublished_hashes,
                              const std::shared_ptr<const MiningWork>& work,
                              std::uint32_t nonce, const Hash& hash,
                              std::uint64_t maximum_hashes) {
-    // Multiple workers may finish simultaneously. Reserve the completed-hash
-    // counter with a CAS so the public limit cannot be exceeded by fetch_add
-    // races; work finishing after the limit is reached is not submitted.
-    auto count = state.hashes.load(std::memory_order_relaxed);
-    for (;;) {
-        if (maximum_hashes != 0 && count >= maximum_hashes) {
-            state.stop.store(true, std::memory_order_release);
-            return count;
+    std::uint64_t count = 0;
+    if (maximum_hashes != 0) {
+        // Finite benchmark/test runs need an exact global ceiling. Normal pool
+        // mining does not: avoid a contended atomic read-modify-write on every
+        // RandomX hash by publishing each worker's counter in small batches.
+        count = state.hashes.load(std::memory_order_relaxed);
+        for (;;) {
+            if (count >= maximum_hashes) {
+                state.stop.store(true, std::memory_order_release);
+                return count;
+            }
+            if (state.hashes.compare_exchange_weak(
+                    count, count + 1, std::memory_order_relaxed,
+                    std::memory_order_relaxed)) {
+                ++count;
+                break;
+            }
         }
-        if (state.hashes.compare_exchange_weak(
-                count, count + 1, std::memory_order_relaxed,
-                std::memory_order_relaxed)) {
-            ++count;
-            break;
+    } else {
+        ++unpublished_hashes;
+        if (unpublished_hashes >= 64) {
+            state.hashes.fetch_add(unpublished_hashes, std::memory_order_relaxed);
+            unpublished_hashes = 0;
         }
+        count = state.hashes.load(std::memory_order_relaxed) + unpublished_hashes;
     }
+
     ++local_worker_hashes;
     if (worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id] &&
         ((local_worker_hashes & 0x3fU) == 0 ||
          (maximum_hashes != 0 && count >= maximum_hashes))) {
         state.worker_hashes[worker_id]->store(local_worker_hashes, std::memory_order_relaxed);
     }
-    // Serialize the final generation check with queue insertion. This closes
-    // the reconnect race where a worker could enqueue an old-session share
-    // immediately after the network thread had cleared the previous queue.
-    {
+
+    // Almost every RandomX result is below the pool's share target. Test it
+    // before taking either shared mutex: the hot path must not serialize all
+    // CPU workers on a queue lock or a current-work lookup.
+    if (hash_meets_target(hash, work->job.target)) {
+        // Serialize only actual share candidates with queue insertion. This
+        // closes the reconnect/job-generation race without locking per hash.
         std::lock_guard lock(state.share_mutex);
         const auto latest_work = state.current_work();
         if (latest_work && latest_work->generation == work->generation) {
-            if (hash_meets_target(hash, latest_work->job.target)) {
-                if (state.shares.size() < kMaximumQueuedShares) {
-                    state.shares.push_back({
-                        latest_work->generation, latest_work->job.id, nonce, hash, latest_work->job.target});
-                } else {
-                    state.dropped_shares.fetch_add(1, std::memory_order_relaxed);
-                }
-                state.found.fetch_add(1, std::memory_order_relaxed);
+            if (state.shares.size() < kMaximumQueuedShares) {
+                state.shares.push_back({
+                    latest_work->generation, latest_work->job.id, nonce, hash, latest_work->job.target});
+            } else {
+                state.dropped_shares.fetch_add(1, std::memory_order_relaxed);
             }
-        } else if (hash_meets_target(hash, work->job.target)) {
+            state.found.fetch_add(1, std::memory_order_relaxed);
+        } else {
             state.stale_shares.fetch_add(1, std::memory_order_relaxed);
         }
     }
@@ -87,9 +100,14 @@ std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
 }
 
 struct WorkerCounterPublisher {
+    MiningState* state = nullptr;
     std::atomic<std::uint64_t>* published = nullptr;
     std::uint64_t* local = nullptr;
+    std::uint64_t* unpublished = nullptr;
     ~WorkerCounterPublisher() {
+        if (state && unpublished && *unpublished != 0) {
+            state->hashes.fetch_add(*unpublished, std::memory_order_relaxed);
+        }
         if (published && local) published->store(*local, std::memory_order_relaxed);
     }
 };
@@ -109,11 +127,12 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         return;
     }
     std::uint64_t local_worker_hashes = 0;
+    std::uint64_t unpublished_hashes = 0;
     auto* published_worker_counter =
         worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id]
             ? state.worker_hashes[worker_id].get() : nullptr;
     WorkerCounterPublisher counter_publisher{
-        published_worker_counter, &local_worker_hashes};
+        &state, published_worker_counter, &local_worker_hashes, &unpublished_hashes};
     const bool affinity_disabled = affinity_override && *affinity_override < 0;
     const bool pinned = affinity_override
         ? (*affinity_override >= 0 &&
@@ -167,7 +186,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         auto completed_work = std::move(pending_work);
         pending_work.reset();
         const auto count = complete_hash(
-            state, worker_id, local_worker_hashes, completed_work, pending_nonce, hash, maximum_hashes);
+            state, worker_id, local_worker_hashes, unpublished_hashes, completed_work, pending_nonce, hash, maximum_hashes);
         if (maximum_hashes != 0 && count >= maximum_hashes) {
             state.stop.store(true, std::memory_order_release);
         }
@@ -244,8 +263,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 }
                 if (!vm) throw std::runtime_error("worker VM creation failed");
                 active_vm_config_generation = requested_vm_config_generation;
-                logging::info("cpu", "worker #" + std::to_string(worker_id) + " RandomX VM ready");
-            } else if (memory_changed) {
+                    } else if (memory_changed) {
                 if (work->full_memory) {
                     if (!work->dataset) {
                         throw std::runtime_error("new RandomX dataset is missing");
@@ -309,7 +327,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     vm.get(), blob.data(), blob.size(), hash.data());
                 if (pending_work) {
                     const auto count = complete_hash(
-                        state, worker_id, local_worker_hashes, pending_work, pending_nonce, hash, maximum_hashes);
+                        state, worker_id, local_worker_hashes, unpublished_hashes, pending_work, pending_nonce, hash, maximum_hashes);
                     if (maximum_hashes != 0 && count >= maximum_hashes) {
                         state.stop.store(true, std::memory_order_release);
                     }
