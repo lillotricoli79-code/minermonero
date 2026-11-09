@@ -199,7 +199,23 @@ int run_miner(const std::filesystem::path& config_path,
                 throw std::invalid_argument("--threads must be between 1 and 256");
             if (!config.contains("cpu") || !config["cpu"].is_object())
                 config["cpu"] = nlohmann::json::object();
-            config["cpu"]["threads"] = thread_override;
+            auto& cpu = config["cpu"];
+            if (cpu.contains("rx") && cpu["rx"].is_object()) {
+                cpu["rx"]["threads"] = thread_override;
+            } else if (cpu.contains("rx") && cpu["rx"].is_array()) {
+                const auto previous_profile = cpu["rx"];
+                nlohmann::json overridden_profile = nlohmann::json::array();
+                for (std::uint32_t index = 0; index < thread_override; ++index) {
+                    if (index < previous_profile.size()) {
+                        overridden_profile.push_back(previous_profile[index]);
+                    } else {
+                        overridden_profile.push_back(-1);
+                    }
+                }
+                cpu["rx"] = std::move(overridden_profile);
+            } else {
+                cpu["threads"] = thread_override;
+            }
             logging::info("cpu", "thread count overridden from shell: " +
                 std::to_string(thread_override));
         }
