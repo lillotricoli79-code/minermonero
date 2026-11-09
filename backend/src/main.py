@@ -55,7 +55,7 @@ class MinerConfigUpdate(BaseModel):
     worker: str = "rig01"
     password: str | None = None
     threads: int = Field(default=0, ge=0, le=256)
-    priority: int = Field(default=2, ge=-1, le=5)
+    priority: int = Field(default=2, ge=-1, le=5, strict=True)
     huge_pages: bool = False
     jit_huge_pages: bool = False
     prefetch_mode: int = Field(default=1, ge=0, le=3)
