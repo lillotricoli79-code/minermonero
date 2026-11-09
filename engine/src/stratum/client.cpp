@@ -79,6 +79,49 @@ bool console_input_available() {
 #endif
 }
 
+// Publish the real engine snapshot independently of stdout so a miner started
+// by the user's main BAT can be observed by the local dashboard. This does not
+// alter Stratum messages, authentication, or config parsing.
+bool write_status_snapshot(const std::filesystem::path& path,
+                           const nlohmann::json& status) noexcept {
+    auto temporary = path;
+    temporary += ".tmp";
+    try {
+        {
+            std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+            if (!output) return false;
+            output << status.dump() << '\n';
+            output.flush();
+            if (!output) {
+                output.close();
+                std::error_code ignored;
+                std::filesystem::remove(temporary, ignored);
+                return false;
+            }
+        }
+#ifdef _WIN32
+        if (!MoveFileExW(temporary.c_str(), path.c_str(),
+                         MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            DeleteFileW(temporary.c_str());
+            return false;
+        }
+#else
+        std::error_code error;
+        std::filesystem::rename(temporary, path, error);
+        if (error) {
+            std::error_code ignored;
+            std::filesystem::remove(temporary, ignored);
+            return false;
+        }
+#endif
+        return true;
+    } catch (...) {
+        std::error_code ignored;
+        std::filesystem::remove(temporary, ignored);
+        return false;
+    }
+}
+
 std::uint64_t available_physical_memory_bytes() noexcept {
 #ifdef _WIN32
     MEMORYSTATUSEX status{};
@@ -145,6 +188,7 @@ int run_miner(const std::filesystem::path& config_path,
     // Open the persistent engine log before CPU/MSR initialization so early
     // hardware and configuration diagnostics are recorded as well.
     logging::set_file(config_path.parent_path() / "unique-rx-stratum.log");
+    const auto status_path = config_path.parent_path() / "unique-rx-status.json";
 
     try {
         std::ifstream file(config_path);
@@ -1337,6 +1381,10 @@ std::uint64_t hash_value = 0;
                             {"pool_latency_ms", state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0 ? nlohmann::json(state.last_share_latency_ms.load(std::memory_order_relaxed)) : nlohmann::json(nullptr)},
                             {"reconnects", state.reconnects.load(std::memory_order_relaxed)},
                         };
+                        status["timestamp_unix_ms"] =
+                            std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch()).count();
+                        (void)write_status_snapshot(status_path, status);
                         if (machine_status_channel_required()) {
                             std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
                         }
