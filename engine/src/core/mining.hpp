@@ -24,6 +24,17 @@ struct Share {
     std::string job_id;
     std::uint32_t nonce = 0;
     Hash hash{};
+    std::uint64_t target = 0;
+};
+
+struct DifficultyResult {
+    double difficulty = 0.0;
+    std::uint64_t at_unix_seconds = 0;
+};
+
+struct BestResults {
+    double estimated_hashes = 0.0;
+    std::vector<DifficultyResult> top_difficulties;
 };
 
 struct MiningWork {
@@ -47,6 +58,12 @@ struct MiningState {
     std::atomic<std::uint64_t> dropped_shares{0};
     std::atomic<std::int64_t> last_share_latency_ms{-1};
     std::atomic<std::uint64_t> reconnects{0};
+    std::atomic<bool> large_pages_active{false};
+
+    mutable std::mutex best_mutex;
+    BestResults best_results;
+    void record_accepted_share(double actual_difficulty, double target_difficulty);
+    BestResults best_snapshot() const;
 
     // NyxRX Metrics::register_thread port: real counters per hashing worker.
     std::vector<std::shared_ptr<std::atomic<std::uint64_t>>> worker_hashes;
