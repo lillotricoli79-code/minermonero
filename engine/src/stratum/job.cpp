@@ -158,7 +158,8 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
         if (!pool.is_object()) {
             throw std::invalid_argument("pool configuration entry must be an object");
         }
-        if (!pool.value("enabled", true)) continue;
+        if (pool.contains("enabled") && !pool["enabled"].is_null() &&
+            !pool["enabled"].get<bool>()) continue;
 
         auto address = pool.at("url").get<std::string>();
         PoolConfig entry;
