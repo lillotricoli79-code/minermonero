@@ -408,7 +408,7 @@ int run_miner(const std::filesystem::path& config_path,
             }
             logging::warning("config", "cpu.asm XMRig selection is parsed; RandomX JIT instruction dispatch remains governed by the detected CPU features and is not overridden by this field");
         }
-        bool cpu_yield = true; // XMRig CpuConfig default.
+        bool cpu_yield = false; // Throughput-first default; users can enable XMRig-style yielding explicitly.
         if (cpu_config.contains("yield") && !cpu_config["yield"].is_null()) {
             if (!cpu_config["yield"].is_boolean())
                 throw std::runtime_error("cpu.yield must be boolean or null");
