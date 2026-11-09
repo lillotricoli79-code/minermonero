@@ -167,6 +167,12 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         if (maximum_hashes != 0 && count >= maximum_hashes) {
             state.stop.store(true, std::memory_order_release);
         }
+        // XMRig CpuWorker honors cpu.yield between completed hash rounds.
+        // Keep the default off for maximum throughput; enable only when the
+        // imported XMRig configuration explicitly requests it.
+        if (state.cpu_yield.load(std::memory_order_relaxed)) {
+            std::this_thread::yield();
+        }
         return count;
     };
 
