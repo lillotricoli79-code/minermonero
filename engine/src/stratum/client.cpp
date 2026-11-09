@@ -793,7 +793,7 @@ int run_miner(const std::filesystem::path& config_path,
                         line("POOL", active_pool.host + ":" + active_pool.port +
                             (active_pool.tls ? " | TLS" : " | TCP") +
                             (active_pool.keepalive ? " | keepalive" : ""));
-                        line("CONNESSIONE", work ? "connesso · job attivo" : "attesa job / riconnessione");
+                        line("CONNESSIONE", work ? "connesso - job attivo" : "attesa job / riconnessione");
                         line("JOB / HEIGHT", work ? work->job.id + " / " +
                             (work->job.height ? std::to_string(*work->job.height) : "n/d")
                             : std::string("in attesa del job"));
@@ -804,7 +804,8 @@ int run_miner(const std::filesystem::path& config_path,
                         line("UPTIME", std::to_string(uptime) + " secondi");
                         line("MEMORIA", std::string(full_memory ? "RandomX FAST" : "RandomX LIGHT") +
                             " | huge pages " + (state.large_pages_active.load() ? "attive" : "non attive") +
-                            " | JIT HP " + (jit_huge_pages ? "ON" : "OFF"));
+                            " | JIT HP " + (jit_huge_pages ? "ON" : "OFF") +
+                            " | prefetch " + std::to_string(runtime_prefetch_mode->load()));
                         line("MSR", msr_status);
                         std::cout << "  -------------------------------------------------------------------------------\n"
                                   << "  EVENTI RECENTI\n";
