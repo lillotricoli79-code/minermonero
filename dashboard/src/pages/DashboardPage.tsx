@@ -737,7 +737,7 @@ function App() {
                         key={`best-share-${index}`}
                         icon={<ShieldCheck size={15} />}
                         label={`Share #${index + 1}`}
-                        value={`${formatCount(entry.difficulty)} · ${new Date(entry.at_unix_seconds * 1000).toLocaleString("it-IT")}`}
+                        value={`${entry.difficulty.toLocaleString("it-IT", { maximumFractionDigits: 2 })} · ${new Date(entry.at_unix_seconds * 1000).toLocaleString("it-IT")}`}
                       />
                     ))}
                     <DataRow icon={<Gauge size={15} />} label="Effort stimato" value={status.best ? status.best.effort_percent.toFixed(2) + "%" : "In attesa"} />
