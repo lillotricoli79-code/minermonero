@@ -3,7 +3,7 @@
     "enabled": true,
     "threads": 0,
     "max-threads-hint": 0,
-    "huge-pages": false,
+    "huge-pages": true,
     "jit-huge-pages": false,
     "prefetch-mode": 1,
     "priority": 2
