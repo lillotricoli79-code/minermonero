@@ -527,6 +527,7 @@ int run_miner(const std::filesystem::path& config_path,
                                          {"pending", pending.size()},
                                          {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
                             {"uptime_seconds", uptime},
+                            // XMRMiner StratumJob.getDifficulty() port: UINT64_MAX / pool target.
                             {"algorithm", "rx/0"}, {"job_id", work->job.id},
                             {"job_difficulty", work->job.target == 0 ? nlohmann::json(nullptr) : nlohmann::json(static_cast<double>(std::numeric_limits<std::uint64_t>::max()) / static_cast<double>(work->job.target))},
                             {"height", work->job.height
