@@ -160,17 +160,38 @@ jobs:
           # Always add/replace the extension through Add-Member; this is reliable
           # for ConvertFrom-Json PSCustomObjects even when optional members vary.
           $config.randomx | Add-Member -Force -NotePropertyName "msr-module" -NotePropertyValue "msr/IntelMSR.bin"
-          $config.pools = @([pscustomobject]@{
-            enabled = $true
-            url = "pool.hashvault.pro:443"
-            user = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ+7500"
-            pass = "x"
-            'rig-id' = "lillot"
-            tls = $true
-            'tls-fingerprint' = "420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14"
-            keepalive = $false
-            nicehash = $false
-          })
+          $config.pools = @(
+            [pscustomobject]@{
+              algo = $null
+              coin = $null
+              url = "pool.hashvault.pro:443"
+              user = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ"
+              pass = "lillot"
+              'rig-id' = $null
+              nicehash = $false
+              keepalive = $false
+              enabled = $true
+              tls = $true
+              'tls-fingerprint' = "420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14"
+              daemon = $false
+              'self-select' = $null
+            },
+            [pscustomobject]@{
+              algo = $null
+              coin = $null
+              url = "pool.hashvault.sh:443"
+              user = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ"
+              pass = "WorkerX"
+              'rig-id' = $null
+              nicehash = $false
+              keepalive = $false
+              enabled = $true
+              tls = $true
+              'tls-fingerprint' = "420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14"
+              daemon = $false
+              'self-select' = $null
+            }
+          )
           $config | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $out "config.json") -Encoding utf8
           # Bundle the exact Python runtime and dependencies used by the tested backend.
           $pythonRoot = (& python -c "import sys; print(sys.base_prefix)").Trim()
