@@ -1,6 +1,9 @@
 #include "mining.hpp"
 
 #include <utility>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 
 namespace unique_rx::core {
 
@@ -10,6 +13,28 @@ bool hash_meets_target(const Hash& hash, std::uint64_t target) noexcept {
         value |= static_cast<std::uint64_t>(hash[24 + index]) << (index * 8);
     }
     return value < target;
+}
+
+void MiningState::record_accepted_share(double actual_difficulty, double target_difficulty) {
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    const auto unix_seconds = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::seconds>(now).count());
+    std::lock_guard lock(best_mutex);
+    if (std::isfinite(target_difficulty) && target_difficulty > 0.0) {
+        best_results.estimated_hashes += target_difficulty;
+    }
+    if (!std::isfinite(actual_difficulty) || actual_difficulty <= 0.0) return;
+    best_results.top_difficulties.push_back({actual_difficulty, unix_seconds});
+    std::sort(best_results.top_difficulties.begin(), best_results.top_difficulties.end(),
+        [](const DifficultyResult& left, const DifficultyResult& right) {
+            return left.difficulty > right.difficulty;
+        });
+    if (best_results.top_difficulties.size() > 10) best_results.top_difficulties.resize(10);
+}
+
+BestResults MiningState::best_snapshot() const {
+    std::lock_guard lock(best_mutex);
+    return best_results;
 }
 
 void MiningState::initialize_worker_counters(std::uint32_t count) {
