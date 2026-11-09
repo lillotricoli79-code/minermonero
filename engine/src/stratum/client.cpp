@@ -282,6 +282,19 @@ int run_miner(const std::filesystem::path& config_path,
             : "RandomX scratchpad memory pool capacity " +
                 std::to_string(memory_pool_capacity) + " pages");
         auto started = Clock::now();
+        const auto configured_log_interval = [&](const char* key, std::uint32_t fallback) {
+            if (!config.contains(key) || config[key].is_null()) return fallback;
+            if (!config[key].is_number_integer())
+                throw std::runtime_error(std::string(key) + " must be an integer number of seconds");
+            const auto value = config[key].get<std::int64_t>();
+            if (value < 0 || value > 86400)
+                throw std::runtime_error(std::string(key) + " must be between 0 and 86400 seconds");
+            return static_cast<std::uint32_t>(value);
+        };
+        // XMRig-compatible timing controls; the existing 5-second speed line
+        // remains the default when no explicit print-time is supplied.
+        const auto print_interval = configured_log_interval("print-time", 5);
+        const auto health_interval = configured_log_interval("health-print-time", 60);
         std::vector<std::uint64_t> worker_previous_hashes(pool_threads, 0);
         std::vector<double> worker_rates(pool_threads, 0.0);
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
@@ -496,6 +509,7 @@ int run_miner(const std::filesystem::path& config_path,
         logging::info("algo", "RandomX rx/0");
         logging::info("memory", full_memory ? "full dataset mode" : "light cache mode");
         auto last_console_speed = started;
+        auto last_health_print = started;
         const auto log_event = [&](const std::string& event,
                                    const nlohmann::json& details) {
             if (event == "CONNECTED") {
@@ -880,7 +894,8 @@ std::uint64_t hash_value = 0;
                         if (machine_status_channel_required()) {
                             std::cout << "UNIQUE_RX_STATUS " << status.dump() << '\n' << std::flush;
                         }
-                        if (now - last_console_speed >= std::chrono::seconds(5)) {
+                        if (print_interval > 0 &&
+                            now - last_console_speed >= std::chrono::seconds(print_interval)) {
                             const auto speed_text = [](double rate) {
                                 const char* units[] = {"H/s", "kH/s", "MH/s", "GH/s"};
                                 std::size_t unit = 0;
@@ -911,6 +926,36 @@ std::uint64_t hash_value = 0;
                             activity << " | job " << work->job.id;
                             logging::info("status", activity.str());
                             last_console_speed = now;
+                        }
+                        if (health_interval > 0 &&
+                            now - last_health_print >= std::chrono::seconds(health_interval)) {
+                            std::ostringstream health;
+                            health << "CPU process "
+                                   << (system_sample.process_cpu_percent
+                                       ? std::to_string(*system_sample.process_cpu_percent) + "%"
+                                       : std::string("n/a"))
+                                   << " | system "
+                                   << (system_sample.system_cpu_percent
+                                       ? std::to_string(*system_sample.system_cpu_percent) + "%"
+                                       : std::string("n/a"))
+                                   << " | frequency "
+                                   << (system_sample.cpu_frequency_mhz
+                                       ? std::to_string(*system_sample.cpu_frequency_mhz) + " MHz"
+                                       : std::string("n/a"))
+                                   << " | memory "
+                                   << (system_sample.process_memory_bytes
+                                       ? std::to_string(*system_sample.process_memory_bytes / (1024 * 1024)) + " MiB"
+                                       : std::string("n/a"))
+                                   << " | temperature "
+                                   << (system_sample.temperature_c
+                                       ? std::to_string(*system_sample.temperature_c) + " C"
+                                       : std::string("n/a"))
+                                   << " | power "
+                                   << (system_sample.package_power_watts
+                                       ? std::to_string(*system_sample.package_power_watts) + " W"
+                                       : std::string("n/a"));
+                            logging::info("health", health.str());
+                            last_health_print = now;
                         }
                         last_sample_time = now;
                     }
