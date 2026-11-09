@@ -1,5 +1,6 @@
 #include "stratum/stratum.hpp"
 #include "platform/socket.hpp"
+#include "logging/log.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -365,29 +366,32 @@ int main() {
         }
     });
 
-    std::ostringstream miner_output;
-    std::ostringstream miner_errors;
-    auto* previous_output = std::cout.rdbuf(miner_output.rdbuf());
-    auto* previous_error = std::cerr.rdbuf(miner_errors.rdbuf());
     const int result = unique_rx::run_miner(config_path, 0);
-    std::cout.rdbuf(previous_output);
-    std::cerr.rdbuf(previous_error);
     pool.join();
     unique_rx::platform::close_socket(listener);
 
-    // Human-readable logger output is intentionally routed to the rotating
-    // log file when stdout is reserved for UNIQUE_RX_STATUS JSON telemetry.
+    // The logger owns a background writer. Drain and join it before reading
+    // its file; never swap process-wide std::cout/std::cerr stream buffers while
+    // worker threads may flush them (the MSVC CRT fast-fails on that race).
+    unique_rx::logging::flush();
+    unique_rx::logging::close_file();
+
     const auto log_path = config_path.parent_path() / "unique-rx-stratum.log";
+    const auto status_path = config_path.parent_path() / "unique-rx-status.json";
     std::ifstream log_file(log_path, std::ios::binary);
     std::ostringstream log_contents;
     if (log_file) log_contents << log_file.rdbuf();
     const std::string miner_log = log_contents.str();
-    const std::string miner_status = miner_output.str();
+
+    std::ifstream status_file(status_path, std::ios::binary);
+    std::ostringstream status_contents;
+    if (status_file) status_contents << status_file.rdbuf();
+    const std::string miner_status = status_contents.str();
 
     std::filesystem::remove(config_path);
     std::filesystem::remove(log_path);
     std::filesystem::remove(config_path.parent_path() / "unique-rx-command.json");
-    std::filesystem::remove(config_path.parent_path() / "unique-rx-status.json");
+    std::filesystem::remove(status_path);
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
         miner_log.find("switching pool") == std::string::npos ||
         miner_log.find("disconnected") == std::string::npos ||
@@ -401,7 +405,6 @@ int main() {
                   << " server_ok=" << server_ok.load(std::memory_order_acquire)
                   << "\n--- miner log ---\n" << miner_log
                   << "\n--- miner status stdout ---\n" << miner_status
-                  << "\n--- miner stderr ---\n" << miner_errors.str()
                   << "\n";
         return 1;
     }
