@@ -41,7 +41,7 @@ jobs:
           mkdir -p "$out/licenses"
           cp build/unique-rx "$out/unique-rx"
           cp README.md "$out/README.md"
-          cp LICENSES/XMRIG-GPL-3.0.txt LICENSES/RXMINER-MIT.txt LICENSES/NYXRX-MIT.txt "$out/licenses/"
+          cp LICENSES/XMRIG-GPL-3.0.txt LICENSES/RXMINER-MIT.txt LICENSES/NYXRX-MIT.txt LICENSES/XMR-MINER-GPL-3.0.txt "$out/licenses/"
           cp engine/src/randomx/upstream/LICENSE "$out/licenses/RANDOMX-BSD-3-CLAUSE.txt"
           git archive --format=zip --output="$out/unique-rx-source.zip" HEAD
           git rev-parse HEAD > "$out/SOURCE-COMMIT.txt"
@@ -108,6 +108,7 @@ jobs:
           Copy-Item -LiteralPath "LICENSES\XMRIG-GPL-3.0.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\RXMINER-MIT.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\NYXRX-MIT.txt" -Destination $licenses
+          Copy-Item -LiteralPath "LICENSES\XMR-MINER-GPL-3.0.txt" -Destination $licenses
           Copy-Item -LiteralPath "engine\src\randomx\upstream\LICENSE" -Destination (Join-Path $licenses "RANDOMX-BSD-3-CLAUSE.txt")
           git archive --format=zip "--output=$(Join-Path $out 'unique-rx-source.zip')" HEAD
           if ($LASTEXITCODE -ne 0) { throw "Unable to package corresponding source revision." }
