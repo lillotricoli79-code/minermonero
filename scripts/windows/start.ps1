@@ -28,17 +28,19 @@ if ($needsAdmin) {
 # The native engine treats MSR as optional and continues without it when
 # the feature is disabled, unsupported, or lacks permissions.
 
-# The downloadable portable package contains the native miner but not the
-# Python dashboard/backend. In that layout, launch the native engine directly.
+# A complete Windows package must start the native miner, backend API and
+# dashboard as one coordinated application. Never silently fall back to a
+# standalone miner: that produces the console shell but leaves the dashboard
+# disconnected and its telemetry unavailable.
 $backendMain = Join-Path $repoRoot "backend\src\main.py"
-if (-not (Test-Path -LiteralPath $backendMain)) {
-    $minerExe = Join-Path $repoRoot "unique-rx.exe"
-    if (-not (Test-Path -LiteralPath $minerExe)) {
-        throw "Backend e unique-rx.exe non trovati: pacchetto incompleto."
-    }
-    Write-Host "Avvio miner nativo in modalità portatile (configurazione MSR rispettata)..."
-    & $minerExe --mine $configPath
-    exit $LASTEXITCODE
+$dashboardIndex = Join-Path $repoRoot "dashboard\dist\index.html"
+$minerExe = Join-Path $repoRoot "unique-rx.exe"
+$requiredFiles = @($backendMain, $dashboardIndex, $minerExe, $requirements)
+$missingFiles = @($requiredFiles | Where-Object { -not (Test-Path -LiteralPath $_) })
+if ($missingFiles.Count -gt 0) {
+    throw ("Pacchetto UNIQUE RX incompleto: manca " + ($missingFiles -join ", ") +
+        ". Estrai il pacchetto Windows completo e avvia scripts\windows\start.bat. " +
+        "Non avvio il miner da solo per evitare la dashboard scollegata.")
 }
 
 $bundledPython = Join-Path $repoRoot "python\python.exe"
