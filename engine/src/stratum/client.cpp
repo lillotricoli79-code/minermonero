@@ -520,7 +520,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  config          configurazione XMRig (credenziali oscurate)\n"
                                       << "  threads N       imposta worker in tempo reale (1-256)\n"
                                       << "  threads auto    ripristina il numero iniziale configurato\n"
-                                      << "  set cpu.threads N modifica i worker in tempo reale\n"
+                                      << "  set cpu.rx N|auto regola i worker RandomX in tempo reale\n"
                                       << "  set prefetch-mode N (0-3) modifica il prefetch JIT live\n"
                                       << "  set cpu.priority -1..5 aggiorna la priorità dei worker\n"
                                       << "  set cpu.yield on|off abilita/disabilita yield XMRig\n"
@@ -554,19 +554,24 @@ int run_miner(const std::filesystem::path& config_path,
                             std::string setting_value;
                             if (!(input >> setting >> setting_value)) {
                                 std::cout << "Uso: set prefetch-mode N | set huge-pages on|off | set randomx.mode fast|light\n";
-                            } else if (setting == "cpu.threads") {
-                                try {
+                            } else if (setting == "cpu.rx" || setting == "cpu.threads") {
+                                if (setting_value == "auto") {
+                                    desired_threads->store(automatic_threads, std::memory_order_release);
+                                    logging::info("cpu", "runtime RandomX thread profile restored to automatic startup count " +
+                                        std::to_string(automatic_threads));
+                                    std::cout << "Thread RandomX ripristinati: " << automatic_threads << '\n';
+                                } else try {
                                     std::size_t used = 0;
                                     const auto requested = std::stoul(setting_value, &used, 10);
                                     if (used != setting_value.size() || requested == 0 || requested > 256) {
-                                        std::cout << "cpu.threads deve essere compreso tra 1 e 256\n";
+                                        std::cout << setting << " deve essere compreso tra 1 e 256, oppure auto\n";
                                     } else {
                                         desired_threads->store(static_cast<std::uint32_t>(requested),
                                                                 std::memory_order_release);
-                                        logging::info("cpu", "runtime cpu.threads set to " + std::to_string(requested));
+                                        logging::info("cpu", "runtime " + setting + " set to " + std::to_string(requested));
                                     }
                                 } catch (...) {
-                                    std::cout << "Valore cpu.threads non valido\n";
+                                    std::cout << "Valore " << setting << " non valido\n";
                                 }
                             } else if (setting == "prefetch-mode" ||
                                        setting == "randomx.scratchpad_prefetch_mode") {
