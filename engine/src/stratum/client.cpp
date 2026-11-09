@@ -1623,7 +1623,7 @@ std::uint64_t hash_value = 0;
                 reconnect_shares["stale"] = state.stale_shares.load();
                 reconnect_shares["expired"] = state.expired_shares.load();
                 reconnect_shares["dropped"] = state.dropped_shares.load();
-                reconnect_shares["pending"] = 0;
+                reconnect_shares["pending"] = pending.size();
                 reconnect_shares["total"] = state.accepted.load() + state.rejected.load() +
                                             state.stale_shares.load();
                 reconnect_status["shares"] = std::move(reconnect_shares);
