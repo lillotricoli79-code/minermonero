@@ -400,7 +400,7 @@ int run_miner(const std::filesystem::path& config_path,
                                           << worker_hashrates[id] << " H/s | hashes "
                                           << (id < state.worker_hashes.size() && state.worker_hashes[id]
                                               ? state.worker_hashes[id]->load(std::memory_order_relaxed) : 0)
-                                          << '\\n';
+                                          << '\n';
                             }
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
