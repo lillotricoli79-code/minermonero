@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 /config.json
 /engine/build/
+/engine/build-*/
 CMakeFiles/
 
 /logs/
@@ -12,3 +13,5 @@ CMakeFiles/
 /dashboard/dist/
 
 /engine/msr/*.bin
+
+/release/
