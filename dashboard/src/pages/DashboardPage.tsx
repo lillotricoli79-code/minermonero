@@ -114,7 +114,7 @@ const emptyStatus: Status = {
   managed: false,
   error: null,
   hashrate: { "10s": null, "60s": null, "15m": null },
-  shares: { accepted: null, rejected: null, total: null, stale: null, pending: null, expired: null, dropped: null },
+  shares: { found: null, submitted: null, accepted: null, rejected: null, total: null, stale: null, pending: null, expired: null, dropped: null },
   uptime_seconds: null,
   algorithm: null,
   job_id: null,
