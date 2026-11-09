@@ -2,6 +2,9 @@ name: Native miner engine validation
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/native-engine.yml"
 
 permissions:
   contents: read
