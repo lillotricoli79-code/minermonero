@@ -131,6 +131,16 @@ int run_miner(const std::filesystem::path& config_path,
         std::ifstream file(config_path);
         if (!file) throw std::runtime_error("cannot open config.json");
         auto config = nlohmann::json::parse(file);
+        if (!config.is_object())
+            throw std::runtime_error("XMRig config root must be a JSON object");
+        if (config.contains("cpu") && config["cpu"].is_boolean()) {
+            config["cpu"] = nlohmann::json{{"enabled", config["cpu"].get<bool>()}};
+        } else if (config.contains("cpu") && !config["cpu"].is_object()) {
+            throw std::runtime_error("cpu must be an object or boolean, as in XMRig config");
+        }
+        if (config.contains("randomx") && !config["randomx"].is_object()) {
+            throw std::runtime_error("randomx must be an object, as in XMRig config");
+        }
         if (config.contains("log-file") && !config["log-file"].is_null()) {
             if (!config["log-file"].is_string())
                 throw std::runtime_error("log-file must be a string path");
@@ -147,6 +157,10 @@ int run_miner(const std::filesystem::path& config_path,
         logging::configure(logger_config);
         if (config.value("background", false))
             logging::warning("config", "background mode is not supported; keep the miner attached to its console/backend");
+        if (config.value("autosave", false))
+            logging::warning("config", "autosave is recognized but runtime changes are not written back to config.json automatically");
+        if (config.value("pause-on-battery", false))
+            logging::warning("config", "pause-on-battery is not implemented by the native engine; stop the miner manually when required");
         if (config.contains("http") && config["http"].is_object() &&
             config["http"].value("enabled", false))
             logging::warning("config", "XMRig http API settings are recognized but the integrated dashboard/backend owns the local API; no separate XMRig HTTP listener is started");
