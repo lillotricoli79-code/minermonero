@@ -24,9 +24,9 @@
     "huge-pages": true,
     "huge-pages-jit": false,
     "hw-aes": null,
-    "memory-pool": 0,
+    "memory-pool": true,
     "priority": null,
-    "yield": true,
+    "yield": false,
     "asm": "auto"
   },
   "randomx": {
