@@ -40,6 +40,7 @@ if(BUILD_TESTING)
     src/logging/log.cpp)
   target_compile_features(unique-rx-logging-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-logging-tests PRIVATE src)
+  target_link_libraries(unique-rx-logging-tests PRIVATE Threads::Threads)
   add_test(NAME unique-rx-logging-rotation COMMAND unique-rx-logging-tests)
 
   add_test(NAME unique-rx-cli-rejects-invalid-max-hashes
