@@ -461,24 +461,71 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
     // Zero (or an absent key) keeps automatic physical-core/cache selection.
     std::uint32_t selected = 0;
     bool explicit_thread_count = false;
-    if (cpu_config.contains("threads")) {
+    if (cpu_config.contains("threads") && !cpu_config["threads"].is_null()) {
         const auto& configured = cpu_config["threads"];
-        if (!configured.is_number_unsigned() && !configured.is_number_integer()) {
-            throw std::invalid_argument("cpu.threads must be an integer");
-        }
         std::uint64_t requested = 0;
-        if (configured.is_number_unsigned()) {
-            requested = configured.get<std::uint64_t>();
-        } else {
-            const auto signed_request = configured.get<std::int64_t>();
-            if (signed_request < 0) {
-                throw std::invalid_argument("cpu.threads must be between 0 and 256");
+        if (configured.is_array()) {
+            // XMRig CpuThreads array form: each entry is a CPU affinity index
+            // or [intensity, affinity]. RandomX uses one VM per entry; its
+            // intensity is therefore retained as profile metadata only.
+            for (const auto& thread : configured) {
+                if (thread.is_number_integer()) {
+                    const auto affinity = thread.get<std::int64_t>();
+                    if (affinity < -1)
+                        throw std::invalid_argument("cpu.threads affinity must be -1 or a non-negative CPU index");
+                } else if (thread.is_array() && thread.size() >= 2 &&
+                           thread[0].is_number_unsigned() &&
+                           thread[1].is_number_integer()) {
+                    const auto intensity = thread[0].get<std::uint64_t>();
+                    const auto affinity = thread[1].get<std::int64_t>();
+                    if (intensity > 5 || affinity < -1)
+                        throw std::invalid_argument("cpu.threads entry must use [intensity:0..5, affinity:-1 or CPU index]");
+                } else {
+                    throw std::invalid_argument("cpu.threads array entries must be affinity integers or [intensity, affinity]");
+                }
+                ++requested;
             }
-            requested = static_cast<std::uint64_t>(signed_request);
+        } else if (configured.is_object()) {
+            // XMRig compact object form: {"threads": N, "affinity": mask,
+            // "intensity": N}. The worker count is the requested lane count.
+            if (configured.contains("threads")) {
+                const auto& count = configured["threads"];
+                if (!count.is_number_unsigned() && !count.is_number_integer())
+                    throw std::invalid_argument("cpu.threads.threads must be an integer");
+                if (count.is_number_unsigned()) {
+                    requested = count.get<std::uint64_t>();
+                } else {
+                    const auto signed_count = count.get<std::int64_t>();
+                    if (signed_count < 0)
+                        throw std::invalid_argument("cpu.threads.threads must be between 0 and 256");
+                    requested = static_cast<std::uint64_t>(signed_count);
+                }
+            }
+            if (configured.contains("intensity") &&
+                (!configured["intensity"].is_number_integer() ||
+                 configured["intensity"].get<std::int64_t>() < 0 ||
+                 configured["intensity"].get<std::int64_t>() > 5)) {
+                throw std::invalid_argument("cpu.threads.intensity must be between 0 and 5");
+            }
+            if (configured.contains("affinity") &&
+                !configured["affinity"].is_number_integer() &&
+                !configured["affinity"].is_string()) {
+                throw std::invalid_argument("cpu.threads.affinity must be an integer or mask string");
+            }
+        } else if (configured.is_number_unsigned() || configured.is_number_integer()) {
+            if (configured.is_number_unsigned()) {
+                requested = configured.get<std::uint64_t>();
+            } else {
+                const auto signed_request = configured.get<std::int64_t>();
+                if (signed_request < 0)
+                    throw std::invalid_argument("cpu.threads must be between 0 and 256");
+                requested = static_cast<std::uint64_t>(signed_request);
+            }
+        } else {
+            throw std::invalid_argument("cpu.threads must be an integer, XMRig thread array, or thread profile object");
         }
-        if (requested > 256) {
-            throw std::invalid_argument("cpu.threads must be between 0 and 256");
-        }
+        if (requested > 256)
+            throw std::invalid_argument("cpu.threads must contain between 0 and 256 workers");
         if (requested > 0) {
             explicit_thread_count = true;
             selected = std::min(logical_threads, static_cast<std::uint32_t>(requested));
