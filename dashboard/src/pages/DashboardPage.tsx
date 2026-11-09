@@ -68,7 +68,7 @@ type Status = {
     l3_cache_bytes: number;
     features: { aes: boolean; ssse3: boolean; avx2: boolean; vaes: boolean; bmi2: boolean };
   } | null;
-  msr_active: boolean | null;
+  msr_active: boolean | null;\n  system: { cpu_percent: number | null; process_cpu_percent: number | null; cpu_frequency_mhz: number | null; memory_used_bytes: number | null; process_memory_bytes: number | null; temperature_c: number | null; package_power_watts: number | null } | null;
   full_memory: boolean | null;
   pool: string | null;
   connected: boolean | null;
@@ -103,7 +103,7 @@ const emptyStatus: Status = {
   height: null,
   threads: null,
   cpu: null,
-  msr_active: null,
+  msr_active: null,\n  system: null,
   full_memory: null,
   pool: null,
   connected: null,
