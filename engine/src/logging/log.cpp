@@ -280,43 +280,44 @@ void submit(Level level, std::string_view category, std::string_view message) {
     Entry entry{timestamp_now(), level_name(level),
                 std::string(category), std::string(message)};
     Config config;
-    bool synchronous = false;
     {
         std::lock_guard lock(s.mutex);
         config = s.config;
         if (level == Level::Off || level < config.minimum_level) return;
         remember_locked(s, entry);
-        if (!s.running || s.stopping) {
-            synchronous = true;
-        } else {
-            const auto capacity = std::max<std::size_t>(64, config.queue_capacity);
-            if (s.queue.size() >= capacity) {
-                s.dropped.fetch_add(1, std::memory_order_relaxed);
-                // Preserve severe diagnostics without blocking mining workers.
-                if (level >= Level::Error) {
-                    write_console(entry, config);
-                    std::cerr << "[WARN] logger queue full; message not persisted\n";
+        if (!s.running) {
+            // Before the asynchronous worker starts, preserve the legacy synchronous API.
+            write_console(entry, config);
+            if (s.file.is_open()) {
+                s.file << format_entry(entry) << '\\n';
+                if (level >= Level::Warning) s.file.flush();
+                if (!s.file) {
+                    s.errors.fetch_add(1, std::memory_order_relaxed);
+                    s.file.clear();
                 }
-                return;
             }
-            Event event;
-            event.kind = EventKind::Record;
-            event.entry = std::move(entry);
-            s.queue.push_back(std::move(event));
-            s.ready.notify_one();
+            return;
         }
-    }
-    if (synchronous) {
-        std::lock_guard lock(s.mutex);
-        write_console(entry, config);
-        if (s.file.is_open()) {
-            s.file << format_entry(entry) << '\n';
-            if (level >= Level::Warning) s.file.flush();
-            if (!s.file) {
-                s.errors.fetch_add(1, std::memory_order_relaxed);
-                s.file.clear();
+        if (s.stopping) {
+            // Shutdown owns the file stream until the writer has drained and exited.
+            if (level >= Level::Error) write_console(entry, config);
+            s.dropped.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+        const auto capacity = std::max<std::size_t>(64, config.queue_capacity);
+        if (s.queue.size() >= capacity) {
+            s.dropped.fetch_add(1, std::memory_order_relaxed);
+            if (level >= Level::Error) {
+                write_console(entry, config);
+                std::cerr << "[WARN] logger queue full; message not persisted\\n";
             }
+            return;
         }
+        Event event;
+        event.kind = EventKind::Record;
+        event.entry = std::move(entry);
+        s.queue.push_back(std::move(event));
+        s.ready.notify_one();
     }
 }
 
@@ -330,6 +331,8 @@ bool initialize(const std::filesystem::path& path, const Config& config) {
         s.config.queue_capacity = std::max<std::size_t>(64, s.config.queue_capacity);
         if (s.running && !s.stopping) {
             // The writer owns the stream: enqueue a serialized file switch.
+        } else if (s.running && s.stopping) {
+            return false;
         } else {
             open_file(s, path);
             start_locked(s);
@@ -348,7 +351,8 @@ void set_file(const std::filesystem::path& path) {
     bool running = false;
     {
         std::lock_guard lock(s.mutex);
-        running = s.running && !s.stopping;
+        if (s.stopping) return;
+        running = s.running;
         if (!running) {
             open_file(s, path);
             return;
@@ -425,7 +429,8 @@ void flush() {
     auto result = completion->get_future();
     {
         std::lock_guard lock(s.mutex);
-        if (!s.running || s.stopping) {
+        if (s.stopping) return;
+        if (!s.running) {
             if (s.file.is_open()) s.file.flush();
             std::cout.flush();
             return;
