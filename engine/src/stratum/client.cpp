@@ -185,6 +185,21 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         // NyxRX metrics.rs MetricsSnapshot port: rates come from actual worker
         // counter deltas; no synthetic hashrate is generated for the dashboard.
+        const auto collect_best_status = [&]() {
+            const auto best = state.best_snapshot();
+            nlohmann::json top = nlohmann::json::array();
+            for (const auto& result : best.top_difficulties) {
+                top.push_back({{"difficulty", result.difficulty},
+                               {"at_unix_seconds", result.at_unix_seconds}});
+            }
+            const double effort = !best.top_difficulties.empty() &&
+                best.top_difficulties.front().difficulty > 0.0
+                ? best.estimated_hashes / best.top_difficulties.front().difficulty * 100.0
+                : 0.0;
+            return nlohmann::json{{"estimated_hashes", best.estimated_hashes},
+                                  {"effort_percent", effort},
+                                  {"top_difficulties", std::move(top)}};
+        };
         const auto collect_worker_status = [&]() {
             nlohmann::json result = nlohmann::json::array();
             const auto sample_time = Clock::now();
@@ -276,7 +291,12 @@ int run_miner(const std::filesystem::path& config_path,
         };
         auto last_sample_time = started;
         std::deque<std::pair<Clock::time_point, std::uint64_t>> samples;
-        std::unordered_map<std::uint64_t, Clock::time_point> pending;
+struct PendingShare {
+            Clock::time_point submitted_at;
+            double actual_difficulty = 0.0;
+            double target_difficulty = 0.0;
+        };
+        std::unordered_map<std::uint64_t, PendingShare> pending;
         std::size_t pool_index = 0;
         std::chrono::seconds retry_delay{1};
 
@@ -308,6 +328,8 @@ int run_miner(const std::filesystem::path& config_path,
                 cache = std::move(next_cache);
                 dataset = std::move(next_dataset);
                 flags = next_flags;
+                state.large_pages_active.store(
+                    (next_flags & RANDOMX_FLAG_LARGE_PAGES) != 0, std::memory_order_relaxed);
                 active_seed = next_job.seed;
                 have_seed = true;
             }
@@ -347,8 +369,9 @@ int run_miner(const std::filesystem::path& config_path,
                     }
                     // NyxRX PoolStatus latency: measure real submit-to-response RTT.
                     const auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        Clock::now() - pending_share->second).count();
+                        Clock::now() - pending_share->second.submitted_at).count();
                     state.last_share_latency_ms.store(latency_ms, std::memory_order_relaxed);
+                    const auto accepted_share_data = pending_share->second;
                     pending.erase(pending_share);
 
                     const bool has_error = rpc_response_failed(message);
@@ -370,6 +393,8 @@ int run_miner(const std::filesystem::path& config_path,
                     if (accepted) {
                         log_event("SHARE_ACCEPTED", {{"response_id", response_id}});
                         state.accepted.fetch_add(1, std::memory_order_relaxed);
+                        state.record_accepted_share(accepted_share_data.actual_difficulty,
+                                                    accepted_share_data.target_difficulty);
                     } else if (stale) {
                         log_event("SHARE_STALE", {{"response_id", response_id},
                                                   {"error", error_text}});
@@ -421,7 +446,19 @@ int run_miner(const std::filesystem::path& config_path,
                             }
                             throw;
                         }
-                        pending.emplace(submit_id, Clock::now());
+std::uint64_t hash_value = 0;
+                        for (std::size_t byte = 0; byte < 8; ++byte) {
+                            hash_value |= static_cast<std::uint64_t>(share.hash[24 + byte]) << (byte * 8);
+                        }
+                        const double actual_difficulty = hash_value == 0
+                            ? std::numeric_limits<double>::max()
+                            : static_cast<double>(std::numeric_limits<std::uint64_t>::max()) /
+                              static_cast<double>(hash_value);
+                        const double target_difficulty = share.target == 0 ? 0.0
+                            : static_cast<double>(std::numeric_limits<std::uint64_t>::max()) /
+                              static_cast<double>(share.target);
+                        pending.emplace(submit_id, PendingShare{
+                            Clock::now(), actual_difficulty, target_difficulty});
                         state.submitted.fetch_add(1, std::memory_order_relaxed);
                     }
                 };
@@ -535,9 +572,10 @@ int run_miner(const std::filesystem::path& config_path,
                                 : nlohmann::json(nullptr)},
                             {"threads", pool_threads}, {"cpu", cpu_summary},
                             {"workers", collect_worker_status()},
+                            {"best", collect_best_status()},
                             {"msr_active", msr.active()}, {"full_memory", full_memory},
                             {"large_pages_requested", large_pages_requested},
-                            {"large_pages_active", (work->flags & RANDOMX_FLAG_LARGE_PAGES) != 0},
+                            {"large_pages_active", state.large_pages_active.load(std::memory_order_relaxed)},
                             {"system", {
                                 {"cpu_percent", optional_number(system_sample.system_cpu_percent)},
                                 {"process_cpu_percent", optional_number(system_sample.process_cpu_percent)},
@@ -669,7 +707,7 @@ int run_miner(const std::filesystem::path& config_path,
                     {"workers", collect_worker_status()},
                     {"msr_active", msr.active()}, {"full_memory", full_memory},
                     {"large_pages_requested", large_pages_requested},
-                    {"large_pages_active", (flags & RANDOMX_FLAG_LARGE_PAGES) != 0},
+                    {"large_pages_active", state.large_pages_active.load(std::memory_order_relaxed)},
                     {"system", {
                         {"cpu_percent", reconnect_optional(reconnect_system.system_cpu_percent)},
                         {"process_cpu_percent", reconnect_optional(reconnect_system.process_cpu_percent)},
