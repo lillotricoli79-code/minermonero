@@ -178,7 +178,7 @@ int run_miner(const std::filesystem::path& config_path,
         }
         const auto pools = parse_pool_configs(config);
         std::string user_agent = config.value("user-agent",
-            std::string(user_agent));
+            std::string("UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)"));
         if (user_agent.empty() || user_agent.size() > 256 ||
             user_agent.find_first_of("\\r\\n") != std::string::npos)
             throw std::runtime_error("user-agent must contain 1 to 256 characters without newlines");
@@ -839,8 +839,7 @@ struct PendingShare {
                 StratumTransport transport;
                 transport.connect_to(pool);
                 log_event("CONNECTED", {{"host", pool.host}, {"port", pool.port}});
-                transport.send_json(make_login_request(1, pool,
-                    "UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)"));
+                transport.send_json(make_login_request(1, pool, user_agent));
                 const auto login_deadline = Clock::now() + std::chrono::seconds(30);
 
                 const auto record_share_response = [&](const nlohmann::json& message) {
