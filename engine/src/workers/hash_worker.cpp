@@ -119,8 +119,9 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         ? (*affinity_override >= 0 &&
            platform::pin_current_thread_by_id(static_cast<std::uint32_t>(*affinity_override)))
         : platform::pin_current_thread(worker_id);
-    const bool priority_applied = platform::set_current_thread_priority(state.cpu_priority);
-    const std::string priority_message = state.cpu_priority == -1
+    int applied_priority = state.cpu_priority.load(std::memory_order_relaxed);
+    const bool priority_applied = platform::set_current_thread_priority(applied_priority);
+    const std::string priority_message = applied_priority == -1
         ? "; OS priority left unchanged"
         : priority_applied ? "; priority applied"
                            : "; priority unchanged (permission or platform limit)";
@@ -277,6 +278,19 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     kNonceReservationSize, nonce_space(work->job) - block_start);
             }
             const auto nonce_offset = nonce_block_next++;
+            if ((nonce_offset & 0xffU) == 0) {
+                const int requested_priority = state.cpu_priority.load(std::memory_order_relaxed);
+                if (requested_priority != applied_priority) {
+                    if (platform::set_current_thread_priority(requested_priority)) {
+                        applied_priority = requested_priority;
+                        logging::info("cpu", "worker #" + std::to_string(worker_id) +
+                            " priority updated to " + std::to_string(applied_priority));
+                    } else {
+                        logging::warning("cpu", "worker #" + std::to_string(worker_id) +
+                            " could not apply updated priority " + std::to_string(requested_priority));
+                    }
+                }
+            }
             const auto nonce = nonce_at_offset(work->job, nonce_offset);
             write_nonce(blob, nonce);
 
