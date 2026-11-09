@@ -381,7 +381,12 @@ void close_file() {
     State& s = state();
     std::thread writer;
     {
-        std::lock_guard lock(s.mutex);
+        std::unique_lock lock(s.mutex);
+        if (s.stopping) {
+            // A concurrent closer must wait for the first caller to finish joining.
+            s.space.wait(lock, [&] { return !s.running; });
+            return;
+        }
         if (!s.running) {
             if (s.file.is_open()) {
                 s.file.flush();
@@ -401,6 +406,7 @@ void close_file() {
         s.running = false;
         s.stopping = false;
         s.queue.clear();
+        s.space.notify_all();
     }
 }
 
