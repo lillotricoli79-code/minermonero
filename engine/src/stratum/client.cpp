@@ -415,14 +415,14 @@ int run_miner(const std::filesystem::path& config_path,
                                     std::size_t used = 0;
                                     const int priority = std::stoi(setting_value, &used, 10);
                                     if (used != setting_value.size() || priority < -1 || priority > 5) {
-                                        std::cout << "cpu.priority deve essere compreso tra -1 e 5\\n";
+                                        std::cout << "cpu.priority deve essere compreso tra -1 e 5\n";
                                     } else {
                                         state.cpu_priority.store(priority, std::memory_order_release);
                                         logging::info("cpu", "runtime CPU priority changed to " + std::to_string(priority));
-                                        std::cout << "Priorità richiesta; applicazione entro il prossimo blocco nonce per ogni worker.\\n";
+                                        std::cout << "Priorità richiesta; applicazione entro il prossimo blocco nonce per ogni worker.\n";
                                     }
                                 } catch (...) {
-                                    std::cout << "Valore cpu.priority non valido\\n";
+                                    std::cout << "Valore cpu.priority non valido\n";
                                 }
                             } else if (setting == "cpu.yield") {
                                 if (setting_value == "on" || setting_value == "true" || setting_value == "1") {
@@ -432,7 +432,7 @@ int run_miner(const std::filesystem::path& config_path,
                                     state.cpu_yield.store(false, std::memory_order_release);
                                     logging::info("cpu", "cpu.yield disabled at runtime");
                                 } else {
-                                    std::cout << "cpu.yield accetta on/off\\n";
+                                    std::cout << "cpu.yield accetta on/off\n";
                                 }
                             } else if (setting == "huge-pages" || setting == "randomx.mode" ||
                                        setting == "cpu.hw-aes" || setting == "randomx.numa") {
