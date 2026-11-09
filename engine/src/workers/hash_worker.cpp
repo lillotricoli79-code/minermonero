@@ -304,8 +304,6 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 if (requested_priority != applied_priority) {
                     if (platform::set_current_thread_priority(requested_priority)) {
                         applied_priority = requested_priority;
-                        logging::info("cpu", "worker #" + std::to_string(worker_id) +
-                            " priority updated to " + std::to_string(applied_priority));
                     } else {
                         logging::warning("cpu", "worker #" + std::to_string(worker_id) +
                             " could not apply updated priority " + std::to_string(requested_priority));
