@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
@@ -309,14 +310,33 @@ int main() {
                 }
                 second_session_ok = true;
 
-                // Allow the miner's network loop to consume all three replies and
-                // publish a fresh structured status snapshot before requesting shutdown.
-                // Without this grace period SIGINT can race the final submit response.
-                std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+                // Ask the miner to stop through the same atomic command-file
+                // channel used by the local dashboard. This exercises graceful
+                // shutdown without raising a process-wide CRT signal from the
+                // mock-pool thread (which can fast-fail on Windows runners).
+                const auto command_path = config_path.parent_path() /
+                    "unique-rx-command.json";
+                const auto issued_at = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                {
+                    std::ofstream command_file(command_path, std::ios::binary | std::ios::trunc);
+                    if (!command_file) {
+                        unique_rx::platform::close_socket(client);
+                        return;
+                    }
+                    command_file << nlohmann::json{
+                        {"command", "stop"}, {"timestamp_unix_ms", issued_at}
+                    }.dump() << '\\n';
+                    command_file.flush();
+                    if (!command_file) {
+                        command_file.close();
+                        unique_rx::platform::close_socket(client);
+                        return;
+                    }
+                }
 
                 // Continue servicing the miner's orderly two-second queue drain
                 // until it closes the socket.
-                std::raise(SIGINT);
                 line.clear();
                 while (read_line(client, line)) {
                     const auto submit = nlohmann::json::parse(line);
