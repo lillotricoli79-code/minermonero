@@ -714,7 +714,7 @@ std::uint64_t hash_value = 0;
                     {"threads", pool_threads}, {"cpu", cpu_summary},
                     {"workers", collect_worker_status()},
                     {"best", collect_best_status()},
-                    {"msr_active", msr.active()}, {"full_memory", full_memory},
+                    {"msr_active", msr.active()}, {"msr_status", msr_status}, {"full_memory", full_memory},
                     {"large_pages_requested", large_pages_requested},
                     {"large_pages_active", state.large_pages_active.load(std::memory_order_relaxed)},
                     {"system", {
