@@ -57,6 +57,7 @@ type Status = {
   job_id: string | null;
   height: number | null;
   threads: number | null;
+  cpu_priority?: number | null;
   cpu: {
     vendor: string;
     brand: string;
