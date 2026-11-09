@@ -71,6 +71,8 @@ type Status = {
   } | null;
   msr_active: boolean | null;
   workers?: WorkerStatus[];
+  best?: BestStatus | null;
+  job_difficulty?: number | null;
   pool_latency_ms: number | null;
   reconnects: number | null;
   large_pages_requested: boolean | null;
@@ -98,6 +100,7 @@ type MinerConfig = {
 type ChartPoint = { at: number; hashrate: number | null; hashrate60: number | null; hashrate15m: number | null };
 type SystemChartPoint = { at: number; system: number; miner: number | null };
 type WorkerStatus = { id: number; hashes: number; hashrate_hps: number; active: boolean };
+type BestStatus = { estimated_hashes: number; effort_percent: number; top_difficulties: { difficulty: number; at_unix_seconds: number }[] };
 type LogItem = { id: number; time: number; message: string; engine?: string };
 
 const emptyStatus: Status = {
@@ -726,6 +729,10 @@ function App() {
                     <DataRow icon={<Gauge size={15} />} label="Frequenza CPU" value={status.system?.cpu_frequency_mhz != null ? `${formatCount(status.system.cpu_frequency_mhz)} MHz` : "Non disponibile"} />
                     <DataRow icon={<Cpu size={15} />} label="RAM sistema / processo" value={status.system?.memory_used_bytes != null ? `${(status.system.memory_used_bytes / 1073741824).toFixed(2)} / ${status.system.process_memory_bytes != null ? (status.system.process_memory_bytes / 1073741824).toFixed(2) : "n/d"} GB` : "Non disponibile"} />
                     <DataRow icon={<Activity size={15} />} label="Temperatura sensore" value={status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "Non disponibile"} />
+                    <DataRow icon={<Gauge size={15} />} label="Difficoltà job" value={status.job_difficulty == null ? "Non disponibile" : formatCount(status.job_difficulty)} />
+                    <DataRow icon={<ShieldCheck size={15} />} label="Miglior share" value={status.best?.top_difficulties?.[0] ? status.best.top_difficulties[0].difficulty.toLocaleString("it-IT", { maximumFractionDigits: 2 }) : "In attesa"} />
+                    <DataRow icon={<Gauge size={15} />} label="Effort stimato" value={status.best ? status.best.effort_percent.toFixed(2) + "%" : "In attesa"} />
+                    <DataRow icon={<Activity size={15} />} label="Lavoro accettato stimato" value={status.best ? formatCount(status.best.estimated_hashes) + " hash" : "In attesa"} />
                     <DataRow icon={<Cpu size={15} />} label="Huge Pages" value={status.large_pages_active == null ? "Non disponibile" : status.large_pages_active ? "Attive" : status.large_pages_requested ? "Non disponibili · fallback" : "Disattivate"} />
                     <DataRow icon={<Gauge size={15} />} label="Latenza share" value={status.pool_latency_ms == null ? "In attesa" : `${formatCount(status.pool_latency_ms)} ms`} />
                     <DataRow icon={<RefreshCw size={15} />} label="Riconnessioni pool" value={status.reconnects == null ? "Non disponibile" : formatCount(status.reconnects)} />
