@@ -6,6 +6,7 @@
 #include <map>
 #include <set>
 #include <tuple>
+#include <utility>
 
 #ifdef _WIN32
 #ifndef _WIN32_WINNT
@@ -28,9 +29,7 @@
 #include <sys/resource.h>
 #include <filesystem>
 #include <fstream>
-#include <map>
 #include <string>
-#include <utility>
 #endif
 
 namespace unique_rx::platform {
