@@ -46,6 +46,7 @@ DEFAULTS: dict[str, Any] = {
         "restricted": True,
     },
     "pools": [],
+    "randomx": {"full-memory": True, "wrmsr": False, "rdmsr": True},
 }
 
 
@@ -61,7 +62,7 @@ class MinerConfigUpdate(BaseModel):
     prefetch_mode: int = Field(default=1, ge=0, le=3)
     tls: bool = False
     tls_fingerprint: str = ""
-    msr_mode: Literal["auto", "off", "fast", "custom"] = "auto"
+    msr_mode: Literal["auto", "off", "fast", "custom"] = "off"
     api_port: int = Field(default=18088, ge=1024, le=65535, strict=True)
 
     @field_validator("pool")
