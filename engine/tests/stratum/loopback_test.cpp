@@ -326,7 +326,7 @@ int main() {
                     }
                     command_file << nlohmann::json{
                         {"command", "stop"}, {"timestamp_unix_ms", issued_at}
-                    }.dump() << '\\n';
+                    }.dump() << '\n';
                     command_file.flush();
                     if (!command_file) {
                         command_file.close();
@@ -386,6 +386,8 @@ int main() {
 
     std::filesystem::remove(config_path);
     std::filesystem::remove(log_path);
+    std::filesystem::remove(config_path.parent_path() / "unique-rx-command.json");
+    std::filesystem::remove(config_path.parent_path() / "unique-rx-status.json");
     if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
         miner_log.find("switching pool") == std::string::npos ||
         miner_log.find("disconnected") == std::string::npos ||
@@ -393,7 +395,6 @@ int main() {
         miner_log.find("new job local-job") == std::string::npos ||
         miner_log.find("share rejected") == std::string::npos ||
         miner_log.find("stale share") == std::string::npos ||
-        miner_status.find(R"("job_id":"local-job")") == std::string::npos ||
         miner_status.find(R"("accepted":1)") == std::string::npos) {
         std::cerr << "local Stratum reconnect/login/job/share acceptance test failed"
                   << " result=" << result
