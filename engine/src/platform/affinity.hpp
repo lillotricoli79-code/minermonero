@@ -137,9 +137,18 @@ inline std::vector<std::pair<WORD, DWORD>> ordered_processors() {
 #elif defined(__linux__)
 inline std::vector<unsigned int> ordered_processors(
     const std::vector<unsigned int>& allowed) {
-    // NUMA node is the outer ordering key: workers are spread over memory
-    // domains before SMT siblings are considered within each physical core.
-    std::map<std::tuple<int, int, int>, std::vector<unsigned int>> cores;
+    // NUMA node/package remain the outer ordering keys. Within each memory
+    // domain, prioritize physical cores with the highest advertised maximum
+    // frequency before SMT siblings. The frequency ranking is a C++ port of
+    // XMRMiner getBigCoreIds() (GPL-3.0; see LICENSES/XMR-MINER-GPL-3.0.txt).
+    struct CoreInfo {
+        int node = -1;
+        int package = -1;
+        int core = -1;
+        std::uint64_t max_frequency_khz = 0;
+        std::vector<unsigned int> siblings;
+    };
+    std::map<std::tuple<int, int, int>, CoreInfo> grouped;
     for (const auto cpu : allowed) {
         const auto cpu_root = std::filesystem::path("/sys/devices/system/cpu") /
             ("cpu" + std::to_string(cpu));
@@ -147,6 +156,11 @@ inline std::vector<unsigned int> ordered_processors(
         int package = -1, core = static_cast<int>(cpu), node = -1;
         std::ifstream(topology / "physical_package_id") >> package;
         std::ifstream(topology / "core_id") >> core;
+
+        std::uint64_t max_frequency = 0;
+        std::ifstream frequency_file(cpu_root / "cpufreq/cpuinfo_max_freq");
+        frequency_file >> max_frequency;
+
         std::error_code ec;
         for (const auto& entry : std::filesystem::directory_iterator(cpu_root, ec)) {
             const auto name = entry.path().filename().string();
@@ -157,21 +171,36 @@ inline std::vector<unsigned int> ordered_processors(
                 break;
             }
         }
-        cores[{node, package, core}].push_back(cpu);
+        auto& group = grouped[{node, package, core}];
+        group.node = node;
+        group.package = package;
+        group.core = core;
+        group.max_frequency_khz = std::max(group.max_frequency_khz, max_frequency);
+        group.siblings.push_back(cpu);
     }
-    std::vector<std::vector<unsigned int>> siblings;
-    siblings.reserve(cores.size());
-    for (auto& entry : cores) {
-        auto& cpus = entry.second;
-        std::sort(cpus.begin(), cpus.end());
-        siblings.push_back(cpus);
+
+    std::vector<CoreInfo> cores;
+    cores.reserve(grouped.size());
+    for (auto& entry : grouped) {
+        auto& core = entry.second;
+        std::sort(core.siblings.begin(), core.siblings.end());
+        cores.push_back(std::move(core));
     }
+    std::stable_sort(cores.begin(), cores.end(), [](const CoreInfo& left, const CoreInfo& right) {
+        if (left.node != right.node) return left.node < right.node;
+        if (left.package != right.package) return left.package < right.package;
+        if (left.max_frequency_khz != right.max_frequency_khz)
+            return left.max_frequency_khz > right.max_frequency_khz;
+        return left.core < right.core;
+    });
+
     std::vector<unsigned int> result;
+    result.reserve(allowed.size());
     for (std::size_t sibling = 0; ; ++sibling) {
         bool added = false;
-        for (const auto& core : siblings) {
-            if (sibling < core.size()) {
-                result.push_back(core[sibling]);
+        for (const auto& core : cores) {
+            if (sibling < core.siblings.size()) {
+                result.push_back(core.siblings[sibling]);
                 added = true;
             }
         }
