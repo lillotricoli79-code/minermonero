@@ -102,7 +102,8 @@ struct WorkerCounterPublisher {
 // handoff and bounded share queue. GPL-3.0; see LICENSES/XMRIG-GPL-3.0.txt.
 void hash_worker(MiningState& state, std::uint32_t worker_id,
                  std::uint32_t worker_count, std::uint64_t maximum_hashes,
-                 std::atomic<bool>& worker_stop) {
+                 std::atomic<bool>& worker_stop,
+                 std::optional<std::int64_t> affinity_override) {
     if (worker_count == 0 || worker_id >= worker_count) {
         state.report_worker_error("invalid CPU worker index or worker count");
         return;
@@ -113,18 +114,29 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             ? state.worker_hashes[worker_id].get() : nullptr;
     WorkerCounterPublisher counter_publisher{
         published_worker_counter, &local_worker_hashes};
-    const bool pinned = platform::pin_current_thread(worker_id);
+    const bool affinity_disabled = affinity_override && *affinity_override < 0;
+    const bool pinned = affinity_override
+        ? (*affinity_override >= 0 &&
+           platform::pin_current_thread_by_id(static_cast<std::uint32_t>(*affinity_override)))
+        : platform::pin_current_thread(worker_id);
     const bool priority_applied = platform::set_current_thread_priority(state.cpu_priority);
     const std::string priority_message = state.cpu_priority == -1
         ? "; OS priority left unchanged"
         : priority_applied ? "; priority applied"
                            : "; priority unchanged (permission or platform limit)";
+    const std::string affinity_message = pinned
+        ? " started; CPU affinity pinned"
+        : affinity_disabled ? " started; CPU affinity disabled by profile"
+                            : " started; affinity unavailable";
     logging::info("cpu", "worker #" + std::to_string(worker_id) +
-        (pinned ? " started; CPU affinity pinned" : " started; affinity unavailable") +
-        priority_message);
+        affinity_message + priority_message);
     // Scratchpad mappings are reused only by workers on the same NUMA node.
-    rxm_set_allocator_node(pinned
-        ? platform::numa_node_for_logical_cpu(worker_id) : -1);
+    const int allocator_node = pinned
+        ? (affinity_override
+            ? platform::numa_node_for_cpu_id(static_cast<std::uint32_t>(*affinity_override))
+            : platform::numa_node_for_logical_cpu(worker_id))
+        : -1;
+    rxm_set_allocator_node(allocator_node);
 
     Vm vm;
     std::shared_ptr<const MiningWork> active_work;
