@@ -130,15 +130,19 @@ int run_miner(const std::filesystem::path& config_path,
                 "writes are intentionally unsupported.");
         }
         MsrManager msr(randomx_config.value("msr-module", std::string()));
+        std::string msr_status;
         if (msr_explicitly_disabled) {
+            msr_status = "Disattivato da configurazione";
             logging::info("msr", "MSR tuning explicitly disabled by configuration");
         } else {
             try {
                 msr.apply_randomx_preset();
+                msr_status = "Preset CPU applicato; ripristino automatico alla chiusura";
                 logging::info("msr", "CPU-specific RandomX preset applied; original registers will be restored on exit");
             } catch (const std::exception& error) {
                 // MSR tuning is an optional optimization. An unknown CPU, a missing
                 // driver, or unavailable permissions must never prevent rx/0 mining.
+                msr_status = std::string("Non disponibile: ") + error.what();
                 logging::warning("msr", std::string("tuning skipped safely: ") + error.what() +
                                   "; continuing with standard CPU settings");
             }
@@ -577,7 +581,7 @@ std::uint64_t hash_value = 0;
                             {"threads", pool_threads}, {"cpu", cpu_summary},
                             {"workers", collect_worker_status()},
                             {"best", collect_best_status()},
-                            {"msr_active", msr.active()}, {"full_memory", full_memory},
+                            {"msr_active", msr.active()}, {"msr_status", msr_status}, {"full_memory", full_memory},
                             {"large_pages_requested", large_pages_requested},
                             {"large_pages_active", state.large_pages_active.load(std::memory_order_relaxed)},
                             {"system", {
