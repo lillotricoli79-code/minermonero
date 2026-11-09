@@ -46,6 +46,16 @@ int main() {
                 best.top_difficulties[0].at_unix_seconds > 0,
                 "best-share telemetry is missing its Unix timestamp");
 
+    MiningState top_ten_state;
+    for (std::uint64_t difficulty = 1; difficulty <= 12; ++difficulty) {
+        top_ten_state.record_accepted_share(static_cast<double>(difficulty), 100.0);
+    }
+    const auto top_ten = top_ten_state.best_snapshot();
+    ok &= check(top_ten.top_difficulties.size() == 10 &&
+                top_ten.top_difficulties.front().difficulty == 12.0 &&
+                top_ten.top_difficulties.back().difficulty == 3.0,
+                "best-share telemetry does not retain the ten highest difficulties");
+
     MiningState state;
     unique_rx::core::hash_worker(state, 0, 0, 0);
     ok &= check(state.stop.load(), "zero worker count did not stop the miner");
