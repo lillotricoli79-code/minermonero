@@ -3,7 +3,19 @@
 > Documento operativo vincolante del progetto. Le disposizioni qui contenute devono essere lette prima di ogni intervento e rispettate durante sviluppo, integrazione, test e rilascio.
 
 ## 1. Obiettivo e identità del progetto
-
+sistemare l'integrazione tra miner, backend e dashboard, preservando il BAT funzionante, config.json, Stratum e tutto il codice già valido. non toccare stratum il login e il parser del config.
+Funzioni richieste per la shell UNIQUE RX ingrandirla usare cio che gia funziona e integrare i log di xmrig piu tutto quello di nyxrx tutto in c++.
+1. Configurazione compatibile con XMRig, comprese le opzioni CPU e RandomX, senza limitarsi ai pochi parametri attualmente gestiti.
+2. Logger completo, con output ordinato e professionale, non messaggi sparsi.
+3. Informazioni CPU: modello, AES, AVX2, BMI2, core e thread. regolaggio trhead nella shell e grafico hashrate come nyxrx.
+4. Pool: indirizzo, porta, TLS, connessione e riconnessioni.
+5. MSR e modalità memoria.
+6. Hashrate aggiornato: 10 secondi, 60 secondi e 15 minuti.
+7. Shares: trovate, accettate, rifiutate, stale, pending, expired e perse.
+8. Uptime, altezza blocco e Job ID.
+9. Errori e riconnessioni registrati correttamente.
+10. Telemetria utilizzabile dalla dashboard, senza inondare la console con messaggi tecnici e rumore per ogni share.
+E avevi precisato anche due vincoli: MSR attivabile dal BAT e autenticazione Stratum da non toccare.
 Realizzare un miner CPU autonomo per Monero, algoritmo **RandomX `rx/0`**, con motore nativo, gestione pool/Stratum, worker, shares, ottimizzazioni CPU, MSR sicuro e dashboard collegata ai dati reali del motore.
 
 Il progetto deve essere portabile e utilizzabile su **più computer e configurazioni CPU**, non costruito o limitato al PC di sviluppo (Intel i7-6700K). Il rilevamento hardware e le impostazioni devono adattarsi alla macchina in uso.
