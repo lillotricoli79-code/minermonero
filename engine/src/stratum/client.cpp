@@ -482,18 +482,21 @@ int run_miner(const std::filesystem::path& config_path,
         const auto cpu_summary = cpu_summary_json();
         // XMRig-compatible persistent scratchpad pool: false disables it,
         // true sizes it for the active workers, and a number sets capacity.
-        std::size_t memory_pool_capacity = 0;
+        const auto automatic_memory_pool_capacity = [&] {
+            std::uint64_t l3_bytes = 0;
+            if (cpu_summary.contains("l3_cache_bytes") &&
+                cpu_summary["l3_cache_bytes"].is_number()) {
+                l3_bytes = cpu_summary["l3_cache_bytes"].get<std::uint64_t>();
+            }
+            const auto l3_pages = static_cast<std::size_t>(
+                l3_bytes / (2ULL * 1024ULL * 1024ULL));
+            return std::max<std::size_t>(pool_threads, l3_pages);
+        };
+        // Reuse 2 MiB RandomX worker scratchpads by default. XMRig-style
+        // false/0 remains an explicit opt-out; -1/true requests auto sizing.
+        std::size_t memory_pool_capacity = automatic_memory_pool_capacity();
         if (cpu_config.contains("memory-pool") && !cpu_config["memory-pool"].is_null()) {
             const auto& memory_pool = cpu_config["memory-pool"];
-            const auto automatic_memory_pool_capacity = [&] {
-                std::uint64_t l3_bytes = 0;
-                if (cpu_summary.contains("l3_cache_bytes") &&
-                    cpu_summary["l3_cache_bytes"].is_number()) {
-                    l3_bytes = cpu_summary["l3_cache_bytes"].get<std::uint64_t>();
-                }
-                const auto l3_pages = static_cast<std::size_t>(l3_bytes / (2ULL * 1024ULL * 1024ULL));
-                return std::max<std::size_t>(pool_threads, l3_pages);
-            };
             if (memory_pool.is_boolean()) {
                 memory_pool_capacity = memory_pool.get<bool>()
                     ? automatic_memory_pool_capacity() : 0;
