@@ -36,6 +36,18 @@
 namespace unique_rx::telemetry {
 namespace {
 #ifdef _WIN32
+// PROCESSOR_POWER_INFORMATION is documented by PowrProf but is not declared
+// by every Windows SDK/MinGW header set. Keep the documented six-ULONG ABI
+// locally so the same telemetry code builds with MSVC and MinGW.
+struct ProcessorPowerInformation {
+    ULONG Number;
+    ULONG MaxMhz;
+    ULONG CurrentMhz;
+    ULONG MhzLimit;
+    ULONG MaxIdleState;
+    ULONG CurrentIdleState;
+};
+
 std::uint64_t filetime_value(const FILETIME& value) {
     return (static_cast<std::uint64_t>(value.dwHighDateTime) << 32) |
         static_cast<std::uint64_t>(value.dwLowDateTime);
@@ -82,10 +94,10 @@ std::optional<std::uint64_t> read_cpu_frequency_mhz() {
     // sampled without truncating the CPU frequency telemetry.
     const DWORD processor_count = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
     if (processor_count == 0) return std::nullopt;
-    std::vector<PROCESSOR_POWER_INFORMATION> processors(processor_count);
+    std::vector<ProcessorPowerInformation> processors(processor_count);
     const auto status = CallNtPowerInformation(
         ProcessorInformation, nullptr, 0, processors.data(),
-        static_cast<ULONG>(processors.size() * sizeof(PROCESSOR_POWER_INFORMATION)));
+        static_cast<ULONG>(processors.size() * sizeof(ProcessorPowerInformation)));
     if (status != 0) return std::nullopt;
     std::uint64_t total_mhz = 0;
     std::uint64_t count = 0;
