@@ -182,6 +182,8 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<std::uint64_t> worker_previous_hashes(pool_threads, 0);
         std::vector<double> worker_rates(pool_threads, 0.0);
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
+        // NyxRX metrics.rs MetricsSnapshot port: rates come from actual worker
+        // counter deltas; no synthetic hashrate is generated for the dashboard.
         const auto collect_worker_status = [&]() {
             nlohmann::json result = nlohmann::json::array();
             const auto sample_time = Clock::now();
@@ -342,6 +344,7 @@ int run_miner(const std::filesystem::path& config_path,
                         log_event("UNMATCHED_RESPONSE", message);
                         return;
                     }
+                    // NyxRX PoolStatus latency: measure real submit-to-response RTT.
                     const auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                         Clock::now() - pending_share->second).count();
                     state.last_share_latency_ms.store(latency_ms, std::memory_order_relaxed);
