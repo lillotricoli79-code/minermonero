@@ -149,7 +149,9 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
 
     Vm vm;
     std::shared_ptr<const MiningWork> active_work;
+    std::shared_ptr<const MiningWork> published_work;
     std::shared_ptr<const MiningWork> pending_work;
+    std::uint64_t observed_work_revision = UINT64_MAX;
     std::vector<std::uint8_t> blob;
     std::uint64_t exhausted_generation = 0;
     std::uint64_t nonce_block_generation = 0;
@@ -191,7 +193,12 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     try {
         while (!state.stop.load(std::memory_order_acquire) &&
                !worker_stop.load(std::memory_order_acquire)) {
-            const auto work = state.current_work();
+            const auto work_revision = state.work_revision.load(std::memory_order_acquire);
+            if (work_revision != observed_work_revision) {
+                published_work = state.current_work();
+                observed_work_revision = work_revision;
+            }
+            const auto& work = published_work;
             if (!work) {
                 flush_pending();
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
