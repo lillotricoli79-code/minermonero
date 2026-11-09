@@ -1657,8 +1657,19 @@ std::uint64_t hash_value = 0;
                 }
                 auto remaining_delay =
                     std::chrono::duration_cast<std::chrono::milliseconds>(retry_delay);
+                auto next_reconnect_snapshot = Clock::now();
                 while (remaining_delay > std::chrono::milliseconds::zero() &&
                        !g_stop_requested && !state.stop.load(std::memory_order_acquire)) {
+                    consume_dashboard_command();
+                    if (state.stop.load(std::memory_order_acquire)) break;
+                    if (Clock::now() >= next_reconnect_snapshot) {
+                        reconnect_status["timestamp_unix_ms"] =
+                            std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch()).count();
+                        reconnect_status["pid"] = current_process_id();
+                        (void)write_status_snapshot(status_path, reconnect_status);
+                        next_reconnect_snapshot = Clock::now() + std::chrono::seconds(1);
+                    }
                     const auto step = std::min(
                         remaining_delay, std::chrono::milliseconds(100));
                     std::this_thread::sleep_for(step);
