@@ -49,6 +49,11 @@ std::vector<std::uint8_t> decode_hex(std::string_view value) {
     return bytes;
 }
 
+// Adapted from XMRig src/base/net/stratum/Job.cpp, Job::setTarget()
+// and Job::toDiff(): Copyright (c) 2016-2025 XMRig and contributors.
+// Distributed under GPL-3.0-or-later; see LICENSES/XMRIG-GPL-3.0.txt.
+// The port keeps XMRig's 4-byte compact-target integer semantics while
+// validating hexadecimal input and rejecting zero/unsupported target sizes.
 std::uint64_t parse_share_target(std::string_view value) {
     if (value.size() != 8 && value.size() != 16) {
         throw std::invalid_argument("pool target must be 4 or 8 bytes");
