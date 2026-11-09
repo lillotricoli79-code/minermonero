@@ -289,7 +289,7 @@ void submit(Level level, std::string_view category, std::string_view message) {
             // Before the asynchronous worker starts, preserve the legacy synchronous API.
             write_console(entry, config);
             if (s.file.is_open()) {
-                s.file << format_entry(entry) << '\\n';
+                s.file << format_entry(entry) << '\n';
                 if (level >= Level::Warning) s.file.flush();
                 if (!s.file) {
                     s.errors.fetch_add(1, std::memory_order_relaxed);
@@ -309,7 +309,7 @@ void submit(Level level, std::string_view category, std::string_view message) {
             s.dropped.fetch_add(1, std::memory_order_relaxed);
             if (level >= Level::Error) {
                 write_console(entry, config);
-                std::cerr << "[WARN] logger queue full; message not persisted\\n";
+                std::cerr << "[WARN] logger queue full; message not persisted\n";
             }
             return;
         }
