@@ -36,7 +36,7 @@ void write_nonce(std::vector<std::uint8_t>& blob, std::uint32_t nonce) {
 // RxMiner's bounded Submitter channel uses QUEUE_LIMIT=8192.
 inline constexpr std::size_t kMaximumQueuedShares = 8192;
 
-std::uint64_t complete_hash(MiningState& state,
+std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
                              const std::shared_ptr<const MiningWork>& work,
                              std::uint32_t nonce, const Hash& hash,
                              std::uint64_t maximum_hashes) {
@@ -55,6 +55,9 @@ std::uint64_t complete_hash(MiningState& state,
             ++count;
             break;
         }
+    }
+    if (worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id]) {
+        state.worker_hashes[worker_id]->fetch_add(1, std::memory_order_relaxed);
     }
     // Serialize the final generation check with queue insertion. This closes
     // the reconnect race where a worker could enqueue an old-session share
@@ -116,7 +119,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         auto completed_work = std::move(pending_work);
         pending_work.reset();
         const auto count = complete_hash(
-            state, completed_work, pending_nonce, hash, maximum_hashes);
+            state, worker_id, completed_work, pending_nonce, hash, maximum_hashes);
         if (maximum_hashes != 0 && count >= maximum_hashes) {
             state.stop.store(true, std::memory_order_release);
         }
@@ -223,7 +226,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     vm.get(), blob.data(), blob.size(), hash.data());
                 if (pending_work) {
                     const auto count = complete_hash(
-                        state, pending_work, pending_nonce, hash, maximum_hashes);
+                        state, worker_id, pending_work, pending_nonce, hash, maximum_hashes);
                     if (maximum_hashes != 0 && count >= maximum_hashes) {
                         state.stop.store(true, std::memory_order_release);
                     }
