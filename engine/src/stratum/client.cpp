@@ -232,6 +232,12 @@ int run_miner(const std::filesystem::path& config_path,
         if (config.contains("verbose") && !config["verbose"].is_null() &&
             !config["verbose"].is_boolean())
             throw std::runtime_error("verbose must be boolean");
+        // In an interactive native shell, the TUI owns the terminal surface:
+        // keep structured XMRig-style records in the rotating log/history pane,
+        // never interleave asynchronous-looking log lines with the live screen.
+        // When stdout is redirected, emit only the machine-readable status channel.
+        logger_config.console_output =
+            !console_input_available() && !machine_status_channel_required();
         logging::configure(logger_config);
         if (config.contains("background") && !config["background"].is_null() &&
             config["background"].get<bool>())
