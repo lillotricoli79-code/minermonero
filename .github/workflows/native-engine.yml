@@ -135,18 +135,25 @@ jobs:
           $ErrorActionPreference = "Stop"
           $out = Join-Path $env:GITHUB_WORKSPACE "build\Release"
           $licenses = Join-Path $out "licenses"
-          New-Item -ItemType Directory -Force -Path $licenses | Out-Null
+          $msr = Join-Path $out "msr"
+          New-Item -ItemType Directory -Force -Path $licenses, $msr | Out-Null
           Copy-Item -LiteralPath "README.md" -Destination $out
           Copy-Item -LiteralPath "LICENSES\XMRIG-GPL-3.0.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\RXMINER-MIT.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\NYXRX-MIT.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\XMR-MINER-GPL-3.0.txt" -Destination $licenses
           Copy-Item -LiteralPath "engine\src\randomx\upstream\LICENSE" -Destination (Join-Path $licenses "RANDOMX-BSD-3-CLAUSE.txt")
+          Copy-Item -LiteralPath "engine\msr\PawnIO-COPYING" -Destination (Join-Path $msr "COPYING")
           git archive --format=zip "--output=$(Join-Path $out 'unique-rx-source.zip')" HEAD
           if ($LASTEXITCODE -ne 0) { throw "Unable to package corresponding source revision." }
           git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $out "SOURCE-COMMIT.txt") -Encoding ascii
+          $checksums = @(
+            (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $out "unique-rx.exe")).Hash.ToLower() + "  unique-rx.exe"
+            (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $out "unique-rx-source.zip")).Hash.ToLower() + "  unique-rx-source.zip"
+          )
+          $checksums | Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ascii
 
-      - name: Upload Windows miner executable and runtime
+      - name: Upload Windows miner and corresponding source package
         uses: actions/upload-artifact@v4
         with:
           name: unique-rx-windows-x64
@@ -154,4 +161,10 @@ jobs:
             build/Release/unique-rx.exe
             build/Release/libssl*.dll
             build/Release/libcrypto*.dll
+            build/Release/README.md
+            build/Release/licenses/**
+            build/Release/msr/COPYING
+            build/Release/unique-rx-source.zip
+            build/Release/SOURCE-COMMIT.txt
+            build/Release/SHA256SUMS.txt
           if-no-files-found: error
