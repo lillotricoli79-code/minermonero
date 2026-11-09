@@ -70,6 +70,7 @@ type Status = {
     features: { aes: boolean; ssse3: boolean; avx2: boolean; vaes: boolean; bmi2: boolean };
   } | null;
   msr_active: boolean | null;
+  workers: WorkerStatus[];
   system: { cpu_percent: number | null; process_cpu_percent: number | null; cpu_frequency_mhz: number | null; memory_used_bytes: number | null; process_memory_bytes: number | null; temperature_c: number | null; package_power_watts: number | null; on_battery: boolean | null } | null;
   full_memory: boolean | null;
   pool: string | null;
@@ -92,6 +93,7 @@ type MinerConfig = {
 };
 type ChartPoint = { at: number; hashrate: number | null; hashrate60: number | null; hashrate15m: number | null };
 type SystemChartPoint = { at: number; system: number; miner: number | null };
+type WorkerStatus = { id: number; hashes: number; hashrate_hps: number; active: boolean };
 type LogItem = { id: number; time: number; message: string; engine?: string };
 
 const emptyStatus: Status = {
@@ -108,6 +110,7 @@ const emptyStatus: Status = {
   cpu: null,
   msr_active: null,
   system: null,
+  workers: [],
   full_memory: null,
   pool: null,
   connected: null,
@@ -620,6 +623,32 @@ function App() {
                 <div className="chart-foot">
                   <span>Campioni CPU forniti dal sistema operativo · nessun valore simulato</span>
                   <span>{systemHistory.length} PUNTI</span>
+                </div>
+              </section>
+              <section className="chart-section">
+                <div className="section-heading">
+                  <div>
+                    <div className="eyebrow">NYXRX · METRICHE PER THREAD</div>
+                    <h2>Worker RandomX</h2>
+                  </div>
+                  <div className="chart-legend">
+                    {status.workers?.filter((worker) => worker.active).length ?? 0} ATTIVI
+                  </div>
+                </div>
+                <div className="worker-list">
+                  {status.workers?.length ? status.workers.map((worker) => (
+                    <DataRow
+                      key={worker.id}
+                      icon={<Cpu size={15} />}
+                      label={\`Worker #\${worker.id + 1} · \${worker.active ? "attivo" : "fermo"}\`}
+                      value={\`\${formatHashrate(worker.hashrate_hps)} · \${formatCount(worker.hashes)} hash\`}
+                    />
+                  )) : (
+                    <div className="chart-empty">
+                      <strong>Worker in attesa</strong>
+                      <span>Le metriche compaiono quando il motore avvia i thread di hashing.</span>
+                    </div>
+                  )}
                 </div>
               </section>
               <section className="lower-grid">
