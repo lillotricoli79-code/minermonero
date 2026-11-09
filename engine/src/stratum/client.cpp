@@ -681,6 +681,7 @@ int run_miner(const std::filesystem::path& config_path,
                     std::deque<double> shell_rate_history;
                     auto previous_sample = Clock::now();
                     double shell_hashrate = 0.0;
+                    auto last_command_at = Clock::time_point::min();
                     const auto average_rate = [&](std::size_t window) {
                         const auto count = std::min(window, shell_rate_history.size());
                         if (count == 0) return 0.0;
@@ -1089,7 +1090,11 @@ int run_miner(const std::filesystem::path& config_path,
                                 shell_rate_history.push_back(shell_hashrate);
                                 if (shell_rate_history.size() > 900) shell_rate_history.pop_front();
                             }
-                            if (command_line.empty()) render_operator_screen();
+                            if (command_line.empty() &&
+                                (last_command_at == Clock::time_point::min() ||
+                                 now - last_command_at >= std::chrono::seconds(2))) {
+                                render_operator_screen();
+                            }
                             previous_hashes = hashes;
                             previous_sample = now;
                         }
@@ -1124,7 +1129,10 @@ int run_miner(const std::filesystem::path& config_path,
                         if (count <= 0) break;
 #endif
                         if (character == '\r' || character == '\n') {
-                            if (!command_line.empty()) process_command(command_line);
+                            if (!command_line.empty()) {
+                                process_command(command_line);
+                                last_command_at = Clock::now();
+                            }
                             command_line.clear();
                         } else if (character == '\b' || character == 127) {
                             if (!command_line.empty()) command_line.pop_back();
