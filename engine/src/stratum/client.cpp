@@ -353,26 +353,26 @@ int run_miner(const std::filesystem::path& config_path,
                             std::string setting;
                             std::string setting_value;
                             if (!(input >> setting >> setting_value)) {
-                                std::cout << "Uso: set prefetch-mode N | set huge-pages on|off | set randomx.mode fast|light\\n";
+                                std::cout << "Uso: set prefetch-mode N | set huge-pages on|off | set randomx.mode fast|light\n";
                             } else if (setting == "prefetch-mode") {
                                 try {
                                     std::size_t used = 0;
                                     const int mode = std::stoi(setting_value, &used, 10);
                                     if (used != setting_value.size() || mode < 0 || mode > 3) {
-                                        std::cout << "prefetch-mode deve essere 0, 1, 2 o 3\\n";
+                                        std::cout << "prefetch-mode deve essere 0, 1, 2 o 3\n";
                                     } else {
                                         rxm_set_prefetch_mode(mode);
                                         runtime_prefetch_mode->store(mode, std::memory_order_release);
                                         logging::info("cpu", "runtime prefetch mode changed to " + std::to_string(mode));
-                                        std::cout << "Prefetch mode applicato: " << mode << '\\n';
+                                        std::cout << "Prefetch mode applicato: " << mode << '\n';
                                     }
                                 } catch (...) {
-                                    std::cout << "Valore prefetch-mode non valido\\n";
+                                    std::cout << "Valore prefetch-mode non valido\n";
                                 }
                             } else if (setting == "huge-pages" || setting == "randomx.mode") {
-                                std::cout << setting << " è un'impostazione di inizializzazione RandomX: modifica config.json e riavvia il miner per applicarla.\\n";
+                                std::cout << setting << " è un'impostazione di inizializzazione RandomX: modifica config.json e riavvia il miner per applicarla.\n";
                             } else {
-                                std::cout << "Impostazione non supportata dalla shell: " << setting << '\\n';
+                                std::cout << "Impostazione non supportata dalla shell: " << setting << '\n';
                             }
                         } else if (command == "status") {
                             const auto hashes = state.hashes.load(std::memory_order_relaxed);
@@ -394,7 +394,7 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << "Workers configurati: " << desired_threads->load()
                                       << " | hash totali: "
                                       << state.hashes.load(std::memory_order_relaxed)
-                                      << " | dettaglio per-worker disponibile nel log/API\\n";
+                                      << " | dettaglio per-worker disponibile nel log/API\n";
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
                         } else if (command == "logs") {
@@ -415,7 +415,7 @@ int run_miner(const std::filesystem::path& config_path,
                                           << " | TLS " << (endpoint.tls ? "on" : "off")
                                           << " | keepalive " << (endpoint.keepalive ? "on" : "off")
                                           << " | login " << (endpoint.wallet.empty() ? "non configurato" : "configurato")
-                                          << '\\n';
+                                          << '\n';
                             }
                         } else if (command == "memory") {
                             std::cout << "RandomX mode: " << (full_memory ? "fast/full dataset" : "light/cache")
@@ -423,7 +423,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << " | JIT huge pages: " << (jit_huge_pages ? "si" : "no")
                                       << " | prefetch mode: " << runtime_prefetch_mode->load(std::memory_order_relaxed)
                                       << " | MSR: " << msr_status
-                                      << "\\nNota: richiesta non equivale ad allocazione riuscita; controllare i log.\\n";
+                                      << "\nNota: richiesta non equivale ad allocazione riuscita; controllare i log.\n";
                         } else if (command == "config") {
                             auto safe = config;
                             if (safe.contains("pools") && safe["pools"].is_array()) {
@@ -433,7 +433,7 @@ int run_miner(const std::filesystem::path& config_path,
                                     if (endpoint.contains("pass")) endpoint["pass"] = "<redacted>";
                                 }
                             }
-                            std::cout << safe.dump(2) << '\\n';
+                            std::cout << safe.dump(2) << '\n';
                         } else if (command == "quit") {
                             std::cout << "Arresto ordinato richiesto...\n";
                             state.stop.store(true, std::memory_order_release);
