@@ -52,7 +52,23 @@ std::shared_ptr<const MiningWork> MiningState::current_work() {
 
 void MiningState::set_work(std::shared_ptr<const MiningWork> next) {
     std::lock_guard lock(work_mutex);
+    if (next && (!work || work->generation != next->generation)) {
+        std::lock_guard nonce_lock(nonce_mutex);
+        nonce_cursor.store(0, std::memory_order_relaxed);
+        nonce_generation.store(next->generation, std::memory_order_release);
+    }
     work = std::move(next);
+}
+
+std::uint64_t MiningState::next_nonce_offset(std::uint64_t generation) {
+    if (nonce_generation.load(std::memory_order_acquire) != generation) {
+        std::lock_guard lock(nonce_mutex);
+        if (nonce_generation.load(std::memory_order_relaxed) != generation) {
+            nonce_cursor.store(0, std::memory_order_relaxed);
+            nonce_generation.store(generation, std::memory_order_release);
+        }
+    }
+    return nonce_cursor.fetch_add(1, std::memory_order_relaxed);
 }
 
 void MiningState::report_worker_error(const std::string& error) {
