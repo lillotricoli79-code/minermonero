@@ -56,6 +56,21 @@ int main() {
                 top_ten.top_difficulties.back().difficulty == 3.0,
                 "best-share telemetry does not retain the ten highest difficulties");
 
+    MiningState nonce_state;
+    auto first_work = std::make_shared<unique_rx::core::MiningWork>();
+    first_work->generation = 41;
+    nonce_state.set_work(first_work);
+    ok &= check(nonce_state.next_nonce_offset(41) == 0 &&
+                nonce_state.next_nonce_offset(41) == 1 &&
+                nonce_state.next_nonce_offset(41) == 2,
+                "shared nonce allocator did not issue unique sequential offsets");
+    auto second_work = std::make_shared<unique_rx::core::MiningWork>();
+    second_work->generation = 42;
+    nonce_state.set_work(second_work);
+    ok &= check(nonce_state.next_nonce_offset(41) == UINT64_MAX &&
+                nonce_state.next_nonce_offset(42) == 0,
+                "nonce allocator did not reset safely for a new job generation");
+
     MiningState state;
     std::atomic<bool> worker_stop{false};
     unique_rx::core::hash_worker(state, 0, 0, 0, worker_stop);
