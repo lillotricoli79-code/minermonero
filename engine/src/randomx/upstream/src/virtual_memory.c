@@ -50,9 +50,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
-/* RxMiner: guarantee 2 MiB alignment so MADV_HUGEPAGE can back the RandomX
+/* RxMiner MIT adaptation, commit 5fe52dde2650c623fd0472804152a94711889dce:
+ * guarantee 2 MiB alignment so MADV_HUGEPAGE can back the RandomX
  * dataset, cache and per-thread scratchpad with transparent huge pages even
- * when no privileged hugetlb pool is configured. */
+ * when no privileged hugetlb pool is configured. See LICENSES/RXMINER-MIT.txt. */
 
 #define PAGE_READONLY PROT_READ
 #define PAGE_READWRITE (PROT_READ | PROT_WRITE)
