@@ -32,6 +32,20 @@ int main() {
     ok &= check(unique_rx::core::hash_meets_target(target_hash, 3),
                 "RandomX target comparison rejected a lower little-endian hash");
 
+    MiningState metrics_state;
+    metrics_state.record_accepted_share(250.0, 100.0);
+    metrics_state.record_accepted_share(200.0, 100.0);
+    const auto best = metrics_state.best_snapshot();
+    ok &= check(best.estimated_hashes == 200.0,
+                "accepted-share estimated work does not accumulate pool target difficulty");
+    ok &= check(best.top_difficulties.size() == 2 &&
+                best.top_difficulties[0].difficulty == 250.0 &&
+                best.top_difficulties[1].difficulty == 200.0,
+                "best-share telemetry does not retain descending actual difficulty");
+    ok &= check(!best.top_difficulties.empty() &&
+                best.top_difficulties[0].at_unix_seconds > 0,
+                "best-share telemetry is missing its Unix timestamp");
+
     MiningState state;
     unique_rx::core::hash_worker(state, 0, 0, 0);
     ok &= check(state.stop.load(), "zero worker count did not stop the miner");
