@@ -61,15 +61,22 @@ std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
             }
         }
     } else {
+        // Normal mining has no global hash ceiling. Keep the hot path entirely
+        // worker-local: reading state.hashes here made every worker contend on
+        // the same cache line once per hash even though counters are published
+        // in batches. The dashboard can tolerate this bounded publication lag.
+        count = 0;
+    }
+
+    ++local_worker_hashes;
+    if (maximum_hashes == 0) {
         ++unpublished_hashes;
         if (unpublished_hashes >= 64) {
             state.hashes.fetch_add(unpublished_hashes, std::memory_order_relaxed);
             unpublished_hashes = 0;
         }
-        count = state.hashes.load(std::memory_order_relaxed) + unpublished_hashes;
+        count = local_worker_hashes;
     }
-
-    ++local_worker_hashes;
     if (worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id] &&
         ((local_worker_hashes & 0x3fU) == 0 ||
          (maximum_hashes != 0 && count >= maximum_hashes))) {
