@@ -279,9 +279,9 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         character = static_cast<char>(key);
                         if (key == 13) {
-                            std::cout << '\\n' << std::flush;
+                            std::cout << '\n' << std::flush;
                         } else if (key == 8) {
-                            std::cout << "\\b \\b" << std::flush;
+                            std::cout << "\b \b" << std::flush;
                         } else if (key >= 32 && key <= 126) {
                             std::cout << character << std::flush;
                         }
