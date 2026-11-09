@@ -45,7 +45,7 @@ void print_usage(const char* executable) {
     std::cout << "Usage: " << executable
               << " --benchmark|--benchmark-full|--benchmark-interpreter|--benchmark-full-interpreter [seconds] [lanes:1..4] [seed] [input]\n";
     std::cout << "       " << executable
-              << " --mine [config.json] [max-hashes:0=unlimited]\n";
+              << " --mine [config.json] [--threads N] [--max-hashes N]\n";
     std::cout << "       " << executable
               << " --benchmark [seconds] [lanes:1..4] [seed] [input] [prefetch-mode:0..3] [jit-huge-pages:0|1]\n";
 }
