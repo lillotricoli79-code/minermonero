@@ -252,6 +252,28 @@ def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def read_native_status_snapshot(max_age_seconds: float = 8.0) -> dict[str, Any] | None:
+    """Read fresh telemetry published by the native engine, including BAT-launched miners."""
+    snapshot_path = ROOT / "unique-rx-status.json"
+    try:
+        stat = snapshot_path.stat()
+        if time.time() - stat.st_mtime > max_age_seconds:
+            return None
+        payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if not isinstance(payload.get("hashrate"), dict) or not isinstance(payload.get("shares"), dict):
+        return None
+    timestamp_ms = payload.get("timestamp_unix_ms")
+    if isinstance(timestamp_ms, (int, float)) and not isinstance(timestamp_ms, bool):
+        age = time.time() - (float(timestamp_ms) / 1000.0)
+        if age < -5.0 or age > max_age_seconds:
+            return None
+    return payload
+
+
 def is_loopback(host: str) -> bool:
     host = host.strip("[]").lower()
     if host == "localhost":
@@ -432,6 +454,9 @@ class MinerController:
         if managed and engine_kind == "unique-rx":
             if native_status is not None:
                 return {**native_status, "managed": True}
+            snapshot = read_native_status_snapshot()
+            if snapshot is not None:
+                return {**snapshot, "managed": True}
             return {
                 "state": "AVVIO",
                 "managed": True,
@@ -451,6 +476,14 @@ class MinerController:
                 "cpu": None,
                 "pool": None,
                 "connected": False,
+            }
+        snapshot = read_native_status_snapshot()
+        if snapshot is not None:
+            return {
+                **snapshot,
+                "state": "ATTIVO" if snapshot.get("connected") else "RICONNESSIONE",
+                "managed": False,
+                "error": None,
             }
         try:
             summary = self.read_summary(load_config())
@@ -512,6 +545,11 @@ class MinerController:
         executable = Path(executable_path).resolve()
         if self.is_running():
             raise HTTPException(status_code=409, detail="XMRig è già gestito da questa dashboard")
+        if read_native_status_snapshot() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="UNIQUE RX è già attivo ed è stato avviato esternamente (ad esempio dal BAT principale).",
+            )
         try:
             self.read_summary(config)
             raise HTTPException(status_code=409, detail="Un miner risponde già all'API locale")
