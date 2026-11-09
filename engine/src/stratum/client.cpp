@@ -155,14 +155,18 @@ int run_miner(const std::filesystem::path& config_path,
             logger_config.colored_output = config["colors"].get<bool>();
         }
         logging::configure(logger_config);
-        if (config.value("background", false))
+        if (config.contains("background") && !config["background"].is_null() &&
+            config["background"].get<bool>())
             logging::warning("config", "background mode is not supported; keep the miner attached to its console/backend");
-        if (config.value("autosave", false))
+        if (config.contains("autosave") && !config["autosave"].is_null() &&
+            config["autosave"].get<bool>())
             logging::warning("config", "autosave is recognized but runtime changes are not written back to config.json automatically");
-        if (config.value("pause-on-battery", false))
+        if (config.contains("pause-on-battery") && !config["pause-on-battery"].is_null() &&
+            config["pause-on-battery"].get<bool>())
             logging::warning("config", "pause-on-battery is not implemented by the native engine; stop the miner manually when required");
         if (config.contains("http") && config["http"].is_object() &&
-            config["http"].value("enabled", false))
+            config["http"].contains("enabled") && !config["http"]["enabled"].is_null() &&
+            config["http"]["enabled"].get<bool>())
             logging::warning("config", "XMRig http API settings are recognized but the integrated dashboard/backend owns the local API; no separate XMRig HTTP listener is started");
         if (config.contains("donate-level"))
             logging::warning("config", "donate-level is not applied: UNIQUE RX does not redirect mining time to a developer pool");
@@ -191,8 +195,9 @@ int run_miner(const std::filesystem::path& config_path,
             }
         }
         const auto pools = parse_pool_configs(config);
-        std::string user_agent = config.value("user-agent",
-            std::string("UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)"));
+        std::string user_agent = config.contains("user-agent") && !config["user-agent"].is_null()
+            ? config["user-agent"].get<std::string>()
+            : std::string("UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)");
         if (user_agent.empty() || user_agent.size() > 256 ||
             user_agent.find_first_of("\r\n") != std::string::npos)
             throw std::runtime_error("user-agent must contain 1 to 256 characters without newlines");
@@ -280,10 +285,12 @@ int run_miner(const std::filesystem::path& config_path,
                                              std::memory_order_relaxed);
             }
         }
-        if (randomx_config.value("rdmsr", true) == false) {
+        if (randomx_config.contains("rdmsr") && !randomx_config["rdmsr"].is_null() &&
+            !randomx_config["rdmsr"].get<bool>()) {
             logging::info("config", "randomx.rdmsr=false accepted; the native engine does not read MSRs for mining");
         }
-        if (randomx_config.value("cache_qos", false)) {
+        if (randomx_config.contains("cache_qos") && !randomx_config["cache_qos"].is_null() &&
+            randomx_config["cache_qos"].get<bool>()) {
             logging::warning("config", "randomx.cache_qos is recognized but cache QoS allocation is not implemented");
         }
         if (cpu_config.contains("asm") && !cpu_config["asm"].is_null()) {
