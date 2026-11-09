@@ -547,7 +547,7 @@ function App() {
                           }
                           formatter={(value, name) => [
                             formatHashrate(Number(value)),
-                            name === "hashrate60" ? "Media 60s" : name === "hashrate15m" ? "Media 15m" : "Media 10s",
+                            name === "Media 60s" ? "Media 60s" : name === "Media 15m" ? "Media 15m" : "Media 10s",
                           ]}
                           contentStyle={{
                             border: "1px solid #dfe8e3",
