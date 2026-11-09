@@ -90,6 +90,7 @@ type MinerConfig = {
   password_set: boolean;
   password: string;
   threads: number;
+  priority: number;
   huge_pages: boolean;
   jit_huge_pages: boolean;
   prefetch_mode: number;
@@ -949,6 +950,22 @@ function App() {
                         }
                       />
                       <small>0 usa la configurazione automatica del miner.</small>
+                    </label>
+                    <label className="field">
+                      <span>Priorità thread CPU</span>
+                      <select
+                        value={config.priority}
+                        onChange={(event) => updateConfig("priority", Number(event.target.value))}
+                      >
+                        <option value={-1}>Sistema · non modificare</option>
+                        <option value={0}>Idle</option>
+                        <option value={1}>Bassa</option>
+                        <option value={2}>Normale · consigliata</option>
+                        <option value={3}>Alta</option>
+                        <option value={4}>Molto alta</option>
+                        <option value={5}>Massima · può ridurre la reattività del PC</option>
+                      </select>
+                      <small>Valori compatibili con XMRig. Le priorità elevate possono richiedere privilegi amministrativi.</small>
                     </label>
                     <label className="toggle-field">
                       <span>
