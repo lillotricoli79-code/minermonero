@@ -25,7 +25,7 @@ target_link_libraries(unique-rx PRIVATE randomx Threads::Threads OpenSSL::SSL
   OpenSSL::Crypto nlohmann_json::nlohmann_json)
 
 if(WIN32)
-  target_link_libraries(unique-rx PRIVATE ws2_32 advapi32 psapi)
+  target_link_libraries(unique-rx PRIVATE ws2_32 advapi32 psapi powrprof)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/msr/IntelMSR.bin")
     add_custom_command(TARGET unique-rx POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:unique-rx>/msr"
@@ -102,7 +102,7 @@ if(BUILD_TESTING)
   target_link_libraries(unique-rx-stratum-tests PRIVATE randomx Threads::Threads
     OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
   if(WIN32)
-    target_link_libraries(unique-rx-stratum-tests PRIVATE ws2_32 advapi32 psapi)
+    target_link_libraries(unique-rx-stratum-tests PRIVATE ws2_32 advapi32 psapi powrprof)
   endif()
   add_test(NAME unique-rx-stratum-job-validation COMMAND unique-rx-stratum-tests)
 
@@ -116,7 +116,7 @@ if(BUILD_TESTING)
   target_link_libraries(unique-rx-stratum-integration-tests PRIVATE randomx
     Threads::Threads OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
   if(WIN32)
-    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32 advapi32 psapi)
+    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32 advapi32 psapi powrprof)
   endif()
   add_test(NAME unique-rx-stratum-loopback COMMAND unique-rx-stratum-integration-tests)
   set_tests_properties(unique-rx-stratum-loopback PROPERTIES TIMEOUT 45)
