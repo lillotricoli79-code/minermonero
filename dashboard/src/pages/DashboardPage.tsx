@@ -989,7 +989,7 @@ function App() {
                     <div className="rx-card-title">POOL <span>STRATUM</span></div>
                     <div className="rx-detail-row"><span>STATE</span><strong className={status.connected ? "rx-good" : "rx-warn"}>{status.connected ? "CONNECTED" : status.state}</strong></div>
                     <div className="rx-detail-row"><span>ENDPOINT</span><strong>{status.pool ?? config?.pool ?? "—"}</strong></div>
-                    <div className="rx-detail-row"><span>SECURITY</span><strong>{config ? (config.tls ? "TLS ENABLED" : "TLS DISABLED") : "—"}</strong></div>
+                    <div className="rx-detail-row"><span>TLS CONFIG</span><strong>{config ? (config.tls ? "ENABLED" : "DISABLED") : "—"}</strong></div>
                     <div className="rx-detail-row"><span>LATENCY</span><strong>{status.pool_latency_ms != null ? `${status.pool_latency_ms} ms` : "—"}</strong></div>
                     <div className="rx-detail-row"><span>RETRIES</span><strong>{formatCount(status.reconnects)}</strong></div>
                   </article>
@@ -1058,7 +1058,7 @@ function App() {
                 <article className="rx-card rx-terminal-card">
                   <div className="rx-card-title">OPERATOR TERMINAL <span>COMANDI LIVE · CONFIG IN SOLA LETTURA</span></div>
                   <div className="rx-command-shortcuts">
-                    {["help", "status", "diagnose", "workers", "shares", "graph", "pool", "threads auto", `threads ${Math.max(1, (status.threads ?? 1) - 1)}`, `threads ${Math.min(256, (status.threads ?? 1) + 1)}`, "logs 20"].map((command) => (
+                    {["help", "status", "cpu", "diagnose", "best", "workers", "shares", "graph", "pool", "threads auto", `threads ${Math.max(1, (status.threads ?? 1) - 1)}`, `threads ${Math.min(256, (status.threads ?? 1) + 1)}`, "logs 20"].map((command) => (
                       <button type="button" key={command} onClick={() => setShellCommand(command)}>{command}</button>
                     ))}
                   </div>
