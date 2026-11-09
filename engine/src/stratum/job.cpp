@@ -244,10 +244,15 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
             const auto& keepalive = pool["keepalive"];
             if (keepalive.is_boolean()) {
                 entry.keepalive = keepalive.get<bool>();
+                entry.keepalive_seconds = entry.keepalive ? 60U : 0U;
             } else if (keepalive.is_number_integer()) {
-                entry.keepalive = keepalive.get<std::int64_t>() != 0;
+                const auto seconds = keepalive.get<std::int64_t>();
+                if (seconds < 0 || seconds > 86400)
+                    throw std::invalid_argument("pool.keepalive seconds must be between 0 and 86400");
+                entry.keepalive_seconds = static_cast<std::uint32_t>(seconds);
+                entry.keepalive = entry.keepalive_seconds > 0;
             } else {
-                throw std::invalid_argument("pool.keepalive must be boolean or integer");
+                throw std::invalid_argument("pool.keepalive must be boolean or integer seconds");
             }
         }
         std::string normalized_host = entry.host;
