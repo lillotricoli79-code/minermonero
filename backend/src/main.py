@@ -825,6 +825,8 @@ class MinerController:
                 "start                Avvia il miner",
                 "stop                 Arresto controllato",
                 "diagnose             Diagnostica CPU, memoria, MSR e stato JIT esposto",
+                "cpu                  Riepilogo CPU e istruzioni supportate",
+                "best                 Migliori difficolta ed effort della sessione",
                 "auto                 Alias di threads auto",
                 "status               Stato miner, pool e CPU",
                 "threads              Thread attivi",
@@ -853,7 +855,7 @@ class MinerController:
             )
             return {"command": command, "restart": False, "lines": [message]}
 
-        if verb == "diagnose" and len(parts) == 1:
+        if verb in {"diagnose", "cpu"} and len(parts) == 1:
             cpu = status.get("cpu") or {}
             features = cpu.get("features") or {}
             jit = status.get("jit_status") or status.get("randomx_jit")
@@ -976,6 +978,41 @@ class MinerController:
                     ("Expired", "expired"), ("Perse", "dropped"),
                 )
             ]}
+
+        if verb == "best" and len(parts) == 1:
+            best = status.get("best") or {}
+            estimated_hashes = safe_number(best.get("estimated_hashes"))
+            top = best.get("top_difficulties")
+            if not isinstance(top, list) or not top:
+                return {"command": command, "restart": False, "lines": [
+                    "Nessuna share accettata nella sessione; migliori difficolta non disponibili."
+                ]}
+            lines = [
+                "Hash stimati: " + (
+                    f"{estimated_hashes:,.0f}" if estimated_hashes is not None else "n/d"
+                ),
+                " # | DIFFICULTY | EFFORT % | AGE",
+            ]
+            for index, item in enumerate(top[:10], start=1):
+                if not isinstance(item, dict):
+                    continue
+                difficulty = safe_number(item.get("difficulty"))
+                timestamp = safe_number(item.get("at_unix_seconds"))
+                effort = (
+                    estimated_hashes / difficulty * 100.0
+                    if estimated_hashes is not None and difficulty is not None and difficulty > 0
+                    else None
+                )
+                age = max(0, int(time.time() - timestamp)) if timestamp is not None else None
+                lines.append(
+                    f"{index:2} | "
+                    + (f"{difficulty:10,.0f}" if difficulty is not None else "         n/d")
+                    + " | "
+                    + (f"{effort:8.2f}" if effort is not None else "     n/d")
+                    + " | "
+                    + (f"{age}s ago" if age is not None else "n/d")
+                )
+            return {"command": command, "restart": False, "lines": lines}
 
         if verb == "pool" and len(parts) == 1:
             return {"command": command, "restart": False, "lines": [
