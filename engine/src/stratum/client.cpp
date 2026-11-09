@@ -1057,8 +1057,8 @@ int run_miner(const std::filesystem::path& config_path,
                 // Per-share transport chatter is intentionally omitted from the
                 // operator shell; accepted/rejected counters remain visible.
             } else if (event == "SHARE_ACCEPTED") {
-                logging::info("cpu", "share accepted (response " +
-                    std::to_string(details.value("response_id", std::uint64_t{0})) + ")");
+                // Accepted shares are counted in the periodic summary; do not
+                // flood the operator console with one line per valid share.
             } else if (event == "SHARE_REJECTED") {
                 const auto response = details.value("response", nlohmann::json::object());
                 const auto reason = response.contains("error") && !response["error"].is_null()
