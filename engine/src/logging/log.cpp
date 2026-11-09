@@ -216,7 +216,8 @@ void write_record(State& s, const Entry& entry, const Config& config) {
         s.file.clear();
         return;
     }
-    if (entry.level == "WARN" || entry.level == "ERROR" || entry.level == "FATAL")
+    if (config.flush_on_warning &&
+        (entry.level == "WARN" || entry.level == "ERROR" || entry.level == "FATAL"))
         s.file.flush();
 }
 
@@ -235,19 +236,31 @@ void writer_loop(State* state_ptr) {
             s.space.notify_all();
         }
 
-        if (event.kind == EventKind::Record) {
-            write_record(s, event.entry, config);
-        } else if (event.kind == EventKind::SetFile) {
-            open_file(s, event.path);
-            if (event.completion) {
-                const bool ok = event.path.empty() || s.file.is_open();
-                event.completion->set_value(ok);
+        try {
+            if (event.kind == EventKind::Record) {
+                write_record(s, event.entry, config);
+            } else if (event.kind == EventKind::SetFile) {
+                open_file(s, event.path);
+                if (event.completion) {
+                    const bool ok = event.path.empty() || s.file.is_open();
+                    event.completion->set_value(ok);
+                }
+            } else if (event.kind == EventKind::Flush) {
+                if (s.file.is_open()) s.file.flush();
+                std::cout.flush();
+                if (event.completion)
+                    event.completion->set_value(!s.file.is_open() || static_cast<bool>(s.file));
             }
-        } else if (event.kind == EventKind::Flush) {
-            if (s.file.is_open()) s.file.flush();
-            std::cout.flush();
-            if (event.completion)
-                event.completion->set_value(!s.file.is_open() || static_cast<bool>(s.file));
+        } catch (const std::exception& error) {
+            note_io_error(s, error.what());
+            if (event.completion) {
+                try { event.completion->set_value(false); } catch (...) {}
+            }
+        } catch (...) {
+            note_io_error(s, "unknown exception in asynchronous writer");
+            if (event.completion) {
+                try { event.completion->set_value(false); } catch (...) {}
+            }
         }
     }
     if (s.file.is_open()) {
@@ -277,6 +290,10 @@ void start_locked(State& s) {
 
 void submit(Level level, std::string_view category, std::string_view message) {
     State& s = state();
+    {
+        std::lock_guard lock(s.mutex);
+        if (level == Level::Off || level < s.config.minimum_level) return;
+    }
     Entry entry{timestamp_now(), level_name(level),
                 std::string(category), std::string(message)};
     Config config;
@@ -292,7 +309,7 @@ void submit(Level level, std::string_view category, std::string_view message) {
                 rotate_if_needed(s, config);
                 if (!s.file.is_open()) return;
                 s.file << format_entry(entry) << '\n';
-                if (level >= Level::Warning) s.file.flush();
+                if (config.flush_on_warning && level >= Level::Warning) s.file.flush();
                 if (!s.file) {
                     s.errors.fetch_add(1, std::memory_order_relaxed);
                     s.file.clear();
