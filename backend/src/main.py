@@ -438,6 +438,8 @@ class MinerController:
         self.logs: deque[dict[str, Any]] = deque(maxlen=400)
         self.log_sequence = 0
         self.shell_log = ShellLog(ROOT / "logs" / "shell" / "shell.log")
+        self._native_log_seen: deque[str] = deque()
+        self._native_log_seen_set: set[str] = set()
 
     def _log(self, message: str, engine: str | None = None) -> None:
         # Keep the original miner shell line intact and identify its source.
@@ -750,7 +752,40 @@ class MinerController:
             process.wait(timeout=5)
         self._log("Arresto miner completato.")
 
+    def _ingest_native_log_file(self) -> None:
+        # When the miner is started directly by the main BAT, its C++ log file
+        # is the authoritative event stream; the backend tails it for the UI.
+        if self.is_running():
+            return
+        path = ROOT / "unique-rx-stratum.log"
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[-600:]
+        except OSError:
+            return
+        for line in lines:
+            if not line or line in self._native_log_seen_set:
+                continue
+            if len(self._native_log_seen) >= 1200:
+                expired = self._native_log_seen.popleft()
+                self._native_log_seen_set.discard(expired)
+            self._native_log_seen.append(line)
+            self._native_log_seen_set.add(line)
+            match = re.match(
+                r"^\\[(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\]\\s+(\\w+)\\s+(\\w+)\\s+(.*)$",
+                line,
+            )
+            event_time = time.time()
+            message = line
+            if match:
+                try:
+                    event_time = time.mktime(time.strptime(match.group(1), "%Y-%m-%d %H:%M:%S"))
+                except ValueError:
+                    pass
+                message = f"{match.group(2)} {match.group(3)} {match.group(4)}"
+            self._log(message, "unique-rx")
+
     def recent_logs(self, after: int = 0) -> list[dict[str, Any]]:
+        self._ingest_native_log_file()
         with self.log_lock:
             return [entry for entry in self.logs if entry["id"] > after]
 
