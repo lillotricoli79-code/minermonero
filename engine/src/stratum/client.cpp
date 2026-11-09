@@ -715,7 +715,7 @@ std::uint64_t hash_value = 0;
                                  {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
                     {"uptime_seconds", reconnect_uptime},
                     {"algorithm", "rx/0"}, {"job_id", nullptr}, {"height", nullptr}, {"job_difficulty", nullptr},
-                    {"threads", pool_threads}, {"cpu", cpu_summary},
+                    {"threads", pool_threads}, {"cpu_priority", state.cpu_priority}, {"cpu", cpu_summary},
                     {"workers", collect_worker_status()},
                     {"best", collect_best_status()},
                     {"msr_active", msr.active()}, {"msr_status", msr_status}, {"full_memory", full_memory},
