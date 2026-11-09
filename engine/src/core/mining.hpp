@@ -60,6 +60,9 @@ struct MiningState {
     std::atomic<std::int64_t> last_share_latency_ms{-1};
     std::atomic<std::uint64_t> reconnects{0};
     std::atomic<bool> large_pages_active{false};
+    std::atomic<std::uint64_t> nonce_generation{0};
+    std::atomic<std::uint64_t> nonce_cursor{0};
+    std::mutex nonce_mutex;
 
     mutable std::mutex best_mutex;
     BestResults best_results;
@@ -81,12 +84,14 @@ struct MiningState {
 
     std::shared_ptr<const MiningWork> current_work();
     void set_work(std::shared_ptr<const MiningWork> next);
+    std::uint64_t next_nonce_offset(std::uint64_t generation);
     void report_worker_error(const std::string& error);
 };
 
 bool hash_meets_target(const Hash& hash, std::uint64_t target) noexcept;
 
 void hash_worker(MiningState& state, std::uint32_t worker_id,
-                 std::uint32_t worker_count, std::uint64_t maximum_hashes);
+                 std::uint32_t worker_count, std::uint64_t maximum_hashes,
+                 std::atomic<bool>& worker_stop);
 
 } // namespace unique_rx::core
