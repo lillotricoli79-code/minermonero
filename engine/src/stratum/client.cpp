@@ -451,14 +451,14 @@ int run_miner(const std::filesystem::path& config_path,
                                     std::size_t used = 0;
                                     const auto requested = std::stoul(setting_value, &used, 10);
                                     if (used != setting_value.size() || requested == 0 || requested > 256) {
-                                        std::cout << "cpu.threads deve essere compreso tra 1 e 256\\n";
+                                        std::cout << "cpu.threads deve essere compreso tra 1 e 256\n";
                                     } else {
                                         desired_threads->store(static_cast<std::uint32_t>(requested),
                                                                 std::memory_order_release);
                                         logging::info("cpu", "runtime cpu.threads set to " + std::to_string(requested));
                                     }
                                 } catch (...) {
-                                    std::cout << "Valore cpu.threads non valido\\n";
+                                    std::cout << "Valore cpu.threads non valido\n";
                                 }
                             } else if (setting == "prefetch-mode" ||
                                        setting == "randomx.scratchpad_prefetch_mode") {
