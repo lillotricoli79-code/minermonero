@@ -103,8 +103,11 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         return;
     }
     std::uint64_t local_worker_hashes = 0;
+    auto* published_worker_counter =
+        worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id]
+            ? state.worker_hashes[worker_id].get() : nullptr;
     WorkerCounterPublisher counter_publisher{
-        state.worker_hashes[worker_id].get(), &local_worker_hashes};
+        published_worker_counter, &local_worker_hashes};
     const bool pinned = platform::pin_current_thread(worker_id);
     logging::info("cpu", "worker #" + std::to_string(worker_id) +
         (pinned ? " started; CPU affinity pinned" : " started; affinity unavailable"));
