@@ -300,7 +300,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [&state, desired_threads, automatic_threads, &cpu_summary, started](std::stop_token stop_token) {
+                [&state, desired_threads, automatic_threads, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, prefetch_mode, started](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     auto previous_sample = Clock::now();
@@ -317,6 +317,9 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  workers         hashrate e contatori per worker\n"
                                       << "  cpu             CPU, core, thread e feature rilevate\n"
                                       << "  logs [N]        ultimi N log (default 30, max 200)\n"
+                                      << "  pool            endpoint e opzioni pool (segreti nascosti)\n"
+                                      << "  memory          profilo RandomX, pagine e prefetch\n"
+                                      << "  config          configurazione XMRig (credenziali oscurate)\n"
                                       << "  threads N       imposta worker in tempo reale (1-256)\n"
                                       << "  threads auto    ripristina il numero automatico iniziale\n"
                                       << "  help            mostra questo aiuto\n"
@@ -375,6 +378,33 @@ int run_miner(const std::filesystem::path& config_path,
                                 std::cout << '[' << entry.timestamp << "] " << entry.level
                                           << ' ' << entry.category << ' ' << entry.message << '\n';
                             }
+                        } else if (command == "pool") {
+                            for (std::size_t index = 0; index < pools.size(); ++index) {
+                                const auto& endpoint = pools[index];
+                                std::cout << (index == 0 ? "Pool primario: " : "Pool failover: ")
+                                          << endpoint.host << ':' << endpoint.port
+                                          << " | TLS " << (endpoint.tls ? "on" : "off")
+                                          << " | keepalive " << (endpoint.keepalive ? "on" : "off")
+                                          << " | login " << (endpoint.wallet.empty() ? "non configurato" : "configurato")
+                                          << '\\n';
+                            }
+                        } else if (command == "memory") {
+                            std::cout << "RandomX mode: " << (full_memory ? "fast/full dataset" : "light/cache")
+                                      << " | huge pages richieste: " << (large_pages_requested ? "si" : "no")
+                                      << " | JIT huge pages: " << (jit_huge_pages ? "si" : "no")
+                                      << " | prefetch mode: " << prefetch_mode
+                                      << " | MSR: " << msr_status
+                                      << "\\nNota: richiesta non equivale ad allocazione riuscita; controllare i log.\\n";
+                        } else if (command == "config") {
+                            auto safe = config;
+                            if (safe.contains("pools") && safe["pools"].is_array()) {
+                                for (auto& endpoint : safe["pools"]) {
+                                    if (!endpoint.is_object()) continue;
+                                    if (endpoint.contains("user")) endpoint["user"] = "<redacted>";
+                                    if (endpoint.contains("pass")) endpoint["pass"] = "<redacted>";
+                                }
+                            }
+                            std::cout << safe.dump(2) << '\\n';
                         } else if (command == "quit") {
                             std::cout << "Arresto ordinato richiesto...\n";
                             state.stop.store(true, std::memory_order_release);
