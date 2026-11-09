@@ -61,6 +61,7 @@ void MiningState::set_work(std::shared_ptr<const MiningWork> next) {
         nonce_generation.store(next->generation, std::memory_order_release);
     }
     work = std::move(next);
+    work_revision.fetch_add(1, std::memory_order_release);
 }
 
 std::uint64_t MiningState::next_nonce_offset(std::uint64_t generation,
