@@ -496,6 +496,7 @@ class MinerController:
                 "error": None,
                 "hashrate": {"10s": None, "60s": None, "15m": None},
                 "shares": {
+                    "found": 0, "submitted": 0,
                     "accepted": 0, "rejected": 0, "total": 0,
                     "stale": 0, "pending": 0, "expired": 0, "dropped": 0,
                 },
@@ -534,6 +535,7 @@ class MinerController:
                 "error": str(exc) if managed else None,
                 "hashrate": {"10s": None, "60s": None, "15m": None},
                 "shares": {
+                    "found": None, "submitted": None,
                     "accepted": None, "rejected": None, "total": None,
                     "stale": None, "pending": None, "expired": None, "dropped": None,
                 },
@@ -827,7 +829,7 @@ class MinerController:
                 "threads N            Riavvio controllato con N worker (config invariato)",
                 "threads auto         Riavvio con selezione automatica del config",
                 "workers              Dettaglio worker reali, se disponibile",
-                "shares               Accepted / rejected / stale / pending",
+                "shares               Found / submitted / accepted / rejected / stale / pending / expired / lost",
                 "graph                Hashrate 10s / 60s / 15m",
                 "pool                 Pool e connessione",
                 "logs [N]             Ultime N righe (default 20)",
@@ -963,7 +965,15 @@ class MinerController:
 
         if verb == "shares" and len(parts) == 1:
             shares = status.get("shares") or {}
-            return {"command": command, "restart": False, "lines": [f"{key}: {shares.get(key) if shares.get(key) is not None else 'n/d'}" for key in ("accepted", "rejected", "stale", "pending")]}
+            return {"command": command, "restart": False, "lines": [
+                f"{label}: {shares.get(key) if shares.get(key) is not None else 'n/d'}"
+                for label, key in (
+                    ("Trovate", "found"), ("Inviate", "submitted"),
+                    ("Accettate", "accepted"), ("Rifiutate", "rejected"),
+                    ("Stale", "stale"), ("Pending", "pending"),
+                    ("Expired", "expired"), ("Perse", "dropped"),
+                )
+            ]}
 
         if verb == "pool" and len(parts) == 1:
             return {"command": command, "restart": False, "lines": [
