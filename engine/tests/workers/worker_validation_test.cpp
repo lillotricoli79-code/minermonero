@@ -60,10 +60,12 @@ int main() {
     auto first_work = std::make_shared<unique_rx::core::MiningWork>();
     first_work->generation = 41;
     nonce_state.set_work(first_work);
-    ok &= check(nonce_state.next_nonce_offset(41) == 0 &&
-                nonce_state.next_nonce_offset(41) == 1 &&
-                nonce_state.next_nonce_offset(41) == 2,
-                "shared nonce allocator did not issue unique sequential offsets");
+    const auto range_a = nonce_state.next_nonce_offset(41, 256);
+    const auto range_b = nonce_state.next_nonce_offset(41, 256);
+    ok &= check(range_a == 0 && range_b == 256,
+                "shared nonce allocator did not reserve disjoint worker ranges");
+    ok &= check(nonce_state.next_nonce_offset(41) == 512,
+                "shared nonce allocator did not preserve single-offset compatibility");
     auto second_work = std::make_shared<unique_rx::core::MiningWork>();
     second_work->generation = 42;
     nonce_state.set_work(second_work);
