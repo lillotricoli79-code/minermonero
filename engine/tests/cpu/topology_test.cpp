@@ -1,5 +1,6 @@
 #include "cpu/topology.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <string>
