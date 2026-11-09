@@ -132,7 +132,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     logging::info("cpu", "worker #" + std::to_string(worker_id) +
         affinity_message + priority_message);
     // Scratchpad mappings are reused only by workers on the same NUMA node.
-    const int allocator_node = pinned
+    const int allocator_node = state.cpu_numa_enabled.load(std::memory_order_relaxed) && pinned
         ? (affinity_override
             ? platform::numa_node_for_cpu_id(static_cast<std::uint32_t>(*affinity_override))
             : platform::numa_node_for_logical_cpu(worker_id))
