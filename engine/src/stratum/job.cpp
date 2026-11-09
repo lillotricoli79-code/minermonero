@@ -215,6 +215,19 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
             throw std::invalid_argument("pool password cannot contain newlines");
         }
         entry.worker = pool.value("rig-id", std::string("rig01"));
+        if (pool.contains("algo") && !pool["algo"].is_null()) {
+            const auto pool_algorithm = pool["algo"].get<std::string>();
+            if (pool_algorithm != "rx/0" && pool_algorithm != "rx" &&
+                pool_algorithm != "randomx" && pool_algorithm != "randomx/0") {
+                throw std::invalid_argument("pool.algo must select RandomX rx/0");
+            }
+        }
+        if (pool.value("daemon", false) || pool.contains("self-select")) {
+            throw std::invalid_argument("XMRig daemon/self-select pool modes are not supported by the RandomX Stratum engine");
+        }
+        if (pool.contains("socks5") && !pool["socks5"].is_null()) {
+            throw std::invalid_argument("pool.socks5 proxy is not supported by the native transport");
+        }
         entry.tls = pool.value("tls", false) || scheme_tls;
         if (pool.contains("keepalive") && !pool["keepalive"].is_null()) {
             const auto& keepalive = pool["keepalive"];
