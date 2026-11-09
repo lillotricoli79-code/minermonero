@@ -187,7 +187,6 @@ int run_miner(const std::filesystem::path& config_path,
         ~StopWorkers() { state.stop.store(true, std::memory_order_release); }
     } stop_workers{state};
     std::jthread shell_input_thread;
-    std::jthread status_heartbeat_thread;
 
     using Clock = std::chrono::steady_clock;
     constexpr auto kShareResponseTimeout = std::chrono::seconds(60);
@@ -582,6 +581,7 @@ int run_miner(const std::filesystem::path& config_path,
         auto active_pool_index = std::make_shared<std::atomic<std::size_t>>(0);
         auto runtime_prefetch_mode = std::make_shared<std::atomic<int>>(prefetch_mode);
         const auto cpu_summary = cpu_summary_json();
+        std::jthread status_heartbeat_thread;
         nlohmann::json startup_status = {
             {"state", "AVVIO"}, {"managed", true}, {"error", nullptr},
             {"hashrate", {{"10s", nullptr}, {"60s", nullptr}, {"15m", nullptr}}},
@@ -601,15 +601,21 @@ int run_miner(const std::filesystem::path& config_path,
         // Keep the snapshot fresh while slow RandomX dataset initialization or
         // pool connection is in progress. The heartbeat stops with this process.
         status_heartbeat_thread = std::jthread(
-            [status_path](std::stop_token stop_token) {
+            [status_path, &consume_dashboard_command](std::stop_token stop_token) {
+                auto next_touch = std::chrono::steady_clock::now();
                 while (!stop_token.stop_requested()) {
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    consume_dashboard_command();
                     if (stop_token.stop_requested()) break;
-                    std::error_code error;
-                    if (std::filesystem::exists(status_path, error) && !error) {
-                        std::filesystem::last_write_time(
-                            status_path, std::filesystem::file_time_type::clock::now(), error);
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now >= next_touch) {
+                        std::error_code error;
+                        if (std::filesystem::exists(status_path, error) && !error) {
+                            std::filesystem::last_write_time(
+                                status_path, std::filesystem::file_time_type::clock::now(), error);
+                        }
+                        next_touch = now + std::chrono::seconds(1);
                     }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
             });
         // XMRig-compatible persistent scratchpad pool: false disables it,
@@ -1308,7 +1314,6 @@ std::uint64_t hash_value = 0;
                 };
 
                 while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
-                    consume_dashboard_command();
                     for (const auto& line : transport.read_lines(2)) {
                         const auto message = nlohmann::json::parse(line);
                         if (is_job_notification(message)) {
@@ -1342,8 +1347,6 @@ std::uint64_t hash_value = 0;
                             record_share_response(message);
                         }
                     }
-                    consume_dashboard_command();
-
                     const auto now = Clock::now();
                     if (session_id.empty() && now >= login_deadline) {
                         throw std::runtime_error("pool login timed out");
@@ -1691,7 +1694,6 @@ std::uint64_t hash_value = 0;
                 auto next_reconnect_snapshot = Clock::now();
                 while (remaining_delay > std::chrono::milliseconds::zero() &&
                        !g_stop_requested && !state.stop.load(std::memory_order_acquire)) {
-                    consume_dashboard_command();
                     if (state.stop.load(std::memory_order_acquire)) break;
                     if (Clock::now() >= next_reconnect_snapshot) {
                         reconnect_status["timestamp_unix_ms"] =
