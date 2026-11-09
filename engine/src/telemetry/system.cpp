@@ -1,4 +1,7 @@
 #include "system.hpp"
+#if defined(__linux__)
+#include "platform/linux_cpu_set.hpp"
+#endif
 
 // C++ system-sampling adaptation of NyxRX TelemetrySampler / PowerSampler.
 // CPU thermal-zone selection/EMA is adapted from XMRMiner TemperatureMonitor.kt,
@@ -321,7 +324,10 @@ SystemSample SystemTelemetry::sample() {
             const auto elapsed=std::chrono::duration<double>(now-impl_->previous_at).count();
             const auto ticks=process->first-*impl_->previous_process_ticks;
             const auto hz=static_cast<double>(::sysconf(_SC_CLK_TCK));
-            const auto logical=std::max(1u,std::thread::hardware_concurrency());
+            const auto allowed_cpus = platform::linux_cpu::allowed_cpus();
+            const auto logical = std::max(1u, allowed_cpus.empty()
+                ? std::thread::hardware_concurrency()
+                : static_cast<unsigned int>(allowed_cpus.size()));
             if(elapsed>0.0&&hz>0.0) result.process_cpu_percent=std::clamp(100.0*static_cast<double>(ticks)/hz/elapsed/logical,0.0,100.0);
         }
         impl_->previous_process_ticks=process->first;
