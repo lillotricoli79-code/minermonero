@@ -168,18 +168,36 @@ int run_miner(const std::filesystem::path& config_path,
         std::shared_ptr<randomx_dataset> dataset;
         auto flags = randomx_get_flags();
         const auto cpu_config = config.value("cpu", nlohmann::json::object());
-        const auto cpu_priority = cpu_config.value("priority", 2);
-        if (cpu_priority < -1 || cpu_priority > 5)
-            throw std::runtime_error("cpu.priority must be between -1 and 5");
+        int cpu_priority = -1; // XMRig-compatible null/default: leave OS priority unchanged.
+        if (cpu_config.contains("priority") && !cpu_config["priority"].is_null()) {
+            if (!cpu_config["priority"].is_number_integer())
+                throw std::runtime_error("cpu.priority must be an integer or null");
+            const auto configured_priority = cpu_config["priority"].get<std::int64_t>();
+            if (configured_priority < -1 || configured_priority > 5)
+                throw std::runtime_error("cpu.priority must be between -1 and 5");
+            cpu_priority = static_cast<int>(configured_priority);
+        }
         state.cpu_priority = cpu_priority;
-        const bool large_pages_requested = cpu_config.value("huge-pages", false);
+
+        // XMRig enables RandomX large pages by default. Keep an explicit false
+        // opt-out, but do not silently disable this important optimization.
+        const bool large_pages_requested = cpu_config.value("huge-pages", true);
         if (large_pages_requested) flags |= RANDOMX_FLAG_LARGE_PAGES;
-        // Explicit JIT huge pages are optional and fall back to normal pages
-        // when the OS privilege/reservation is unavailable.
-        rxm_set_jit_huge_pages(cpu_config.value("jit-huge-pages", false) ? 1 : 0);
-        const auto prefetch_mode = cpu_config.value("prefetch-mode", 1);
+
+        // Accept both the README's legacy key and XMRig's native spelling.
+        const bool jit_huge_pages = cpu_config.contains("huge-pages-jit")
+            ? cpu_config.at("huge-pages-jit").get<bool>()
+            : cpu_config.value("jit-huge-pages", false);
+        rxm_set_jit_huge_pages(jit_huge_pages ? 1 : 0);
+
+        int prefetch_mode = 1;
+        if (cpu_config.contains("prefetch-mode")) {
+            prefetch_mode = cpu_config.at("prefetch-mode").get<int>();
+        } else if (randomx_config.contains("scratchpad_prefetch_mode")) {
+            prefetch_mode = randomx_config.at("scratchpad_prefetch_mode").get<int>();
+        }
         if (prefetch_mode < 0 || prefetch_mode > 3)
-            throw std::runtime_error("cpu.prefetch-mode must be between 0 and 3");
+            throw std::runtime_error("cpu.prefetch-mode/randomx.scratchpad_prefetch_mode must be between 0 and 3");
         rxm_set_prefetch_mode(prefetch_mode);
         std::uint64_t generation = 0;
         const auto pool_threads = pools.front().threads;
