@@ -714,6 +714,11 @@ function App() {
                       value={status.cpu ? `${status.cpu.family} / ${status.cpu.model} · step ${status.cpu.stepping}` : "—"}
                     />
                     <DataRow
+                      icon={<Gauge size={15} />}
+                      label="Priorità richiesta"
+                      value={status.cpu_priority == null ? "Non disponibile" : status.cpu_priority === -1 ? "Sistema" : ["Idle", "Bassa", "Normale", "Alta", "Molto alta", "Massima"][status.cpu_priority] ?? String(status.cpu_priority)}
+                    />
+                    <DataRow
                       icon={<Cpu size={15} />}
                       label="Core fisici / logici"
                       value={status.cpu ? `${status.cpu.physical_cores} / ${status.cpu.logical_threads}` : "—"}
