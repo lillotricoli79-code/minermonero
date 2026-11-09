@@ -32,6 +32,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -527,6 +528,7 @@ int run_miner(const std::filesystem::path& config_path,
                                          {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
                             {"uptime_seconds", uptime},
                             {"algorithm", "rx/0"}, {"job_id", work->job.id},
+                            {"job_difficulty", work->job.target == 0 ? nlohmann::json(nullptr) : nlohmann::json(static_cast<double>(std::numeric_limits<std::uint64_t>::max()) / static_cast<double>(work->job.target))},
                             {"height", work->job.height
                                 ? nlohmann::json(*work->job.height)
                                 : nlohmann::json(nullptr)},
@@ -661,7 +663,7 @@ int run_miner(const std::filesystem::path& config_path,
                                  {"pending", 0},
                                  {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
                     {"uptime_seconds", reconnect_uptime},
-                    {"algorithm", "rx/0"}, {"job_id", nullptr}, {"height", nullptr},
+                    {"algorithm", "rx/0"}, {"job_id", nullptr}, {"height", nullptr}, {"job_difficulty", nullptr},
                     {"threads", pool_threads}, {"cpu", cpu_summary},
                     {"workers", collect_worker_status()},
                     {"msr_active", msr.active()}, {"full_memory", full_memory},
