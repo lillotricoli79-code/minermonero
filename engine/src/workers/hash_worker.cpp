@@ -96,6 +96,10 @@ struct WorkerCounterPublisher {
 
 } // namespace
 
+// RandomX pipelined worker loop adapted from XMRig CpuWorker<N>::start()
+// (src/backend/cpu/CpuWorker.cpp): preserve the first/next/last VM pipeline
+// and per-worker nonce stream, integrated with UniqueRX generation-safe work
+// handoff and bounded share queue. GPL-3.0; see LICENSES/XMRIG-GPL-3.0.txt.
 void hash_worker(MiningState& state, std::uint32_t worker_id,
                  std::uint32_t worker_count, std::uint64_t maximum_hashes) {
     if (worker_count == 0 || worker_id >= worker_count) {
