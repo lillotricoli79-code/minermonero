@@ -451,11 +451,23 @@ int main(int argc, char** argv) {
     const std::string miner_status = status_contents.str();
     std::cerr << "loopback: files read\n";
 
-    std::filesystem::remove(config_path);
-    std::filesystem::remove(log_path);
-    std::filesystem::remove(config_path.parent_path() / "unique-rx-command.json");
-    std::filesystem::remove(status_path);
-    if (result != 0 || !server_ok.load(std::memory_order_acquire) ||
+    std::cerr << "loopback: cleanup begin\\n";
+    std::error_code cleanup_error;
+    std::filesystem::remove(config_path, cleanup_error);
+    std::cerr << "loopback: config removed\\n";
+    cleanup_error.clear();
+    std::filesystem::remove(log_path, cleanup_error);
+    std::cerr << "loopback: log removed\\n";
+    cleanup_error.clear();
+    std::filesystem::remove(config_path.parent_path() / "unique-rx-command.json", cleanup_error);
+    std::cerr << "loopback: command removed\\n";
+    cleanup_error.clear();
+    std::filesystem::remove(status_path, cleanup_error);
+    std::cerr << "loopback: status removed\\n";
+    const bool server_ok_value = server_ok.load(std::memory_order_acquire);
+    std::cerr << "loopback: validate begin result=" << result
+              << " server_ok=" << server_ok_value << "\\n";
+    if (result != 0 || !server_ok_value ||
         miner_log.find("switching pool") == std::string::npos ||
         miner_log.find("disconnected") == std::string::npos ||
         miner_log.find("pool login accepted") == std::string::npos ||
