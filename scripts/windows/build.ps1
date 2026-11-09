@@ -197,20 +197,64 @@ $moduleHash = (Get-FileHash -LiteralPath (Join-Path $packageMsrDir "IntelMSR.bin
 if ($moduleHash -ne $expectedMsrSha256) { throw "Hash del modulo MSR nel pacchetto non valido." }
 Set-Content -LiteralPath (Join-Path $packageDir "SHA256SUMS.txt") -Encoding ascii -Value @("$exeHash  unique-rx.exe", "$moduleHash  msr/IntelMSR.bin")
 Copy-Item -LiteralPath (Join-Path $repoRoot "config.example.json") -Destination (Join-Path $packageDir "config.example.json")
+Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $repoRoot "requirements.txt") -Destination $packageDir
+Copy-Item -LiteralPath (Join-Path $repoRoot "backend") -Destination $packageDir -Recurse
+$dashboardOut = Join-Path $packageDir "dashboard\dist"
+New-Item -ItemType Directory -Force -Path $dashboardOut | Out-Null
+Copy-Item -Path (Join-Path $dashboardDir "dist\*") -Destination $dashboardOut -Recurse -Force
+
+$licenses = Join-Path $packageDir "licenses"
+New-Item -ItemType Directory -Force -Path $licenses | Out-Null
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\XMRIG-GPL-3.0.txt") -Destination $licenses
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\RXMINER-MIT.txt") -Destination $licenses
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\NYXRX-MIT.txt") -Destination $licenses
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\XMR-MINER-GPL-3.0.txt") -Destination $licenses
+Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\PAWNIO-MODULES-COPYING") -Destination $licenses
+Copy-Item -LiteralPath (Join-Path $engineDir "src\randomx\upstream\LICENSE") -Destination (Join-Path $licenses "RANDOMX-BSD-3-CLAUSE.txt")
+
 $launcherDir = Join-Path $packageDir "scripts\windows"
 New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start.bat") -Destination $launcherDir
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot "start.ps1") -Destination $launcherDir
+foreach ($script in @("start.bat","start.ps1","stop.bat","stop.ps1","diagnose.bat","diagnose.ps1")) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $script) -Destination $launcherDir
+}
 @'
 @echo off
 setlocal
 call "%~dp0scripts\windows\start.bat" %*
 exit /b %errorlevel%
 '@ | Set-Content -LiteralPath (Join-Path $packageDir "start.bat") -Encoding ascii
-Write-Host "Avvio rapido start.bat e launcher MSR amministrativo inclusi nel pacchetto."
+@'
+@echo off
+setlocal
+call "%~dp0scripts\windows\stop.bat" %*
+exit /b %errorlevel%
+'@ | Set-Content -LiteralPath (Join-Path $packageDir "stop.bat") -Encoding ascii
+@'
+@echo off
+setlocal
+call "%~dp0scripts\windows\diagnose.bat" %*
+exit /b %errorlevel%
+'@ | Set-Content -LiteralPath (Join-Path $packageDir "diagnose.bat") -Encoding ascii
+
+$gitStatus = & git -C $repoRoot status --porcelain
+if ($LASTEXITCODE -ne 0) { throw "Impossibile verificare lo stato Git per il pacchetto sorgente." }
+if ($gitStatus) { throw "Il worktree Git non è pulito: il pacchetto sorgente deve corrispondere esattamente al codice compilato." }
+$sourceZip = Join-Path $packageDir "unique-rx-source.zip"
+& git -C $repoRoot archive --format=zip "--output=$sourceZip" HEAD
+if ($LASTEXITCODE -ne 0) { throw "Impossibile creare il sorgente corrispondente al commit compilato." }
+$sourceHash = (Get-FileHash -LiteralPath $sourceZip -Algorithm SHA256).Hash.ToLowerInvariant()
+$commit = (& git -C $repoRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0) { throw "Impossibile determinare il commit sorgente." }
+Set-Content -LiteralPath (Join-Path $packageDir "SOURCE-COMMIT.txt") -Encoding ascii -Value $commit
+$sourceSums = Join-Path $packageDir "SHA256SUMS.txt"
+Add-Content -LiteralPath $sourceSums -Encoding ascii -Value "$sourceHash  unique-rx-source.zip"
+Copy-Item -LiteralPath (Join-Path $packageDir "msr\COPYING") -Destination (Join-Path $licenses "PAWNIO-MODULE-COPYING")
+
+Write-Host "Pacchetto completo: motore, backend, dashboard, script, licenze e sorgente corrispondente inclusi."
 Write-Host ""
 Write-Host "[OK] Dashboard, backend, motore nativo e suite automatica completati." -ForegroundColor Green
 Write-Host "Miner: $exe"
 Write-Host "Pacchetto portatile: $packageDir"
-Write-Host "Dashboard: $(Join-Path $dashboardDir 'dist\index.html')"
+Write-Host "Dashboard: $(Join-Path $packageDir 'dashboard\dist\index.html')"
 Write-Host "Log Stratum: $(Join-Path $repoRoot 'unique-rx-stratum.log')"
