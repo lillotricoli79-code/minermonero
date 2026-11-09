@@ -48,6 +48,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes cmake ninja-build libssl-dev
 
+      - name: Set up Node.js and build dashboard
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Build dashboard
+        shell: pwsh
+        run: |
+          npm ci --prefix dashboard
+          npm run build --prefix dashboard
+          if (-not (Test-Path "dashboard/dist/index.html")) { throw "Dashboard build output is missing." }
+
       - name: Configure native engine
         run: cmake -S engine -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 
@@ -138,12 +152,19 @@ jobs:
           $out = Join-Path $env:GITHUB_WORKSPACE "build\Release"
           $licenses = Join-Path $out "licenses"
           $msr = Join-Path $out "msr"
-          New-Item -ItemType Directory -Force -Path $licenses, $msr | Out-Null
-          Copy-Item -LiteralPath "README.md" -Destination $out
+          $backend = Join-Path $out "backend"
+          $dashboard = Join-Path $out "dashboard\dist"
+          $scripts = Join-Path $out "scripts\windows"
+          New-Item -ItemType Directory -Force -Path $licenses, $msr, $backend, $dashboard, $scripts | Out-Null
+          Copy-Item -LiteralPath "README.md", "config.example.json", "requirements.txt" -Destination $out
+          Copy-Item -Path "backend\*" -Destination $backend -Recurse -Force
+          Copy-Item -Path "dashboard\dist\*" -Destination $dashboard -Recurse -Force
+          Copy-Item -Path "scripts\windows\*" -Destination $scripts -Recurse -Force
           Copy-Item -LiteralPath "LICENSES\XMRIG-GPL-3.0.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\RXMINER-MIT.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\NYXRX-MIT.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\XMR-MINER-GPL-3.0.txt" -Destination $licenses
+          Copy-Item -LiteralPath "LICENSES\PAWNIO-MODULES-COPYING" -Destination $licenses
           Copy-Item -LiteralPath "engine\src\randomx\upstream\LICENSE" -Destination (Join-Path $licenses "RANDOMX-BSD-3-CLAUSE.txt")
           Copy-Item -LiteralPath "engine\msr\PawnIO-COPYING" -Destination (Join-Path $msr "COPYING")
           git archive --format=zip "--output=$(Join-Path $out 'unique-rx-source.zip')" HEAD
@@ -164,6 +185,11 @@ jobs:
             build/Release/libssl*.dll
             build/Release/libcrypto*.dll
             build/Release/README.md
+            build/Release/config.example.json
+            build/Release/requirements.txt
+            build/Release/backend/**
+            build/Release/dashboard/dist/**
+            build/Release/scripts/windows/**
             build/Release/licenses/**
             build/Release/msr/COPYING
             build/Release/unique-rx-source.zip
