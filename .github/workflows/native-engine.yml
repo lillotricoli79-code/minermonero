@@ -114,9 +114,8 @@ jobs:
       - name: Build native engine
         run: cmake --build build --config Release --parallel 2
 
-      - name: Run native tests
-        run: ctest --test-dir build -C Release --output-on-failure
-
+      # The CTest executables link OpenSSL too. Place its runtime DLLs beside
+      # the multi-config Release binaries before running CTest, not afterwards.
       - name: Bundle OpenSSL runtime DLLs
         shell: pwsh
         run: |
@@ -128,6 +127,9 @@ jobs:
             throw "OpenSSL runtime DLLs were not found in $opensslBin"
           }
           Copy-Item -LiteralPath $dlls.FullName -Destination "build/Release" -Force
+
+      - name: Run native tests
+        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Package Windows miner with corresponding source and licenses
         shell: pwsh
