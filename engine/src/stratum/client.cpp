@@ -259,8 +259,8 @@ int run_miner(const std::filesystem::path& config_path,
         MsrManager msr(randomx_config.value("msr-module", std::string()));
         std::string msr_status;
         if (msr_explicitly_disabled) {
-            msr_status = "Disattivato da configurazione";
-            logging::info("msr", "MSR tuning explicitly disabled by configuration");
+            msr_status = "Disattivato (default XMRig/configurazione)";
+            logging::info("msr", "MSR tuning disabled (XMRig default or explicit configuration)");
         } else {
             try {
                 msr.apply_randomx_preset();
