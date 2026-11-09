@@ -34,6 +34,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -229,15 +230,27 @@ int run_miner(const std::filesystem::path& config_path,
         auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [desired_threads, automatic_threads](std::stop_token stop_token) {
+                [&state, desired_threads, automatic_threads, &cpu_summary](std::stop_token stop_token) {
                     std::string command_line;
+                    std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
+                    auto previous_sample = Clock::now();
+                    double shell_hashrate = 0.0;
                     const auto process_command = [&](const std::string& line) {
                         std::istringstream input(line);
                         std::string command;
                         std::string value;
                         input >> command;
                         if (command == "help") {
-                            std::cout << "Comandi: threads N (1-256), threads auto\n";
+                            std::cout << "Comandi shell UNIQUE RX:\n"
+                                      << "  status          stato, hashrate, pool e uptime\n"
+                                      << "  shares          accepted/rejected/stale/pending\n"
+                                      << "  workers         hashrate e contatori per worker\n"
+                                      << "  cpu             CPU, core, thread e feature rilevate\n"
+                                      << "  logs [N]        ultimi N log (default 30, max 200)\n"
+                                      << "  threads N       imposta worker in tempo reale (1-256)\n"
+                                      << "  threads auto    ripristina il numero automatico iniziale\n"
+                                      << "  help            mostra questo aiuto\n"
+                                      << "  quit             arresta ordinatamente il miner\n";
                         } else if (command == "threads" && (input >> value)) {
                             if (value == "auto") {
                                 desired_threads->store(automatic_threads, std::memory_order_release);
@@ -259,13 +272,61 @@ int run_miner(const std::filesystem::path& config_path,
                                     std::cout << "Valore non valido. Usa threads N oppure threads auto.\n";
                                 }
                             }
+                        } else if (command == "status") {
+                            const auto hashes = state.hashes.load(std::memory_order_relaxed);
+                            std::cout << "Hashrate: " << std::fixed << std::setprecision(2)
+                                      << shell_hashrate << " H/s | total hashes: " << hashes
+                                      << " | workers: " << desired_threads->load()
+                                      << " | reconnects: " << state.reconnects.load()
+                                      << " | uptime: " << std::chrono::duration_cast<std::chrono::seconds>(
+                                             Clock::now() - started).count() << " s\n";
+                        } else if (command == "shares") {
+                            std::cout << "Found " << state.found.load()
+                                      << " | submitted " << state.submitted.load()
+                                      << " | accepted " << state.accepted.load()
+                                      << " | rejected " << state.rejected.load()
+                                      << " | stale " << state.stale_shares.load()
+                                      << " | expired " << state.expired_shares.load()
+                                      << " | dropped " << state.dropped_shares.load() << '\n';
+                        } else if (command == "workers") {
+                            for (std::uint32_t id = 0; id < desired_threads->load(); ++id) {
+                                const auto hashes = id < state.worker_hashes.size() && state.worker_hashes[id]
+                                    ? state.worker_hashes[id]->load(std::memory_order_relaxed) : 0;
+                                std::cout << "Worker #" << id << " | hashes " << hashes << '\n';
+                            }
+                        } else if (command == "cpu") {
+                            std::cout << cpu_summary.dump(2) << '\n';
+                        } else if (command == "logs") {
+                            std::size_t count = 30;
+                            if (input >> value) {
+                                try { count = std::clamp<std::size_t>(std::stoul(value), 1, 200); }
+                                catch (...) { count = 30; }
+                            }
+                            for (const auto& entry : logging::recent_entries(count)) {
+                                std::cout << '[' << entry.timestamp << "] " << entry.level
+                                          << ' ' << entry.category << ' ' << entry.message << '\n';
+                            }
+                        } else if (command == "quit") {
+                            std::cout << "Arresto ordinato richiesto...\n";
+                            state.stop.store(true, std::memory_order_release);
                         } else if (!command.empty()) {
                             std::cout << "Comando sconosciuto. Digita help.\n";
                         }
+                        std::cout << std::flush;
                     };
 
-                    std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\n";
-                    while (!stop_token.stop_requested()) {
+                    std::cout << "Digita help per i comandi UNIQUE RX.\n";
+                    while (!stop_token.stop_requested() &&
+                           !state.stop.load(std::memory_order_acquire)) {
+                        const auto now = Clock::now();
+                        if (now - previous_sample >= std::chrono::seconds(1)) {
+                            const auto hashes = state.hashes.load(std::memory_order_relaxed);
+                            const auto elapsed = std::chrono::duration<double>(now - previous_sample).count();
+                            if (elapsed > 0.0) shell_hashrate =
+                                static_cast<double>(hashes - previous_hashes) / elapsed;
+                            previous_hashes = hashes;
+                            previous_sample = now;
+                        }
                         char character = 0;
 #ifdef _WIN32
                         if (!_kbhit()) {
