@@ -320,9 +320,12 @@ int run_miner(const std::filesystem::path& config_path,
                                              std::memory_order_relaxed);
             }
         }
-        if (randomx_config.contains("rdmsr") && !randomx_config["rdmsr"].is_null() &&
-            !randomx_config["rdmsr"].get<bool>()) {
-            logging::info("config", "randomx.rdmsr=false accepted; the native engine does not read MSRs for mining");
+        if (randomx_config.contains("rdmsr") && !randomx_config["rdmsr"].is_null()) {
+            if (!randomx_config["rdmsr"].is_boolean())
+                throw std::runtime_error("randomx.rdmsr must be boolean");
+            logging::info("config", randomx_config["rdmsr"].get<bool>()
+                ? "randomx.rdmsr recognized; native RandomX engine does not require MSR reads"
+                : "randomx.rdmsr=false accepted; native engine does not read MSRs for mining");
         }
         if (randomx_config.contains("cache_qos") && !randomx_config["cache_qos"].is_null() &&
             randomx_config["cache_qos"].get<bool>()) {
