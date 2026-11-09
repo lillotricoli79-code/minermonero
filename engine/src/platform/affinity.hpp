@@ -34,6 +34,11 @@
 
 namespace unique_rx::platform {
 
+// C++ adaptation of NyxRX hardware.rs HardwareProfile::detect_worker_cpu_order
+// and detect_numa_nodes (MIT; see LICENSES/NYXRX-MIT.txt). It preserves the
+// physical-core-first, NUMA-aware worker ordering while using native Windows
+// processor groups and Linux process cpusets/sysfs.
+// Upstream: https://github.com/MaleficentAd1803/nyxrx
 #ifdef _WIN32
 inline std::vector<std::pair<WORD, DWORD>> available_processors() {
     // Windows 10 normally constrains a process to one processor group;
