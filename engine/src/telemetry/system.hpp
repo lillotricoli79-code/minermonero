@@ -14,6 +14,7 @@ struct SystemSample {
     std::optional<std::uint64_t> process_memory_bytes;
     std::optional<double> temperature_c;
     std::optional<double> package_power_watts;
+    std::optional<bool> on_battery;
 };
 
 class SystemTelemetry {
