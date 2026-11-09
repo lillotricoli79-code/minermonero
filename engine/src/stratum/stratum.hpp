@@ -70,6 +70,7 @@ struct PoolConfig {
     bool tls = false;
     bool keepalive = false;
     bool nicehash = false;
+    bool sni = false;
 };
 
 // Allocate a nonce within the pool-provided nonce range. NiceHash jobs keep
