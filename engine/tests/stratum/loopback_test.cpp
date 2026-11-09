@@ -93,7 +93,7 @@ int run_miner_process(const std::filesystem::path& executable,
     std::wstring command = L"\"" + executable.wstring() + L"\" --mine \"" +
                            config_path.wstring() + L"\"";
     std::vector<wchar_t> mutable_command(command.begin(), command.end());
-    mutable_command.push_back(L'\\0');
+    mutable_command.push_back(L'\0');
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     startup.dwFlags = STARTF_USESTDHANDLES;
@@ -103,10 +103,10 @@ int run_miner_process(const std::filesystem::path& executable,
     PROCESS_INFORMATION process{};
     std::cerr << "loopback launching miner: " << executable.string()
               << " config=" << config_path.string()
-              << " config_exists=" << std::filesystem::exists(config_path) << '\\n';
+              << " config_exists=" << std::filesystem::exists(config_path) << '\n';
     if (!CreateProcessW(executable.c_str(), mutable_command.data(), nullptr, nullptr,
                         TRUE, 0, nullptr, nullptr, &startup, &process)) {
-        std::cerr << "CreateProcessW failed: " << GetLastError() << '\\n';
+        std::cerr << "CreateProcessW failed: " << GetLastError() << '\n';
         return -1;
     }
     const DWORD wait_result = WaitForSingleObject(process.hProcess, 30000);
@@ -192,7 +192,7 @@ bool read_line(Socket socket, std::string& line) {
 
 int main(int argc, char** argv) {
     if (argc != 2) {
-        std::cerr << "usage: loopback_test <unique-rx executable>\\n";
+        std::cerr << "usage: loopback_test <unique-rx executable>\n";
         return 2;
     }
     unique_rx::platform::NetworkRuntime network;
