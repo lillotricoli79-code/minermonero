@@ -771,7 +771,7 @@ class MinerController:
             self._native_log_seen.append(line)
             self._native_log_seen_set.add(line)
             match = re.match(
-                r"^\\[(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\]\\s+(\\w+)\\s+(\\w+)\\s+(.*)$",
+                r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+(\w+)\s+(\w+)\s+(.*)$",
                 line,
             )
             event_time = time.time()
