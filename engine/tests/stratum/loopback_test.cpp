@@ -169,6 +169,10 @@ int main() {
         })},
         {"cpu", {{"enabled", true}, {"max-threads-hint", 1}}},
         {"randomx", {{"wrmsr", false}, {"full-memory", false}}},
+        // This test exercises failover deterministically; production defaults
+        // retain XMRig-style retries and exponential backoff.
+        {"retries", 0},
+        {"retry-pause", 0},
     };
     {
         std::ofstream file(config_path);
