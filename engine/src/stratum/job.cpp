@@ -235,6 +235,11 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
         }
         entry.tls = (pool.contains("tls") && !pool["tls"].is_null()
             ? pool["tls"].get<bool>() : false) || scheme_tls;
+        if (pool.contains("sni") && !pool["sni"].is_null()) {
+            if (!pool["sni"].is_boolean())
+                throw std::invalid_argument("pool.sni must be boolean");
+            entry.sni = pool["sni"].get<bool>();
+        }
         if (pool.contains("keepalive") && !pool["keepalive"].is_null()) {
             const auto& keepalive = pool["keepalive"];
             if (keepalive.is_boolean()) {
