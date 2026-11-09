@@ -726,8 +726,14 @@ int run_miner(const std::filesystem::path& config_path,
                         line("ALGORITMO", "RandomX rx/0");
                         line("CPU", cpu_summary.value("brand", std::string("non disponibile")));
                         line("FEATURE", std::string("AES ") + (features.value("aes", false) ? "ON" : "OFF") +
+                            " | SSSE3 " + (features.value("ssse3", false) ? "ON" : "OFF") +
                             " | AVX2 " + (features.value("avx2", false) ? "ON" : "OFF") +
+                            " | VAES " + (features.value("vaes", false) ? "ON" : "OFF") +
                             " | BMI2 " + (features.value("bmi2", false) ? "ON" : "OFF"));
+                        line("TOPOLOGIA", std::to_string(cpu_summary.value("numa_nodes", 0U)) +
+                            " NUMA | L3 " + std::to_string(
+                                cpu_summary.value("l3_cache_bytes", std::uint64_t{0}) / (1024ULL * 1024ULL)) +
+                            " MiB");
                         line("CORE / WORKER", std::to_string(cpu_summary.value("physical_cores", 0U)) +
                             " fisici | " + std::to_string(cpu_summary.value("logical_threads", 0U)) +
                             " logici | " + std::to_string(desired_threads->load()) + " worker");
