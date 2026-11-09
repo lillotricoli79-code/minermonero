@@ -203,8 +203,29 @@ int run_miner(const std::filesystem::path& config_path,
         const auto pool_threads = pools.front().threads;
         state.initialize_worker_counters(pool_threads);
         const auto cpu_summary = cpu_summary_json();
-        // Keep released 2 MiB RandomX scratchpads for reuse during VM recreation.
-        rxm_set_memory_pool(pool_threads);
+        // XMRig-compatible persistent scratchpad pool: false disables it,
+        // true sizes it for the active workers, and a number sets capacity.
+        std::size_t memory_pool_capacity = 0;
+        if (cpu_config.contains("memory-pool") && !cpu_config["memory-pool"].is_null()) {
+            const auto& memory_pool = cpu_config["memory-pool"];
+            if (memory_pool.is_boolean()) {
+                memory_pool_capacity = memory_pool.get<bool>() ? pool_threads : 0;
+            } else if (memory_pool.is_number_integer()) {
+                const auto requested = memory_pool.get<std::int64_t>();
+                if (requested < -1 || requested > 256)
+                    throw std::runtime_error("cpu.memory-pool must be false, true, -1, or an integer from 0 to 256");
+                memory_pool_capacity = requested <= 0
+                    ? (requested == -1 ? pool_threads : 0)
+                    : static_cast<std::size_t>(requested);
+            } else {
+                throw std::runtime_error("cpu.memory-pool must be boolean or integer");
+            }
+        }
+        rxm_set_memory_pool(memory_pool_capacity);
+        logging::info("memory", memory_pool_capacity == 0
+            ? "RandomX scratchpad memory pool disabled"
+            : "RandomX scratchpad memory pool capacity " +
+                std::to_string(memory_pool_capacity) + " pages");
         auto started = Clock::now();
         std::vector<std::uint64_t> worker_previous_hashes(pool_threads, 0);
         std::vector<double> worker_rates(pool_threads, 0.0);
@@ -354,8 +375,15 @@ struct PendingShare {
                 cache = std::move(next_cache);
                 dataset = std::move(next_dataset);
                 flags = next_flags;
+                const bool dataset_large_pages_active =
+                    (next_flags & RANDOMX_FLAG_LARGE_PAGES) != 0;
                 state.large_pages_active.store(
-                    (next_flags & RANDOMX_FLAG_LARGE_PAGES) != 0, std::memory_order_relaxed);
+                    dataset_large_pages_active, std::memory_order_relaxed);
+                logging::info("memory", dataset_large_pages_active
+                    ? "RandomX cache/dataset large pages allocated"
+                    : (large_pages_requested
+                        ? "RandomX cache/dataset using standard pages (large-page allocation unavailable)"
+                        : "RandomX large pages disabled by configuration"));
                 active_seed = next_job.seed;
                 have_seed = true;
             }
