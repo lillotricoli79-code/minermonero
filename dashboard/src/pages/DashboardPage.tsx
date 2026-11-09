@@ -528,6 +528,13 @@ function App() {
                   detail="candidate prodotte dal motore"
                 />
                 <MetricCard
+                  label="SHARE INVIATE"
+                  value={formatCount(status.shares.submitted ?? null)}
+                  icon={<Activity size={16} />}
+                  tone="blue"
+                  detail="submit effettivi verso il pool"
+                />
+                <MetricCard
                   label="SHARE IN ATTESA"
                   value={formatCount(status.shares.pending)}
                   icon={<Radio size={16} />}
