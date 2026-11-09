@@ -75,7 +75,7 @@ int main() {
         {"rx", {{"threads", 3}, {"affinity", "0x0d"}}}
     });
     if (xmrig_rx_affinities != std::vector<std::int64_t>({0, 2, 3})) {
-        std::cerr << "Native XMRig cpu.rx affinity mask was not expanded.\\n";
+        std::cerr << "Native XMRig cpu.rx affinity mask was not expanded.\n";
         return 1;
     }
 
