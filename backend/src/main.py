@@ -701,6 +701,10 @@ class MinerController:
         if verb in {"help", "?"} and len(parts) == 1:
             return {"command": command, "restart": False, "lines": [
                 "help                 Elenco comandi",
+                "start                Avvia il miner",
+                "stop                 Arresto controllato",
+                "diagnose             Diagnostica CPU, memoria, MSR e stato JIT esposto",
+                "auto                 Alias di threads auto",
                 "status               Stato miner, pool e CPU",
                 "threads              Thread attivi",
                 "threads N            Riavvio controllato con N worker (config invariato)",
@@ -710,6 +714,34 @@ class MinerController:
                 "graph                Hashrate 10s / 60s / 15m",
                 "pool                 Pool e connessione",
                 "logs [N]             Ultime N righe (default 20)",
+            ]}
+
+        if verb == "auto" and len(parts) == 1:
+            return self.execute_shell_command("threads auto")
+
+        if verb == "start" and len(parts) == 1:
+            self.start()
+            return {"command": command, "restart": False, "lines": ["Richiesta di avvio inviata al miner nativo/backend."]}
+
+        if verb == "stop" and len(parts) == 1:
+            self.stop()
+            return {"command": command, "restart": False, "lines": ["Arresto controllato completato."]}
+
+        if verb == "diagnose" and len(parts) == 1:
+            cpu = status.get("cpu") or {}
+            features = cpu.get("features") or {}
+            jit = status.get("jit_status") or status.get("randomx_jit")
+            jit_text = str(jit) if jit is not None else "non pubblicato dalla telemetria (non dedurre JIT/interprete)"
+            return {"command": command, "restart": False, "lines": [
+                "CPU: " + str(cpu.get("brand") or "non rilevata"),
+                "Vendor: " + str(cpu.get("vendor") or "n/d") + " · family/model: " + str(cpu.get("family", "n/d")) + "/" + str(cpu.get("model", "n/d")),
+                "Core: " + str(cpu.get("physical_cores", "n/d")) + " fisici / " + str(cpu.get("logical_threads", "n/d")) + " logici",
+                "Cache L3: " + str(cpu.get("l3_cache_bytes", "n/d")) + " byte · NUMA: " + str(cpu.get("numa_nodes", "n/d")),
+                "AES: " + str(features.get("aes", "n/d")) + " · AVX2: " + str(features.get("avx2", "n/d")) + " · BMI2: " + str(features.get("bmi2", "n/d")),
+                "Huge pages: richieste=" + str(status.get("large_pages_requested", "n/d")) + " · attive=" + str(status.get("large_pages_active", "n/d")),
+                "MSR: " + str(status.get("msr_status") or status.get("msr_active") or "n/d"),
+                "JIT: " + jit_text,
+                "Errore miner: " + str(status.get("error") or "nessuno"),
             ]}
 
         if verb == "threads":
