@@ -467,7 +467,7 @@ function App() {
                   </button>
                   <button
                     className="button button-stop"
-                    disabled={busy || !status.managed}
+                    disabled={busy || !active}
                     onClick={() => void runMiner("stop")}
                   >
                     <Square size={13} fill="currentColor" />
@@ -922,7 +922,7 @@ function App() {
                   </button>
                 </form>
                 <div className="shell-hint">
-                  <span>threads N / threads auto: riavvio controllato del motore</span>
+                  <span>threads N / threads auto: regolazione live dei worker</span>
                   <span>config.json: sola lettura</span>
                 </div>
               </section>
