@@ -131,6 +131,32 @@ int run_miner(const std::filesystem::path& config_path,
         std::ifstream file(config_path);
         if (!file) throw std::runtime_error("cannot open config.json");
         auto config = nlohmann::json::parse(file);
+        if (config.contains("log-file") && !config["log-file"].is_null()) {
+            if (!config["log-file"].is_string())
+                throw std::runtime_error("log-file must be a string path");
+            std::filesystem::path log_path = config["log-file"].get<std::string>();
+            if (log_path.is_relative()) log_path = config_path.parent_path() / log_path;
+            logging::set_file(log_path);
+        }
+        logging::Config logger_config;
+        if (config.contains("colors") && !config["colors"].is_null()) {
+            if (!config["colors"].is_boolean())
+                throw std::runtime_error("colors must be boolean");
+            logger_config.colored_output = config["colors"].get<bool>();
+        }
+        logging::configure(logger_config);
+        if (config.value("background", false))
+            logging::warning("config", "background mode is not supported; keep the miner attached to its console/backend");
+        if (config.contains("http") && config["http"].is_object() &&
+            config["http"].value("enabled", false))
+            logging::warning("config", "XMRig http API settings are recognized but the integrated dashboard/backend owns the local API; no separate XMRig HTTP listener is started");
+        if (config.contains("donate-level"))
+            logging::warning("config", "donate-level is not applied: UNIQUE RX does not redirect mining time to a developer pool");
+        if (config.contains("syslog") && config["syslog"].is_boolean() &&
+            config["syslog"].get<bool>())
+            logging::warning("config", "syslog output is not implemented; file and console logging remain active");
+        if (config.contains("title") && !config["title"].is_null())
+            logging::info("config", "title setting accepted; console title management is not enabled in this native build");
         if (thread_override > 0) {
             if (thread_override > 256)
                 throw std::invalid_argument("--threads must be between 1 and 256");
@@ -711,7 +737,24 @@ struct PendingShare {
         };
         std::unordered_map<std::uint64_t, PendingShare> pending;
         std::size_t pool_index = 0;
-        std::chrono::seconds retry_delay{1};
+        std::uint32_t pool_failures = 0;
+        std::uint32_t retries_per_pool = 5;
+        std::uint32_t retry_pause_seconds = 5;
+        if (config.contains("retries") && !config["retries"].is_null()) {
+            if (!config["retries"].is_number_unsigned() && !config["retries"].is_number_integer())
+                throw std::runtime_error("retries must be a non-negative integer");
+            const auto value = config["retries"].get<std::int64_t>();
+            if (value < 0 || value > 1000) throw std::runtime_error("retries must be between 0 and 1000");
+            retries_per_pool = static_cast<std::uint32_t>(value);
+        }
+        if (config.contains("retry-pause") && !config["retry-pause"].is_null()) {
+            if (!config["retry-pause"].is_number_unsigned() && !config["retry-pause"].is_number_integer())
+                throw std::runtime_error("retry-pause must be a non-negative integer");
+            const auto value = config["retry-pause"].get<std::int64_t>();
+            if (value < 0 || value > 3600) throw std::runtime_error("retry-pause must be between 0 and 3600 seconds");
+            retry_pause_seconds = static_cast<std::uint32_t>(value);
+        }
+        std::chrono::seconds retry_delay{retry_pause_seconds};
 
         const auto install_job = [&](Job next_job) {
             const auto previous_work = state.current_work();
@@ -1216,7 +1259,12 @@ std::uint64_t hash_value = 0;
                 }
                 logging::warning("net", "switching pool; retrying in " +
                     std::to_string(retry_delay.count()) + "s");
-                pool_index = (pool_index + 1) % pools.size();
+                ++pool_failures;
+                if (pool_failures > retries_per_pool) {
+                    pool_index = (pool_index + 1) % pools.size();
+                    pool_failures = 0;
+                    logging::warning("net", "retry limit reached; switching to next configured pool");
+                }
                 auto remaining_delay =
                     std::chrono::duration_cast<std::chrono::milliseconds>(retry_delay);
                 while (remaining_delay > std::chrono::milliseconds::zero() &&
