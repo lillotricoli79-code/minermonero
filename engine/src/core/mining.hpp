@@ -48,6 +48,7 @@ struct MiningWork {
 
 struct MiningState {
     std::atomic<bool> stop{false};
+    int cpu_priority = 2;
     std::atomic<std::uint64_t> hashes{0};
     std::atomic<std::uint64_t> found{0};
     std::atomic<std::uint64_t> submitted{0};
