@@ -113,8 +113,10 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     WorkerCounterPublisher counter_publisher{
         published_worker_counter, &local_worker_hashes};
     const bool pinned = platform::pin_current_thread(worker_id);
+    const bool priority_applied = platform::set_current_thread_priority(state.cpu_priority);
     logging::info("cpu", "worker #" + std::to_string(worker_id) +
-        (pinned ? " started; CPU affinity pinned" : " started; affinity unavailable"));
+        (pinned ? " started; CPU affinity pinned" : " started; affinity unavailable") +
+        (priority_applied ? "; priority applied" : "; priority unchanged (permission or platform limit)"));
     // Scratchpad mappings are reused only by workers on the same NUMA node.
     rxm_set_allocator_node(pinned
         ? platform::numa_node_for_logical_cpu(worker_id) : -1);
