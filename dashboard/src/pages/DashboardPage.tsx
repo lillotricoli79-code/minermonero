@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import DataRow from "../components/DataRow";
 import MetricCard from "../components/MetricCard";
 import { request } from "../services/api";
@@ -311,7 +311,7 @@ function App() {
   };
 
 
-  const runShellCommand = async (event: React.FormEvent<HTMLFormElement>) => {
+  const runShellCommand = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const command = shellCommand.trim();
     if (!command || shellBusy) return;
