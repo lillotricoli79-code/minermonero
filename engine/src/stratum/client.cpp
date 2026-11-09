@@ -257,6 +257,7 @@ int run_miner(const std::filesystem::path& config_path,
         const std::uint32_t automatic_threads = pool_threads;
         state.initialize_worker_counters(256);
         auto desired_threads = std::make_shared<std::atomic<std::uint32_t>>(pool_threads);
+        auto runtime_prefetch_mode = std::make_shared<std::atomic<int>>(prefetch_mode);
         const auto cpu_summary = cpu_summary_json();
         // XMRig-compatible persistent scratchpad pool: false disables it,
         // true sizes it for the active workers, and a number sets capacity.
@@ -300,7 +301,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [&state, desired_threads, automatic_threads, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, prefetch_mode, started](std::stop_token stop_token) {
+                [&state, desired_threads, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     auto previous_sample = Clock::now();
@@ -322,6 +323,9 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  config          configurazione XMRig (credenziali oscurate)\n"
                                       << "  threads N       imposta worker in tempo reale (1-256)\n"
                                       << "  threads auto    ripristina il numero automatico iniziale\n"
+                                      << "  set prefetch-mode N (0-3) modifica il prefetch JIT live\n"
+                                      << "  set huge-pages on|off (richiede riavvio)\n"
+                                      << "  set randomx.mode fast|light (richiede riavvio)\n"
                                       << "  help            mostra questo aiuto\n"
                                       << "  quit             arresta ordinatamente il miner\n";
                         } else if (command == "threads" && (input >> value)) {
@@ -344,6 +348,31 @@ int run_miner(const std::filesystem::path& config_path,
                                 } catch (...) {
                                     std::cout << "Valore non valido. Usa threads N oppure threads auto.\n";
                                 }
+                            }
+                        } else if (command == "set") {
+                            std::string setting;
+                            std::string setting_value;
+                            if (!(input >> setting >> setting_value)) {
+                                std::cout << "Uso: set prefetch-mode N | set huge-pages on|off | set randomx.mode fast|light\\n";
+                            } else if (setting == "prefetch-mode") {
+                                try {
+                                    std::size_t used = 0;
+                                    const int mode = std::stoi(setting_value, &used, 10);
+                                    if (used != setting_value.size() || mode < 0 || mode > 3) {
+                                        std::cout << "prefetch-mode deve essere 0, 1, 2 o 3\\n";
+                                    } else {
+                                        rxm_set_prefetch_mode(mode);
+                                        runtime_prefetch_mode->store(mode, std::memory_order_release);
+                                        logging::info("cpu", "runtime prefetch mode changed to " + std::to_string(mode));
+                                        std::cout << "Prefetch mode applicato: " << mode << '\\n';
+                                    }
+                                } catch (...) {
+                                    std::cout << "Valore prefetch-mode non valido\\n";
+                                }
+                            } else if (setting == "huge-pages" || setting == "randomx.mode") {
+                                std::cout << setting << " è un'impostazione di inizializzazione RandomX: modifica config.json e riavvia il miner per applicarla.\\n";
+                            } else {
+                                std::cout << "Impostazione non supportata dalla shell: " << setting << '\\n';
                             }
                         } else if (command == "status") {
                             const auto hashes = state.hashes.load(std::memory_order_relaxed);
@@ -392,7 +421,7 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << "RandomX mode: " << (full_memory ? "fast/full dataset" : "light/cache")
                                       << " | huge pages richieste: " << (large_pages_requested ? "si" : "no")
                                       << " | JIT huge pages: " << (jit_huge_pages ? "si" : "no")
-                                      << " | prefetch mode: " << prefetch_mode
+                                      << " | prefetch mode: " << runtime_prefetch_mode->load(std::memory_order_relaxed)
                                       << " | MSR: " << msr_status
                                       << "\\nNota: richiesta non equivale ad allocazione riuscita; controllare i log.\\n";
                         } else if (command == "config") {
