@@ -274,6 +274,7 @@ inline bool set_current_thread_priority(int priority) noexcept {
 #ifdef _WIN32
         int native_priority = THREAD_PRIORITY_IDLE;
         switch (priority) {
+        case 0: native_priority = THREAD_PRIORITY_IDLE; break;
         case 1: native_priority = THREAD_PRIORITY_BELOW_NORMAL; break;
         case 2: native_priority = THREAD_PRIORITY_NORMAL; break;
         case 3: native_priority = THREAD_PRIORITY_ABOVE_NORMAL; break;
