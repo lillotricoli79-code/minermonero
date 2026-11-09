@@ -74,10 +74,12 @@ std::optional<std::pair<std::uint64_t,std::uint64_t>> read_process_cpu_and_rss()
 
 std::optional<std::uint64_t> read_cpu_frequency_mhz() {
 #ifdef _WIN32
-    SYSTEM_INFO system_info{};
-    GetSystemInfo(&system_info);
-    if (system_info.dwNumberOfProcessors == 0) return std::nullopt;
-    std::vector<PROCESSOR_POWER_INFORMATION> processors(system_info.dwNumberOfProcessors);
+    // GetSystemInfo reports only the current processor group on modern
+    // Windows. Query all active groups so multi-socket/high-core hosts are
+    // sampled without truncating the CPU frequency telemetry.
+    const DWORD processor_count = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+    if (processor_count == 0) return std::nullopt;
+    std::vector<PROCESSOR_POWER_INFORMATION> processors(processor_count);
     const auto status = CallNtPowerInformation(
         ProcessorInformation, nullptr, 0, processors.data(),
         static_cast<ULONG>(processors.size() * sizeof(PROCESSOR_POWER_INFORMATION)));
