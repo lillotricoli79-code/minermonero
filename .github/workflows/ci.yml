@@ -2,6 +2,9 @@ name: Application CI
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/ci.yml"
 
 permissions:
   contents: read
