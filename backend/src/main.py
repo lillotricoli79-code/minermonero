@@ -274,7 +274,11 @@ def read_native_status_snapshot(max_age_seconds: float = 8.0) -> dict[str, Any] 
     return payload
 
 
-def queue_native_command(command: str, value: int | str | None = None) -> None:
+def queue_native_command(
+    command: str,
+    value: int | str | None = None,
+    target_pid: int | None = None,
+) -> None:
     """Atomically enqueue a short-lived command for the standalone C++ engine."""
     payload: dict[str, Any] = {
         "command": command,
@@ -282,6 +286,8 @@ def queue_native_command(command: str, value: int | str | None = None) -> None:
     }
     if value is not None:
         payload["value"] = value
+    if target_pid is not None and target_pid > 0:
+        payload["target_pid"] = target_pid
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -712,9 +718,14 @@ class MinerController:
                 self.process = None
                 process = None
         if process is None:
-            if read_native_status_snapshot() is not None:
+            snapshot = read_native_status_snapshot()
+            if snapshot is not None:
+                target_pid = snapshot.get("pid")
                 try:
-                    queue_native_command("stop")
+                    queue_native_command(
+                        "stop",
+                        target_pid=target_pid if isinstance(target_pid, int) and not isinstance(target_pid, bool) else None,
+                    )
                 except OSError as exc:
                     raise HTTPException(status_code=500, detail=f"Impossibile inviare l'arresto al miner nativo: {exc}") from exc
                 self._log("Richiesta di arresto graduale inviata al miner nativo avviato esternamente.")
@@ -870,8 +881,13 @@ class MinerController:
                     if not 1 <= requested_value <= 256:
                         raise HTTPException(status_code=400, detail="Il numero di thread deve essere tra 1 e 256.")
                     label = str(requested_value)
+                target_pid = status.get("pid")
                 try:
-                    queue_native_command("threads", requested_value)
+                    queue_native_command(
+                        "threads",
+                        requested_value,
+                        target_pid if isinstance(target_pid, int) and not isinstance(target_pid, bool) else None,
+                    )
                 except OSError as exc:
                     raise HTTPException(status_code=500, detail=f"Impossibile inviare il comando thread al miner: {exc}") from exc
                 self._log(f"Richiesta regolazione a {label} thread inviata al miner nativo esterno.")
