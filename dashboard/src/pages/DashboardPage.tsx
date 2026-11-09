@@ -5,6 +5,7 @@ import { request } from "../services/api";
 import { formatCount, formatHashrate, formatUptime } from "../utils/format";
 import {
   Activity,
+  Terminal,
   ArrowUpRight,
   Check,
   CircleHelp,
@@ -33,7 +34,7 @@ import {
   YAxis,
 } from "recharts";
 
-type Page = "overview" | "settings";
+type Page = "overview" | "settings" | "shell";
 type Status = {
   state: "ATTIVO" | "AVVIO" | "RICONNESSIONE" | "OFFLINE";
   managed: boolean;
@@ -139,6 +140,9 @@ function App() {
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [shellCommand, setShellCommand] = useState("");
+  const [shellBusy, setShellBusy] = useState(false);
+  const [shellLines, setShellLines] = useState<string[]>(["UNIQUE RX operator shell", "Digita help per i comandi disponibili."]);
   const logCursor = useRef(0);
 
   useEffect(() => {
@@ -306,6 +310,31 @@ function App() {
     }
   };
 
+
+  const runShellCommand = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const command = shellCommand.trim();
+    if (!command || shellBusy) return;
+    setShellBusy(true);
+    setShellCommand("");
+    setShellLines((current) => [...current, "> " + command].slice(-300));
+    try {
+      const result = await request<{ lines: string[]; restart?: boolean }>("/shell/command", {
+        method: "POST",
+        body: JSON.stringify({ command }),
+      });
+      setShellLines((current) => [...current, ...result.lines].slice(-300));
+      if (result.restart) {
+        setNotice("Riavvio controllato richiesto. config.json è rimasto invariato.");
+        setStatus(await request<Status>("/status"));
+      }
+    } catch (error) {
+      setShellLines((current) => [...current, "ERRORE: " + (error instanceof Error ? error.message : "Comando non completato.")].slice(-300));
+    } finally {
+      setShellBusy(false);
+    }
+  };
+
   const active = status.state === "ATTIVO";
   const stateLabel = active
     ? status.managed
@@ -341,6 +370,13 @@ function App() {
             <span>Panoramica</span>
           </button>
           <button
+            className={page === "shell" ? "nav-item selected" : "nav-item"}
+            onClick={() => setPage("shell")}
+          >
+            <Terminal size={17} />
+            <span>Shell</span>
+          </button>
+          <button
             className={`nav-item ${page === "settings" ? "selected" : ""}`}
             onClick={() => setPage("settings")}
           >
@@ -374,7 +410,7 @@ function App() {
             <span>MINER</span>
             <ArrowUpRight size={13} />
             <strong>
-              {page === "overview" ? "PANORAMICA" : "CONFIGURAZIONE"}
+              {page === "overview" ? "PANORAMICA" : page === "shell" ? "SHELL OPERATIVA" : "CONFIGURAZIONE"}
             </strong>
           </div>
           <div className="topbar-right">
@@ -848,6 +884,51 @@ function App() {
                 <span>
                   TELEMETRIA FORNITA DAL MINER <ShieldCheck size={13} />
                 </span>
+              </footer>
+            </>
+          ) : page === "shell" ? (
+            <>
+              <section className="page-heading">
+                <div>
+                  <div className="eyebrow"><i /> OPERATOR CONSOLE / 02</div>
+                  <h1>Shell <span>operativa</span></h1>
+                  <p>Comandi collegati allo stato reale del miner. La shell non riscrive config.json.</p>
+                </div>
+                <div className="primary-actions">
+                  <button className="button button-start" type="button" onClick={() => setShellCommand("help")}>
+                    <Terminal size={15} /> Comandi disponibili
+                  </button>
+                </div>
+              </section>
+              <section className="shell-panel">
+                <div className="shell-panel-head">
+                  <div><span className="status-dot good" /> UNIQUE RX · LOCALE</div>
+                  <span>LOG PERSISTENTE · COMANDI REALI</span>
+                </div>
+                <pre className="shell-output" aria-live="polite">{shellLines.join("\n")}</pre>
+                <form className="shell-input-row" onSubmit={(event) => void runShellCommand(event)}>
+                  <label htmlFor="shell-command">&gt;</label>
+                  <input
+                    id="shell-command"
+                    value={shellCommand}
+                    onChange={(event) => setShellCommand(event.target.value)}
+                    placeholder="help, status, threads 4, graph..."
+                    autoComplete="off"
+                    spellCheck={false}
+                    maxLength={120}
+                  />
+                  <button className="button button-start" type="submit" disabled={shellBusy || !shellCommand.trim()}>
+                    {shellBusy ? "ESECUZIONE…" : "ESEGUI"}
+                  </button>
+                </form>
+                <div className="shell-hint">
+                  <span>threads N / threads auto: riavvio controllato del motore</span>
+                  <span>config.json: sola lettura</span>
+                </div>
+              </section>
+              <footer className="page-footer">
+                <span>UNIQUE RX · SHELL OPERATIVA</span>
+                <span>NESSUNA CREDENZIALE MOSTRATA <ShieldCheck size={13} /></span>
               </footer>
             </>
           ) : (
