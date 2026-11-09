@@ -63,11 +63,16 @@ void MiningState::set_work(std::shared_ptr<const MiningWork> next) {
     work = std::move(next);
 }
 
-std::uint64_t MiningState::next_nonce_offset(std::uint64_t generation) {
-    if (nonce_generation.load(std::memory_order_acquire) != generation) {
-        return UINT64_MAX; // obsolete job: abandon it and fetch current work
+std::uint64_t MiningState::next_nonce_offset(std::uint64_t generation,
+                                                   std::uint64_t count) {
+    if (count == 0 ||
+        nonce_generation.load(std::memory_order_acquire) != generation) {
+        return UINT64_MAX; // obsolete job or invalid reservation
     }
-    const auto offset = nonce_cursor.fetch_add(1, std::memory_order_relaxed);
+    // Reserve ranges rather than incrementing the shared cursor for every
+    // hash. Workers consume their local range without synchronization; this
+    // keeps live resizing generation-safe while reducing cache-line traffic.
+    const auto offset = nonce_cursor.fetch_add(count, std::memory_order_relaxed);
     if (nonce_generation.load(std::memory_order_acquire) != generation) {
         return UINT64_MAX;
     }
