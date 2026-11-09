@@ -6,6 +6,24 @@ $logsDir = Join-Path $repoRoot "logs"
 $api = "http://127.0.0.1:8000"
 if (-not (Test-Path -LiteralPath $configPath)) { throw "config.json non trovato. Copia config.example.json e configura wallet e pool." }
 
+# Elevate only when the user's own configuration requests privileged features.
+# MSR is never enabled or modified by this launcher.
+$config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+$needsAdmin = [bool](
+    $config.cpu.'huge-pages' -or
+    $config.cpu.'jit-huge-pages' -or
+    $config.randomx.wrmsr
+)
+if ($needsAdmin) {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+        Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $arguments -WorkingDirectory $repoRoot
+        exit 0
+    }
+}
+
 # Preserve the user's MSR choice exactly as stored in config.json.
 # The native engine treats MSR as optional and continues without it when
 # the feature is disabled, unsupported, or lacks permissions.
