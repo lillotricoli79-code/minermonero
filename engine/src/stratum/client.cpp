@@ -391,7 +391,18 @@ int run_miner(const std::filesystem::path& config_path,
             logging::warning("config", "randomx.cache_qos is recognized but cache QoS allocation is not implemented");
         }
         if (cpu_config.contains("asm") && !cpu_config["asm"].is_null()) {
-            logging::info("config", "cpu.asm accepted; RandomX upstream dispatch selects the supported native code path automatically");
+            const auto& assembly = cpu_config["asm"];
+            if (!assembly.is_boolean() && !assembly.is_string())
+                throw std::runtime_error("cpu.asm must be boolean or one of none, auto, intel, ryzen, bulldozer");
+            if (assembly.is_string()) {
+                auto name = assembly.get<std::string>();
+                std::transform(name.begin(), name.end(), name.begin(),
+                    [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+                if (name != "none" && name != "auto" && name != "intel" &&
+                    name != "ryzen" && name != "bulldozer")
+                    throw std::runtime_error("cpu.asm must be none, auto, intel, ryzen, or bulldozer");
+            }
+            logging::warning("config", "cpu.asm XMRig selection is parsed; RandomX JIT instruction dispatch remains governed by the detected CPU features and is not overridden by this field");
         }
         bool cpu_yield = true; // XMRig CpuConfig default.
         if (cpu_config.contains("yield") && !cpu_config["yield"].is_null()) {
