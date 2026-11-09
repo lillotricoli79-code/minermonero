@@ -12,6 +12,7 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -92,6 +93,7 @@ bool hash_meets_target(const Hash& hash, std::uint64_t target) noexcept;
 
 void hash_worker(MiningState& state, std::uint32_t worker_id,
                  std::uint32_t worker_count, std::uint64_t maximum_hashes,
-                 std::atomic<bool>& worker_stop);
+                 std::atomic<bool>& worker_stop,
+                 std::optional<std::int64_t> affinity_override = std::nullopt);
 
 } // namespace unique_rx::core
