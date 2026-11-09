@@ -17,7 +17,8 @@ target_include_directories(nlohmann_json INTERFACE
 
 add_executable(unique-rx src/logging/log.cpp src/main.cpp src/stratum/client.cpp src/stratum/job.cpp
   src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/randomx/benchmark.cpp
-  src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp\n  src/telemetry/system.cpp)
+  src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp
+  src/telemetry/system.cpp)
 target_compile_features(unique-rx PRIVATE cxx_std_20)
 target_include_directories(unique-rx PRIVATE src "${randomx_SOURCE_DIR}/src")
 target_link_libraries(unique-rx PRIVATE randomx Threads::Threads OpenSSL::SSL
@@ -101,7 +102,7 @@ if(BUILD_TESTING)
   target_link_libraries(unique-rx-stratum-tests PRIVATE randomx Threads::Threads
     OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
   if(WIN32)
-    target_link_libraries(unique-rx-stratum-tests PRIVATE ws2_32 advapi32)
+    target_link_libraries(unique-rx-stratum-tests PRIVATE ws2_32 advapi32 psapi)
   endif()
   add_test(NAME unique-rx-stratum-job-validation COMMAND unique-rx-stratum-tests)
 
@@ -115,7 +116,7 @@ if(BUILD_TESTING)
   target_link_libraries(unique-rx-stratum-integration-tests PRIVATE randomx
     Threads::Threads OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
   if(WIN32)
-    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32 advapi32)
+    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32 advapi32 psapi)
   endif()
   add_test(NAME unique-rx-stratum-loopback COMMAND unique-rx-stratum-integration-tests)
   set_tests_properties(unique-rx-stratum-loopback PROPERTIES TIMEOUT 45)
