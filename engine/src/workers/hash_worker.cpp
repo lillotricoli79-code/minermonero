@@ -37,6 +37,7 @@ void write_nonce(std::vector<std::uint8_t>& blob, std::uint32_t nonce) {
 inline constexpr std::size_t kMaximumQueuedShares = 8192;
 
 std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
+                             std::uint64_t& local_worker_hashes,
                              const std::shared_ptr<const MiningWork>& work,
                              std::uint32_t nonce, const Hash& hash,
                              std::uint64_t maximum_hashes) {
@@ -56,8 +57,11 @@ std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
             break;
         }
     }
-    if (worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id]) {
-        state.worker_hashes[worker_id]->fetch_add(1, std::memory_order_relaxed);
+    ++local_worker_hashes;
+    if (worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id] &&
+        ((local_worker_hashes & 0xffU) == 0 ||
+         (maximum_hashes != 0 && count >= maximum_hashes))) {
+        state.worker_hashes[worker_id]->store(local_worker_hashes, std::memory_order_relaxed);
     }
     // Serialize the final generation check with queue insertion. This closes
     // the reconnect race where a worker could enqueue an old-session share
@@ -82,6 +86,14 @@ std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
     return count;
 }
 
+struct WorkerCounterPublisher {
+    std::atomic<std::uint64_t>* published = nullptr;
+    std::uint64_t* local = nullptr;
+    ~WorkerCounterPublisher() {
+        if (published && local) published->store(*local, std::memory_order_relaxed);
+    }
+};
+
 } // namespace
 
 void hash_worker(MiningState& state, std::uint32_t worker_id,
@@ -90,6 +102,9 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         state.report_worker_error("invalid CPU worker index or worker count");
         return;
     }
+    std::uint64_t local_worker_hashes = 0;
+    WorkerCounterPublisher counter_publisher{
+        state.worker_hashes[worker_id].get(), &local_worker_hashes};
     const bool pinned = platform::pin_current_thread(worker_id);
     logging::info("cpu", "worker #" + std::to_string(worker_id) +
         (pinned ? " started; CPU affinity pinned" : " started; affinity unavailable"));
@@ -119,7 +134,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
         auto completed_work = std::move(pending_work);
         pending_work.reset();
         const auto count = complete_hash(
-            state, worker_id, completed_work, pending_nonce, hash, maximum_hashes);
+            state, worker_id, local_worker_hashes, completed_work, pending_nonce, hash, maximum_hashes);
         if (maximum_hashes != 0 && count >= maximum_hashes) {
             state.stop.store(true, std::memory_order_release);
         }
@@ -226,7 +241,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                     vm.get(), blob.data(), blob.size(), hash.data());
                 if (pending_work) {
                     const auto count = complete_hash(
-                        state, worker_id, pending_work, pending_nonce, hash, maximum_hashes);
+                        state, worker_id, local_worker_hashes, pending_work, pending_nonce, hash, maximum_hashes);
                     if (maximum_hashes != 0 && count >= maximum_hashes) {
                         state.stop.store(true, std::memory_order_release);
                     }
