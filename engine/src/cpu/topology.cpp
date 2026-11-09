@@ -461,8 +461,11 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
     // Zero (or an absent key) keeps automatic physical-core/cache selection.
     std::uint32_t selected = 0;
     bool explicit_thread_count = false;
-    if (cpu_config.contains("threads") && !cpu_config["threads"].is_null()) {
-        const auto& configured = cpu_config["threads"];
+    // XMRig stores the RandomX worker profile under "rx" (CpuThreads
+    // profile); retain the older UNIQUE RX "threads" alias for compatibility.
+    const char* profile_key = cpu_config.contains("rx") ? "rx" : "threads";
+    if (cpu_config.contains(profile_key) && !cpu_config[profile_key].is_null()) {
+        const auto& configured = cpu_config[profile_key];
         std::uint64_t requested = 0;
         if (configured.is_array()) {
             // XMRig CpuThreads array form: each entry is a CPU affinity index
@@ -555,8 +558,11 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
 
 std::vector<std::int64_t> select_cpu_affinities(const nlohmann::json& cpu_config) {
     std::vector<std::int64_t> result;
-    if (!cpu_config.contains("threads")) return result;
-    const auto& configured = cpu_config["threads"];
+    // Match XMRig's RandomX profile key first; legacy UNIQUE RX
+    // configurations using "threads" remain accepted.
+    const char* profile_key = cpu_config.contains("rx") ? "rx" : "threads";
+    if (!cpu_config.contains(profile_key)) return result;
+    const auto& configured = cpu_config[profile_key];
     if (configured.is_array()) {
         result.reserve(configured.size());
         for (const auto& thread : configured) {
