@@ -581,6 +581,22 @@ int run_miner(const std::filesystem::path& config_path,
         auto active_pool_index = std::make_shared<std::atomic<std::size_t>>(0);
         auto runtime_prefetch_mode = std::make_shared<std::atomic<int>>(prefetch_mode);
         const auto cpu_summary = cpu_summary_json();
+        nlohmann::json startup_status = {
+            {"state", "AVVIO"}, {"managed", true}, {"error", nullptr},
+            {"hashrate", {{"10s", nullptr}, {"60s", nullptr}, {"15m", nullptr}}},
+            {"shares", {{"found", 0}, {"submitted", 0}, {"accepted", 0},
+                        {"rejected", 0}, {"stale", 0}, {"pending", 0},
+                        {"expired", 0}, {"dropped", 0}, {"total", 0}}},
+            {"uptime_seconds", 0}, {"algorithm", "rx/0"},
+            {"job_id", nullptr}, {"height", nullptr}, {"threads", pool_threads},
+            {"cpu", cpu_summary}, {"workers", nlohmann::json::array()},
+            {"pool", pools.front().host + ":" + pools.front().port},
+            {"connected", false}, {"pid", current_process_id()},
+        };
+        startup_status["timestamp_unix_ms"] =
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+        (void)write_status_snapshot(status_path, startup_status);
         // XMRig-compatible persistent scratchpad pool: false disables it,
         // true sizes it for the active workers, and a number sets capacity.
         const auto automatic_memory_pool_capacity = [&] {
