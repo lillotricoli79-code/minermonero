@@ -6,7 +6,8 @@
 #include "msr/msr.hpp"
 #include "platform/socket.hpp"
 #include "stratum/transport.hpp"
-#include "logging/log.hpp"\n#include "telemetry/system.hpp"
+#include "logging/log.hpp"
+#include "telemetry/system.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -93,7 +94,8 @@ int run_miner(const std::filesystem::path& config_path,
 #ifdef _WIN32
     SetConsoleCtrlHandler(console_stop_handler, TRUE);
 #endif
-    telemetry::SystemTelemetry system_telemetry;\n    MiningState state;
+    telemetry::SystemTelemetry system_telemetry;
+    MiningState state;
     std::vector<std::jthread> workers;
     struct StopWorkers {
         MiningState& state;
@@ -471,7 +473,11 @@ int run_miner(const std::filesystem::path& config_path,
                         };
                         const auto uptime =
                             std::chrono::duration_cast<std::chrono::seconds>(now - started).count();
-                        const auto system_sample = system_telemetry.sample();\n                        const auto optional_number = [](const auto& value) -> nlohmann::json {\n                            return value ? nlohmann::json(*value) : nlohmann::json(nullptr);\n                        };\n                        nlohmann::json status = {
+                        const auto system_sample = system_telemetry.sample();
+                        const auto optional_number = [](const auto& value) -> nlohmann::json {
+                            return value ? nlohmann::json(*value) : nlohmann::json(nullptr);
+                        };
+                        nlohmann::json status = {
                             {"state", "ATTIVO"}, {"managed", true}, {"error", nullptr},
                             {"hashrate", {{"10s", rate_for(std::chrono::seconds(10))},
                                            {"60s", rate_for(std::chrono::seconds(60))},
@@ -491,7 +497,16 @@ int run_miner(const std::filesystem::path& config_path,
                                 ? nlohmann::json(*work->job.height)
                                 : nlohmann::json(nullptr)},
                             {"threads", pool_threads}, {"cpu", cpu_summary},
-                            {"msr_active", msr.active()}, {"full_memory", full_memory},\n                            {"system", {\n                                {"cpu_percent", optional_number(system_sample.system_cpu_percent)},\n                                {"process_cpu_percent", optional_number(system_sample.process_cpu_percent)},\n                                {"cpu_frequency_mhz", optional_number(system_sample.cpu_frequency_mhz)},\n                                {"memory_used_bytes", optional_number(system_sample.memory_used_bytes)},\n                                {"process_memory_bytes", optional_number(system_sample.process_memory_bytes)},\n                                {"temperature_c", optional_number(system_sample.temperature_c)},\n                                {"package_power_watts", optional_number(system_sample.package_power_watts)}\n                            }},
+                            {"msr_active", msr.active()}, {"full_memory", full_memory},
+                            {"system", {
+                                {"cpu_percent", optional_number(system_sample.system_cpu_percent)},
+                                {"process_cpu_percent", optional_number(system_sample.process_cpu_percent)},
+                                {"cpu_frequency_mhz", optional_number(system_sample.cpu_frequency_mhz)},
+                                {"memory_used_bytes", optional_number(system_sample.memory_used_bytes)},
+                                {"process_memory_bytes", optional_number(system_sample.process_memory_bytes)},
+                                {"temperature_c", optional_number(system_sample.temperature_c)},
+                                {"package_power_watts", optional_number(system_sample.package_power_watts)}
+                            }},
                             {"pool", pool.host + ":" + pool.port}, {"connected", true},
                         };
                         if (machine_status_channel_required()) {
