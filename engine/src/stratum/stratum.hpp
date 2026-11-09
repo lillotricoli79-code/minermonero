@@ -69,6 +69,7 @@ struct PoolConfig {
     std::vector<std::int64_t> cpu_affinities;
     bool tls = false;
     bool keepalive = false;
+    std::uint32_t keepalive_seconds = 0;
     bool nicehash = false;
     bool sni = false;
 };
