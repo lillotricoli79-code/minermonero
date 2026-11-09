@@ -129,7 +129,7 @@ if(BUILD_TESTING)
   if(WIN32)
     target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32 advapi32 psapi powrprof)
   endif()
-  add_test(NAME unique-rx-stratum-loopback COMMAND unique-rx-stratum-integration-tests)
+  add_test(NAME unique-rx-stratum-loopback COMMAND unique-rx-stratum-integration-tests $<TARGET_FILE:unique-rx>)
   set_tests_properties(unique-rx-stratum-loopback PROPERTIES TIMEOUT 45)
 
   if(RANDOMX_VAES_ENABLED)
