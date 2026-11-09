@@ -44,6 +44,8 @@ struct MiningState {
     std::atomic<std::uint64_t> stale_shares{0};
     std::atomic<std::uint64_t> expired_shares{0};
     std::atomic<std::uint64_t> dropped_shares{0};
+    std::atomic<std::int64_t> last_share_latency_ms{-1};
+    std::atomic<std::uint64_t> reconnects{0};
 
     // NyxRX Metrics::register_thread port: real counters per hashing worker.
     std::vector<std::shared_ptr<std::atomic<std::uint64_t>>> worker_hashes;
