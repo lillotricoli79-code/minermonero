@@ -147,7 +147,9 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     std::uint64_t nonce_block_generation = 0;
     std::uint64_t nonce_block_next = 0;
     std::uint64_t nonce_block_end = 0;
-    constexpr std::uint64_t kNonceReservationSize = 256;
+    // Match XMRig CpuWorker's 32768-nonce reservation cadence while
+    // keeping generation-safe, shared allocation for live worker resizing.
+    constexpr std::uint64_t kNonceReservationSize = 32768;
     std::uint32_t pending_nonce = 0;
     bool pipeline_active = false;
     std::uint64_t active_vm_config_generation = UINT64_MAX;
