@@ -55,13 +55,30 @@ void print_usage(const char* executable) {
 int main(int argc, char** argv) {
     try {
         if (argc > 1 && std::string_view(argv[1]) == "--mine") {
-            if (argc > 4) {
-                print_usage(argv[0]);
-                return 2;
+            std::filesystem::path config_path = "config.json";
+            std::uint64_t maximum_hashes = 0;
+            std::uint32_t thread_override = 0;
+            int index = 2;
+            if (index < argc && std::string_view(argv[index]).substr(0, 2) != "--") {
+                config_path = argv[index++];
             }
-            const std::filesystem::path config_path = argc > 2 ? argv[2] : "config.json";
-            const auto maximum_hashes = parse_unsigned64(argc > 3 ? argv[3] : nullptr, 0);
-            return unique_rx::run_miner(config_path, maximum_hashes);
+            while (index < argc) {
+                const std::string_view option(argv[index++]);
+                if ((option == "--threads" || option == "--max-hashes") && index >= argc) {
+                    throw std::invalid_argument(std::string(option) + " requires a value");
+                }
+                if (option == "--threads") {
+                    const auto value = parse_unsigned(argv[index++], 0);
+                    if (value == 0 || value > 256)
+                        throw std::invalid_argument("--threads must be between 1 and 256");
+                    thread_override = value;
+                } else if (option == "--max-hashes") {
+                    maximum_hashes = parse_unsigned64(argv[index++], 0);
+                } else {
+                    throw std::invalid_argument("unknown --mine option: " + std::string(option));
+                }
+            }
+            return unique_rx::run_miner(config_path, maximum_hashes, thread_override);
         }
         if (argc < 2 || std::string_view(argv[1]) == "--help") {
             print_usage(argv[0]);
