@@ -17,14 +17,14 @@ target_include_directories(nlohmann_json INTERFACE
 
 add_executable(unique-rx src/logging/log.cpp src/main.cpp src/stratum/client.cpp src/stratum/job.cpp
   src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/randomx/benchmark.cpp
-  src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp)
+  src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp\n  src/telemetry/system.cpp)
 target_compile_features(unique-rx PRIVATE cxx_std_20)
 target_include_directories(unique-rx PRIVATE src "${randomx_SOURCE_DIR}/src")
 target_link_libraries(unique-rx PRIVATE randomx Threads::Threads OpenSSL::SSL
   OpenSSL::Crypto nlohmann_json::nlohmann_json)
 
 if(WIN32)
-  target_link_libraries(unique-rx PRIVATE ws2_32 advapi32)
+  target_link_libraries(unique-rx PRIVATE ws2_32 advapi32 psapi)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/msr/IntelMSR.bin")
     add_custom_command(TARGET unique-rx POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:unique-rx>/msr"
