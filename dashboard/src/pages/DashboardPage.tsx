@@ -732,6 +732,14 @@ function App() {
                     <DataRow icon={<Activity size={15} />} label="Temperatura sensore" value={status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "Non disponibile"} />
                     <DataRow icon={<Gauge size={15} />} label="Difficoltà job" value={status.job_difficulty == null ? "Non disponibile" : formatCount(status.job_difficulty)} />
                     <DataRow icon={<ShieldCheck size={15} />} label="Miglior share" value={status.best?.top_difficulties?.[0] ? status.best.top_difficulties[0].difficulty.toLocaleString("it-IT", { maximumFractionDigits: 2 }) : "In attesa"} />
+                    {status.best?.top_difficulties?.map((entry, index) => (
+                      <DataRow
+                        key={`best-share-${index}`}
+                        icon={<ShieldCheck size={15} />}
+                        label={`Share #${index + 1}`}
+                        value={`${formatCount(entry.difficulty)} · ${new Date(entry.at_unix_seconds * 1000).toLocaleString("it-IT")}`}
+                      />
+                    ))}
                     <DataRow icon={<Gauge size={15} />} label="Effort stimato" value={status.best ? status.best.effort_percent.toFixed(2) + "%" : "In attesa"} />
                     <DataRow icon={<Activity size={15} />} label="Lavoro accettato stimato" value={status.best ? formatCount(status.best.estimated_hashes) + " hash" : "In attesa"} />
                     <DataRow icon={<Cpu size={15} />} label="Huge Pages" value={status.large_pages_active == null ? "Non disponibile" : status.large_pages_active ? "Attive" : status.large_pages_requested ? "Non disponibili · fallback" : "Disattivate"} />
