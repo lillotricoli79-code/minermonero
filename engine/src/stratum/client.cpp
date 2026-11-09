@@ -320,6 +320,7 @@ int run_miner(const std::filesystem::path& config_path,
             const auto& pool = pools[pool_index];
             state.set_work(nullptr);
             pending.clear();
+            state.last_share_latency_ms.store(-1, std::memory_order_relaxed);
             std::uint64_t next_id = 2;
             std::string session_id;
             bool session_nicehash = pool.nicehash;
