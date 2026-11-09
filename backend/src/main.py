@@ -35,7 +35,7 @@ DEFAULTS: dict[str, Any] = {
     "autosave": True,
     "background": False,
     "colors": True,
-    "cpu": {"enabled": True, "huge-pages": False, "jit-huge-pages": False, "prefetch-mode": 1, "priority": 2},
+    "cpu": {"enabled": True, "huge-pages": True, "jit-huge-pages": False, "prefetch-mode": 1, "priority": 2},
     "cuda": False,
     "opencl": False,
     "http": {
@@ -752,7 +752,7 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
     priority = cpu.get("priority", 2)
     if isinstance(priority, bool) or not isinstance(priority, int) or not -1 <= priority <= 5:
         priority = 2
-    huge_pages = cpu.get("huge-pages", False)
+    huge_pages = cpu.get("huge-pages", True)
     if not isinstance(huge_pages, bool):
         huge_pages = False
     jit_huge_pages = cpu.get("jit-huge-pages", False)
