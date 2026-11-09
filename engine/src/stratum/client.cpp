@@ -608,6 +608,10 @@ int run_miner(const std::filesystem::path& config_path,
                                     if (endpoint.contains("pass")) endpoint["pass"] = "<redacted>";
                                 }
                             }
+                            if (safe.contains("http") && safe["http"].is_object() &&
+                                safe["http"].contains("access-token")) {
+                                safe["http"]["access-token"] = "<redacted>";
+                            }
                             std::cout << safe.dump(2) << '\n';
                         } else if (command == "quit") {
                             std::cout << "Arresto ordinato richiesto...\n";
