@@ -1093,6 +1093,13 @@ int run_miner(const std::filesystem::path& config_path,
                         if ((descriptor.revents & (POLLIN | POLLHUP)) == 0) continue;
                         const auto count = ::read(STDIN_FILENO, &character, 1);
                         if (count <= 0) break;
+                        if (character == '\r' || character == '\n') {
+                            std::cout << '\n' << std::flush;
+                        } else if (character == '\b' || character == 127) {
+                            std::cout << "\b \b" << std::flush;
+                        } else if (character >= 32 && character <= 126) {
+                            std::cout << character << std::flush;
+                        }
 #endif
                         if (character == '\r' || character == '\n') {
                             if (!command_line.empty()) process_command(command_line);
