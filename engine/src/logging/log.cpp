@@ -289,6 +289,8 @@ void submit(Level level, std::string_view category, std::string_view message) {
             // Before the asynchronous worker starts, preserve the legacy synchronous API.
             write_console(entry, config);
             if (s.file.is_open()) {
+                rotate_if_needed(s, config);
+                if (!s.file.is_open()) return;
                 s.file << format_entry(entry) << '\n';
                 if (level >= Level::Warning) s.file.flush();
                 if (!s.file) {
@@ -335,6 +337,7 @@ bool initialize(const std::filesystem::path& path, const Config& config) {
             return false;
         } else {
             open_file(s, path);
+            rotate_if_needed(s, s.config);
             start_locked(s);
             return s.path.empty() || s.file.is_open();
         }
@@ -355,6 +358,7 @@ void set_file(const std::filesystem::path& path) {
         running = s.running;
         if (!running) {
             open_file(s, path);
+            rotate_if_needed(s, s.config);
             return;
         }
     }
