@@ -86,5 +86,63 @@ if (-not $health -or $health.status -ne "ok") {
     }
 }
 if (-not $health -or $health.status -ne "ok") { throw "Backend non raggiungibile su $api. Controlla logs/backend.stderr.log." }
-$result = Invoke-RestMethod -Method Post -Uri "$api/api/miner/start" -TimeoutSec 10
-Write-Host "Richiesta avvio miner inviata: $($result.status)"
+
+# Verify the built dashboard is present before opening the browser.
+$dashboardIndex = Join-Path $repoRoot "dashboard\dist\index.html"
+if (-not (Test-Path -LiteralPath $dashboardIndex)) {
+    throw "Dashboard non compilata: manca dashboard\dist\index.html. Esegui scripts\windows\build.ps1."
+}
+$dashboardUrl = "$api/"
+$dashboardReady = $false
+for ($attempt = 0; $attempt -lt 15; $attempt++) {
+    try {
+        $page = Invoke-WebRequest -Uri $dashboardUrl -UseBasicParsing -TimeoutSec 3
+        if ($page.StatusCode -eq 200 -and $page.Content.Contains('id="root"')) { $dashboardReady = $true; break }
+    } catch {}
+    Start-Sleep -Milliseconds 300
+}
+
+# If a previous backend started before dashboard/dist existed, restart only
+# the exact backend process recorded by this launcher.
+if (-not $dashboardReady) {
+    $pidFile = Join-Path $logsDir "backend.pid"
+    if (Test-Path -LiteralPath $pidFile) {
+        $ownedPid = 0
+        [void][int]::TryParse((Get-Content -LiteralPath $pidFile -Raw).Trim(), [ref]$ownedPid)
+        if ($ownedPid -gt 0) {
+            $ownedProcess = Get-CimInstance Win32_Process -Filter "ProcessId = $ownedPid" -ErrorAction SilentlyContinue
+            if ($ownedProcess -and $ownedProcess.CommandLine -match "backend\.src\.main:app") {
+                Stop-Process -Id $ownedPid -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 500
+            }
+        }
+    }
+    $backend = Start-Process -FilePath $pythonExe -ArgumentList @("-m","uvicorn","backend.src.main:app","--host","127.0.0.1","--port","8000") -WorkingDirectory $repoRoot -RedirectStandardOutput (Join-Path $logsDir "backend.stdout.log") -RedirectStandardError (Join-Path $logsDir "backend.stderr.log") -WindowStyle Hidden -PassThru
+    Set-Content -LiteralPath (Join-Path $logsDir "backend.pid") -Value $backend.Id
+    for ($attempt = 0; $attempt -lt 50; $attempt++) {
+        Start-Sleep -Milliseconds 200
+        if ($backend.HasExited) { throw "Backend riavviato ma terminato. Controlla logs/backend.stderr.log." }
+        try {
+            $page = Invoke-WebRequest -Uri $dashboardUrl -UseBasicParsing -TimeoutSec 2
+            if ($page.StatusCode -eq 200 -and $page.Content.Contains('id="root"')) { $dashboardReady = $true; break }
+        } catch {}
+    }
+}
+if (-not $dashboardReady) {
+    throw "Backend attivo ma dashboard non servita su $dashboardUrl. Controlla dashboard\dist\index.html e logs/backend.stderr.log."
+}
+
+# Keep the dashboard available even if miner startup reports an error.
+try {
+    $result = Invoke-RestMethod -Method Post -Uri "$api/api/miner/start" -TimeoutSec 10
+    Write-Host "Richiesta avvio miner inviata: $($result.status)" -ForegroundColor Green
+} catch {
+    Write-Warning "Dashboard pronta; avvio miner non riuscito: $($_.Exception.Message)"
+}
+Set-Content -LiteralPath (Join-Path $logsDir "dashboard.url.txt") -Value $dashboardUrl -Encoding ascii
+try {
+    Start-Process -FilePath $dashboardUrl
+    Write-Host "Dashboard UNIQUE RX aperta nel browser predefinito: $dashboardUrl" -ForegroundColor Green
+} catch {
+    Write-Warning "Dashboard attiva ma apertura automatica del browser non riuscita. Apri manualmente: $dashboardUrl"
+}
