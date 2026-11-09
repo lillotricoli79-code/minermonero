@@ -25,6 +25,7 @@
 #  define NOMINMAX
 #  include <windows.h>
 #  include <psapi.h>
+#  include <powrprof.h>
 #else
 #  include <unistd.h>
 #endif
@@ -72,7 +73,25 @@ std::optional<std::pair<std::uint64_t,std::uint64_t>> read_process_cpu_and_rss()
 #endif
 
 std::optional<std::uint64_t> read_cpu_frequency_mhz() {
-#ifdef __linux__
+#ifdef _WIN32
+    SYSTEM_INFO system_info{};
+    GetSystemInfo(&system_info);
+    if (system_info.dwNumberOfProcessors == 0) return std::nullopt;
+    std::vector<PROCESSOR_POWER_INFORMATION> processors(system_info.dwNumberOfProcessors);
+    const auto status = CallNtPowerInformation(
+        ProcessorInformation, nullptr, 0, processors.data(),
+        static_cast<ULONG>(processors.size() * sizeof(PROCESSOR_POWER_INFORMATION)));
+    if (status != 0) return std::nullopt;
+    std::uint64_t total_mhz = 0;
+    std::uint64_t count = 0;
+    for (const auto& processor : processors) {
+        if (processor.CurrentMhz > 0) {
+            total_mhz += processor.CurrentMhz;
+            ++count;
+        }
+    }
+    if (count != 0) return total_mhz / count;
+#elif defined(__linux__)
     const std::filesystem::path root("/sys/devices/system/cpu");
     std::error_code ec; std::uint64_t sum=0,count=0;
     for(const auto& entry:std::filesystem::directory_iterator(root,ec)) {
