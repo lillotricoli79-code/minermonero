@@ -681,6 +681,106 @@ int run_miner(const std::filesystem::path& config_path,
                     std::deque<double> shell_rate_history;
                     auto previous_sample = Clock::now();
                     double shell_hashrate = 0.0;
+                    const auto average_rate = [&](std::size_t window) {
+                        const auto count = std::min(window, shell_rate_history.size());
+                        if (count == 0) return 0.0;
+                        double total = 0.0;
+                        auto it = shell_rate_history.end() - static_cast<std::ptrdiff_t>(count);
+                        for (; it != shell_rate_history.end(); ++it) total += *it;
+                        return total / static_cast<double>(count);
+                    };
+#ifdef _WIN32
+                    HANDLE shell_output = GetStdHandle(STD_OUTPUT_HANDLE);
+                    DWORD shell_console_mode = 0;
+                    if (shell_output != INVALID_HANDLE_VALUE &&
+                        GetConsoleMode(shell_output, &shell_console_mode)) {
+                        SetConsoleMode(shell_output, shell_console_mode |
+                            ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+                    }
+#endif
+                    const auto render_operator_screen = [&] {
+                        const auto active_index = std::min(
+                            active_pool_index->load(std::memory_order_relaxed), pools.size() - 1);
+                        const auto& active_pool = pools[active_index];
+                        const auto work = state.current_work();
+                        const auto features = cpu_summary.value("features", nlohmann::json::object());
+                        const auto rate_text = [](double rate) {
+                            const char* units[] = {"H/s", "kH/s", "MH/s", "GH/s"};
+                            std::size_t unit = 0;
+                            while (rate >= 1000.0 && unit < 3) { rate /= 1000.0; ++unit; }
+                            std::ostringstream out;
+                            out << std::fixed << std::setprecision(2) << rate << ' ' << units[unit];
+                            return out.str();
+                        };
+                        const auto line = [](const std::string& label, const std::string& value) {
+                            std::cout << "  " << std::left << std::setw(18) << label
+                                      << " " << value << '\n';
+                        };
+                        const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
+                            Clock::now() - started).count();
+                        std::cout << "\x1b[2J\x1b[H"
+                                  << "\x1b[1;36m"
+                                  << "  U N I Q U E   R X   |   MONERO RANDOMX CPU MINER"
+                                  << "\x1b[0m\n"
+                                  << "  ================================================================================\n";
+                        line("ALGORITMO", "RandomX rx/0");
+                        line("CPU", cpu_summary.value("brand", std::string("non disponibile")));
+                        line("FEATURE", std::string("AES ") + (features.value("aes", false) ? "ON" : "OFF") +
+                            " | AVX2 " + (features.value("avx2", false) ? "ON" : "OFF") +
+                            " | BMI2 " + (features.value("bmi2", false) ? "ON" : "OFF"));
+                        line("CORE / WORKER", std::to_string(cpu_summary.value("physical_cores", 0U)) +
+                            " fisici | " + std::to_string(cpu_summary.value("logical_threads", 0U)) +
+                            " logici | " + std::to_string(desired_threads->load()) + " worker");
+                        std::cout << "  -------------------------------------------------------------------------------\n";
+                        std::cout << "  HASHRATE  10s " << std::setw(16) << rate_text(average_rate(10))
+                                  << "  60s " << std::setw(16) << rate_text(average_rate(60))
+                                  << "  15m " << rate_text(average_rate(900)) << '\n';
+                        const auto graph_begin = shell_rate_history.size() > 48
+                            ? shell_rate_history.end() - 48 : shell_rate_history.begin();
+                        const double graph_peak = graph_begin == shell_rate_history.end()
+                            ? 0.0 : *std::max_element(graph_begin, shell_rate_history.end());
+                        std::cout << "  TREND     ";
+                        static constexpr char graph_levels[] = " .:-=+*#@";
+                        for (auto it = graph_begin; it != shell_rate_history.end(); ++it) {
+                            const auto level = graph_peak > 0.0
+                                ? static_cast<std::size_t>(std::clamp(*it / graph_peak, 0.0, 1.0) * 8.0)
+                                : 0U;
+                            std::cout << graph_levels[level];
+                        }
+                        std::cout << '\n'
+                                  << "  -------------------------------------------------------------------------------\n";
+                        std::cout << "  SHARES    found " << state.found.load()
+                                  << " | sent " << state.submitted.load()
+                                  << " | \x1b[32maccepted " << state.accepted.load()
+                                  << "\x1b[0m | \x1b[31mrejected " << state.rejected.load()
+                                  << "\x1b[0m | stale " << state.stale_shares.load()
+                                  << " | pending " << state.pending.load()
+                                  << " | expired " << state.expired_shares.load()
+                                  << " | lost " << state.dropped_shares.load() << '\n';
+                        line("POOL", active_pool.host + ":" + active_pool.port +
+                            (active_pool.tls ? " | TLS" : " | TCP"));
+                        line("JOB / HEIGHT", work ? work->job.id + " / " +
+                            (work->job.height ? std::to_string(*work->job.height) : "n/d")
+                            : std::string("in attesa del job"));
+                        line("RECONNECT", std::to_string(state.reconnects.load()) +
+                            " | RTT share " +
+                            (state.last_share_latency_ms.load() >= 0
+                                ? std::to_string(state.last_share_latency_ms.load()) + " ms" : "n/d"));
+                        line("UPTIME", std::to_string(uptime) + " secondi");
+                        line("MEMORIA", std::string(full_memory ? "RandomX FAST" : "RandomX LIGHT") +
+                            " | huge pages " + (state.large_pages_active.load() ? "attive" : "non attive") +
+                            " | JIT HP " + (jit_huge_pages ? "ON" : "OFF"));
+                        line("MSR", msr_status);
+                        std::cout << "  -------------------------------------------------------------------------------\n"
+                                  << "  EVENTI RECENTI\n";
+                        for (const auto& entry : logging::recent_entries(4)) {
+                            std::string message = entry.message;
+                            if (message.size() > 88) message.resize(88);
+                            std::cout << "  [" << entry.level << "] " << message << '\n';
+                        }
+                        std::cout << "  -------------------------------------------------------------------------------\n"
+                                  << "  COMANDO > " << command_line << std::flush;
+                    };
                     const auto process_command = [&](const std::string& line) {
                         std::istringstream input(line);
                         std::string command;
@@ -837,6 +937,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << " | accepted " << state.accepted.load()
                                       << " | rejected " << state.rejected.load()
                                       << " | stale " << state.stale_shares.load()
+                                      << " | pending " << state.pending.load()
                                       << " | expired " << state.expired_shares.load()
                                       << " | dropped " << state.dropped_shares.load() << '\n';
                         } else if (command == "best") {
@@ -938,7 +1039,7 @@ int run_miner(const std::filesystem::path& config_path,
                         std::cout << std::flush;
                     };
 
-                    std::cout << "Digita help per i comandi UNIQUE RX.\n";
+                    render_operator_screen();
                     while (!stop_token.stop_requested() &&
                            !state.stop.load(std::memory_order_acquire)) {
                         const auto now = Clock::now();
@@ -959,6 +1060,7 @@ int run_miner(const std::filesystem::path& config_path,
                                 shell_rate_history.push_back(shell_hashrate);
                                 if (shell_rate_history.size() > 900) shell_rate_history.pop_front();
                             }
+                            if (command_line.empty()) render_operator_screen();
                             previous_hashes = hashes;
                             previous_sample = now;
                         }
@@ -1192,6 +1294,7 @@ struct PendingShare {
             const auto& pool = pools[pool_index];
             state.set_work(nullptr);
             pending.clear();
+            state.pending.store(0, std::memory_order_relaxed);
             state.last_share_latency_ms.store(-1, std::memory_order_relaxed);
             std::uint64_t next_id = 2;
             std::string session_id;
@@ -1219,6 +1322,7 @@ struct PendingShare {
                     state.last_share_latency_ms.store(latency_ms, std::memory_order_relaxed);
                     const auto accepted_share_data = pending_share->second;
                     pending.erase(pending_share);
+                    state.pending.store(pending.size(), std::memory_order_relaxed);
 
                     const bool has_error = rpc_response_failed(message);
                     const auto result_status = message.contains("result") &&
@@ -1309,6 +1413,7 @@ std::uint64_t hash_value = 0;
                               static_cast<double>(share.target);
                         pending.emplace(submit_id, PendingShare{
                             Clock::now(), actual_difficulty, target_difficulty});
+                        state.pending.store(pending.size(), std::memory_order_relaxed);
                         state.submitted.fetch_add(1, std::memory_order_relaxed);
                     }
                 };
@@ -1359,6 +1464,7 @@ std::uint64_t hash_value = 0;
                     for (auto it = pending.begin(); it != pending.end();) {
                         if (now - it->second.submitted_at >= kShareResponseTimeout) {
                             it = pending.erase(it);
+                            state.pending.store(pending.size(), std::memory_order_relaxed);
                             state.expired_shares.fetch_add(1, std::memory_order_relaxed);
                         } else {
                             ++it;
@@ -1572,6 +1678,7 @@ std::uint64_t hash_value = 0;
                     if (!pending.empty()) {
                         state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
                         pending.clear();
+                        state.pending.store(0, std::memory_order_relaxed);
                     }
                     {
                         std::lock_guard lock(state.share_mutex);
@@ -1592,6 +1699,7 @@ std::uint64_t hash_value = 0;
                 if (!pending.empty()) {
                     state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
                     pending.clear();
+                    state.pending.store(0, std::memory_order_relaxed);
                 }
                 // A share queued for the previous authenticated pool session must
                 // never leak into a different session after failover/reconnect,
