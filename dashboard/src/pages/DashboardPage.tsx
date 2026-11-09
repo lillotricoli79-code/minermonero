@@ -90,6 +90,7 @@ type MinerConfig = {
   api_port: number;
 };
 type ChartPoint = { at: number; hashrate: number };
+type SystemChartPoint = { at: number; system: number; miner: number | null };
 type LogItem = { id: number; time: number; message: string; engine?: string };
 
 const emptyStatus: Status = {
@@ -116,6 +117,7 @@ function App() {
   const [status, setStatus] = useState<Status>(emptyStatus);
   const [config, setConfig] = useState<MinerConfig | null>(null);
   const [history, setHistory] = useState<ChartPoint[]>([]);
+  const [systemHistory, setSystemHistory] = useState<SystemChartPoint[]>([]);
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -184,6 +186,13 @@ function App() {
         if (rate != null && Number.isFinite(rate)) {
           setHistory((current) =>
             [...current, { at: Date.now(), hashrate: rate }].slice(-48),
+          );
+        }
+        const systemCpu = nextStatus.system?.cpu_percent;
+        if (systemCpu != null && Number.isFinite(systemCpu)) {
+          const minerCpu = nextStatus.system?.process_cpu_percent ?? null;
+          setSystemHistory((current) =>
+            [...current, { at: Date.now(), system: systemCpu, miner: minerCpu }].slice(-48),
           );
         }
       }
@@ -566,6 +575,41 @@ function App() {
                 <div className="chart-foot">
                   <span>Campioni raccolti da questa sessione dashboard</span>
                   <span>{history.length} PUNTI</span>
+                </div>
+              </section>
+              <section className="chart-section">
+                <div className="section-heading">
+                  <div>
+                    <div className="eyebrow">TELEMETRIA NYXRX · CAMPIONI REALI</div>
+                    <h2>Carico CPU sistema e miner</h2>
+                  </div>
+                  <div className="chart-legend">
+                    <i /> Sistema <span>PROCESSO MINER</span>
+                  </div>
+                </div>
+                <div className="chart-frame">
+                  {systemHistory.length > 1 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={systemHistory} margin={{ top: 12, right: 12, bottom: 0, left: 0 }}>
+                        <CartesianGrid stroke="#e1e9e5" vertical={false} />
+                        <XAxis dataKey="at" tickFormatter={(value: number) => new Date(value).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} tickLine={false} axisLine={false} tick={{ fill: "#87938e", fontSize: 11 }} minTickGap={45} />
+                        <YAxis domain={[0, 100]} unit="%" tickLine={false} axisLine={false} width={52} tick={{ fill: "#87938e", fontSize: 11 }} />
+                        <Tooltip labelFormatter={(value) => new Date(Number(value)).toLocaleTimeString("it-IT")} formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name === "system" ? "CPU sistema" : "CPU miner"]} />
+                        <Area type="monotone" dataKey="system" name="system" stroke="#6e9d2b" strokeWidth={2} fill="#b8e86c" fillOpacity={0.16} dot={false} isAnimationActive={false} />
+                        <Area type="monotone" dataKey="miner" name="miner" stroke="#4385b5" strokeWidth={2} fill="#4385b5" fillOpacity={0.10} dot={false} isAnimationActive={false} connectNulls />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="chart-empty">
+                      <div className="empty-glyph"><Activity size={20} /></div>
+                      <strong>Telemetria in attesa</strong>
+                      <span>Il grafico compare quando il sistema operativo fornisce campioni CPU reali.</span>
+                    </div>
+                  )}
+                </div>
+                <div className="chart-foot">
+                  <span>Campioni CPU forniti dal sistema operativo · nessun valore simulato</span>
+                  <span>{systemHistory.length} PUNTI</span>
                 </div>
               </section>
               <section className="lower-grid">
