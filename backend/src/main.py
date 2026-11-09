@@ -266,11 +266,8 @@ def read_native_status_snapshot(max_age_seconds: float = 8.0) -> dict[str, Any] 
         return None
     if not isinstance(payload.get("hashrate"), dict) or not isinstance(payload.get("shares"), dict):
         return None
-    timestamp_ms = payload.get("timestamp_unix_ms")
-    if isinstance(timestamp_ms, (int, float)) and not isinstance(timestamp_ms, bool):
-        age = time.time() - (float(timestamp_ms) / 1000.0)
-        if age < -5.0 or age > max_age_seconds:
-            return None
+    # The C++ process refreshes the file's modification time during startup,
+    # dataset initialization, mining, and pool retry backoff.
     return payload
 
 
