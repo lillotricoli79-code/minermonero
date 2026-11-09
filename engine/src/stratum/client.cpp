@@ -177,6 +177,11 @@ int run_miner(const std::filesystem::path& config_path,
             }
         }
         const auto pools = parse_pool_configs(config);
+        std::string user_agent = config.value("user-agent",
+            std::string(user_agent));
+        if (user_agent.empty() || user_agent.size() > 256 ||
+            user_agent.find_first_of("\\r\\n") != std::string::npos)
+            throw std::runtime_error("user-agent must contain 1 to 256 characters without newlines");
         const auto randomx_config = config.value("randomx", nlohmann::json::object());
         bool full_memory = randomx_config.value("full-memory", true);
         if (randomx_config.contains("mode") && !randomx_config["mode"].is_null()) {
@@ -253,6 +258,23 @@ int run_miner(const std::filesystem::path& config_path,
             cpu_priority = static_cast<int>(configured_priority);
         }
         state.cpu_priority.store(cpu_priority, std::memory_order_relaxed);
+        if (randomx_config.contains("numa") && !randomx_config["numa"].is_null()) {
+            if (!randomx_config["numa"].is_boolean()) {
+                logging::warning("config", "randomx.numa node-list form is not supported; use true or false");
+            } else {
+                state.cpu_numa_enabled.store(randomx_config["numa"].get<bool>(),
+                                             std::memory_order_relaxed);
+            }
+        }
+        if (randomx_config.value("rdmsr", true) == false) {
+            logging::info("config", "randomx.rdmsr=false accepted; the native engine does not read MSRs for mining");
+        }
+        if (randomx_config.value("cache_qos", false)) {
+            logging::warning("config", "randomx.cache_qos is recognized but cache QoS allocation is not implemented");
+        }
+        if (cpu_config.contains("asm") && !cpu_config["asm"].is_null()) {
+            logging::info("config", "cpu.asm accepted; RandomX upstream dispatch selects the supported native code path automatically");
+        }
         if (cpu_config.contains("yield") && !cpu_config["yield"].is_null()) {
             if (!cpu_config["yield"].is_boolean())
                 throw std::runtime_error("cpu.yield must be boolean or null");
