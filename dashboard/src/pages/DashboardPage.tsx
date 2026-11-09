@@ -45,6 +45,8 @@ type Status = {
     "15m": number | null;
   };
   shares: {
+    found?: number | null;
+    submitted?: number | null;
     accepted: number | null;
     rejected: number | null;
     total: number | null;
@@ -519,11 +521,32 @@ function App() {
                   detail="job non più valido"
                 />
                 <MetricCard
+                  label="SHARE TROVATE"
+                  value={formatCount(status.shares.found ?? null)}
+                  icon={<Zap size={16} />}
+                  tone="blue"
+                  detail="candidate prodotte dal motore"
+                />
+                <MetricCard
                   label="SHARE IN ATTESA"
                   value={formatCount(status.shares.pending)}
                   icon={<Radio size={16} />}
                   tone="blue"
                   detail="risposta pool pendente"
+                />
+                <MetricCard
+                  label="SHARE SCADUTE"
+                  value={formatCount(status.shares.expired)}
+                  icon={<RefreshCw size={16} />}
+                  tone="orange"
+                  detail="timeout risposta pool"
+                />
+                <MetricCard
+                  label="SHARE PERSE"
+                  value={formatCount(status.shares.dropped)}
+                  icon={<CircleHelp size={16} />}
+                  tone="orange"
+                  detail="non inviate o abbandonate"
                 />
                 <MetricCard
                   label="UPTIME"
