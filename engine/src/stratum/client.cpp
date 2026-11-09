@@ -1627,6 +1627,10 @@ std::uint64_t hash_value = 0;
                                            : nlohmann::json(nullptr);
                 reconnect_status["reconnects"] =
                     state.reconnects.load(std::memory_order_relaxed);
+                reconnect_status["timestamp_unix_ms"] =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now().time_since_epoch()).count();
+                (void)write_status_snapshot(status_path, reconnect_status);
                 if (machine_status_channel_required()) {
                     std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
                 }
