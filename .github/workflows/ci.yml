@@ -157,11 +157,9 @@ jobs:
           $config.randomx.wrmsr = $false
           # msr-module is a UNIQUE RX extension, not present in stock XMRig configs.
           # Add it safely because ConvertFrom-Json objects reject assignment to absent keys.
-          if (-not $config.randomx.PSObject.Properties["msr-module"]) {
-            $config.randomx | Add-Member -NotePropertyName "msr-module" -NotePropertyValue "msr/IntelMSR.bin"
-          } else {
-            $config.randomx.'msr-module' = "msr/IntelMSR.bin"
-          }
+          # Always add/replace the extension through Add-Member; this is reliable
+          # for ConvertFrom-Json PSCustomObjects even when optional members vary.
+          $config.randomx | Add-Member -Force -NotePropertyName "msr-module" -NotePropertyValue "msr/IntelMSR.bin"
           $config.pools = @([pscustomobject]@{
             enabled = $true
             url = "pool.hashvault.pro:443"
