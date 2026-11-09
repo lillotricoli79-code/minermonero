@@ -200,16 +200,26 @@ if (Test-Path -LiteralPath $packageDir) { Remove-Item -LiteralPath $packageDir -
 New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 Copy-Item -LiteralPath $exe -Destination $packageDir
 Get-ChildItem -LiteralPath $exeDirectory -Filter "*.dll" -File | Copy-Item -Destination $packageDir -Force
-$packageMsrDir = Join-Path $packageDir "msr"
-New-Item -ItemType Directory -Force -Path $packageMsrDir | Out-Null
-$builtMsrModule = Join-Path $exeDirectory "msr\IntelMSR.bin"
-if (-not (Test-Path -LiteralPath $builtMsrModule)) { throw "Il modulo IntelMSR verificato non è stato copiato accanto all'eseguibile." }
-Copy-Item -LiteralPath $builtMsrModule -Destination (Join-Path $packageMsrDir "IntelMSR.bin")
-Copy-Item -LiteralPath (Join-Path $engineDir "msr\PawnIO-COPYING") -Destination (Join-Path $packageMsrDir "COPYING")
 $exeHash = (Get-FileHash -LiteralPath (Join-Path $packageDir "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
-$moduleHash = (Get-FileHash -LiteralPath (Join-Path $packageMsrDir "IntelMSR.bin") -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($moduleHash -ne $expectedMsrSha256) { throw "Hash del modulo MSR nel pacchetto non valido." }
-Set-Content -LiteralPath (Join-Path $packageDir "SHA256SUMS.txt") -Encoding ascii -Value @("$exeHash  unique-rx.exe", "$moduleHash  msr/IntelMSR.bin")
+$shaLines = @("$exeHash  unique-rx.exe")
+$modulePackaged = $false
+$builtMsrModule = Join-Path $exeDirectory "msr\IntelMSR.bin"
+if ($msrModuleVerified -and (Test-Path -LiteralPath $builtMsrModule)) {
+    $moduleHash = (Get-FileHash -LiteralPath $builtMsrModule -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($moduleHash -eq $expectedMsrSha256) {
+        $packageMsrDir = Join-Path $packageDir "msr"
+        New-Item -ItemType Directory -Force -Path $packageMsrDir | Out-Null
+        Copy-Item -LiteralPath $builtMsrModule -Destination (Join-Path $packageMsrDir "IntelMSR.bin")
+        Copy-Item -LiteralPath (Join-Path $engineDir "msr\PawnIO-COPYING") -Destination (Join-Path $packageMsrDir "COPYING")
+        $shaLines += "$moduleHash  msr/IntelMSR.bin"
+        $modulePackaged = $true
+    } else {
+        Write-Warning "Il modulo MSR nella cartella di build non supera SHA-256; viene escluso dal pacchetto."
+    }
+} else {
+    Write-Host "MSR opzionale non incluso: il miner CPU funziona con MSR disattivato." -ForegroundColor Yellow
+}
+Set-Content -LiteralPath (Join-Path $packageDir "SHA256SUMS.txt") -Encoding ascii -Value $shaLines
 Copy-Item -LiteralPath (Join-Path $repoRoot "config.example.json") -Destination (Join-Path $packageDir "config.example.json")
 Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $packageDir
 Copy-Item -LiteralPath (Join-Path $repoRoot "requirements.txt") -Destination $packageDir
@@ -263,7 +273,7 @@ if ($LASTEXITCODE -ne 0) { throw "Impossibile determinare il commit sorgente." }
 Set-Content -LiteralPath (Join-Path $packageDir "SOURCE-COMMIT.txt") -Encoding ascii -Value $commit
 $sourceSums = Join-Path $packageDir "SHA256SUMS.txt"
 Add-Content -LiteralPath $sourceSums -Encoding ascii -Value "$sourceHash  unique-rx-source.zip"
-Copy-Item -LiteralPath (Join-Path $packageDir "msr\COPYING") -Destination (Join-Path $licenses "PAWNIO-MODULE-COPYING")
+if ($modulePackaged) { Copy-Item -LiteralPath (Join-Path $packageDir "msr\COPYING") -Destination (Join-Path $licenses "PAWNIO-MODULE-COPYING") }
 
 Write-Host "Pacchetto completo: motore, backend, dashboard, script, licenze e sorgente corrispondente inclusi."
 Write-Host ""
