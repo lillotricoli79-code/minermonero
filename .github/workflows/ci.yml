@@ -136,11 +136,24 @@ jobs:
           $config.cpu.enabled = $true
           $config.cpu.'max-threads-hint' = 0
           $config.cpu.'huge-pages' = $false
-          $config.cpu.'jit-huge-pages' = $false
-          $config.cpu.'prefetch-mode' = 1
-          if ($null -eq $config.cpu.rx) { $config.cpu | Add-Member -NotePropertyName rx -NotePropertyValue ([pscustomobject]@{}) }
+          # Keep XMRig's native config key names and profile structure.
+          # Add-Member is used because config.example.json intentionally omits optional keys.
+          if (-not $config.cpu.PSObject.Properties["huge-pages-jit"]) {
+            $config.cpu | Add-Member -NotePropertyName "huge-pages-jit" -NotePropertyValue $false
+          } else {
+            $config.cpu.'huge-pages-jit' = $false
+          }
+          if ($null -eq $config.cpu.rx) { $config.cpu | Add-Member -NotePropertyName rx -NotePropertyValue ([pscustomobject]@{ intensity = 1; threads = 0; affinity = -1 }) }
           $config.cpu.rx.threads = 0
-          $config.randomx.'full-memory' = $true
+          if ($config.cpu.PSObject.Properties["prefetch-mode"]) { $config.cpu.PSObject.Properties.Remove("prefetch-mode") }
+          if (-not $config.randomx.PSObject.Properties["scratchpad_prefetch_mode"]) {
+            $config.randomx | Add-Member -NotePropertyName "scratchpad_prefetch_mode" -NotePropertyValue 1
+          } else {
+            $config.randomx.scratchpad_prefetch_mode = 1
+          }
+          # XMRig uses randomx.mode=fast for the full dataset (not full-memory).
+          $config.randomx.mode = "fast"
+          if ($config.randomx.PSObject.Properties["full-memory"]) { $config.randomx.PSObject.Properties.Remove("full-memory") }
           $config.randomx.wrmsr = $false
           $config.randomx.'msr-module' = "msr/IntelMSR.bin"
           $config.pools = @([pscustomobject]@{
