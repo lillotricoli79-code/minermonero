@@ -462,6 +462,7 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << "Comandi shell UNIQUE RX:\n"
                                       << "  status          stato, hashrate, pool e uptime\n"
                                       << "  shares          accepted/rejected/stale/pending\n"
+                                      << "  best            difficoltà migliori ed effort stimato\n"
                                       << "  workers         hashrate e contatori per worker\n"
                                       << "  graph           grafico ASCII hashrate ultimi 60 secondi\n"
                                       << "  cpu             CPU, core, thread e feature rilevate\n"
@@ -578,6 +579,10 @@ int run_miner(const std::filesystem::path& config_path,
                                       << shell_hashrate << " H/s | total hashes: " << hashes
                                       << " | workers: " << desired_threads->load()
                                       << " | reconnects: " << state.reconnects.load()
+                                      << " | pool latency: "
+                                      << (state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0
+                                          ? std::to_string(state.last_share_latency_ms.load(std::memory_order_relaxed)) + " ms"
+                                          : std::string("n/a"))
                                       << " | uptime: " << std::chrono::duration_cast<std::chrono::seconds>(
                                              Clock::now() - started).count() << " s\n";
                         } else if (command == "shares") {
@@ -588,6 +593,23 @@ int run_miner(const std::filesystem::path& config_path,
                                       << " | stale " << state.stale_shares.load()
                                       << " | expired " << state.expired_shares.load()
                                       << " | dropped " << state.dropped_shares.load() << '\n';
+                        } else if (command == "best") {
+                            const auto best = state.best_snapshot();
+                            std::cout << "Hash stimati: " << std::fixed << std::setprecision(2)
+                                      << best.estimated_hashes << '\\n';
+                            for (std::size_t index = 0; index < best.top_difficulties.size(); ++index) {
+                                const auto& result = best.top_difficulties[index];
+                                std::cout << '#' << (index + 1) << " difficulty "
+                                          << result.difficulty << " | unix "
+                                          << result.at_unix_seconds << '\\n';
+                            }
+                            if (!best.top_difficulties.empty() &&
+                                best.top_difficulties.front().difficulty > 0.0) {
+                                std::cout << "Effort stimato: "
+                                          << best.estimated_hashes /
+                                             best.top_difficulties.front().difficulty * 100.0
+                                          << "%\\n";
+                            }
                         } else if (command == "workers") {
                             for (std::uint32_t id = 0; id < desired_threads->load() &&
                                  id < worker_hashrates.size(); ++id) {
