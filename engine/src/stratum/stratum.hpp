@@ -104,6 +104,7 @@ void apply_nicehash_extension(Job& job, bool enabled) noexcept;
 std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config);
 PoolConfig parse_pool_config(const nlohmann::json& config);
 int run_miner(const std::filesystem::path& config_path,
-              std::uint64_t maximum_hashes = 0);
+              std::uint64_t maximum_hashes = 0,
+              std::uint32_t thread_override = 0);
 
 } // namespace unique_rx
