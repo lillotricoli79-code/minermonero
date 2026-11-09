@@ -160,8 +160,23 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
         }
         if (!pool.value("enabled", true)) continue;
 
-        const auto address = pool.at("url").get<std::string>();
+        auto address = pool.at("url").get<std::string>();
         PoolConfig entry;
+        // XMRig accepts bare host:port and explicit Stratum URL schemes.
+        // Preserve the URL's TLS intent while passing a normalized endpoint
+        // to the native socket/TLS transport.
+        bool scheme_tls = false;
+        const auto scheme = address.find("://");
+        if (scheme != std::string::npos) {
+            const auto protocol = address.substr(0, scheme);
+            if (protocol == "stratum+ssl" || protocol == "stratum+tls" ||
+                protocol == "ssl" || protocol == "tls") {
+                scheme_tls = true;
+            } else if (protocol != "stratum+tcp" && protocol != "tcp") {
+                throw std::invalid_argument("unsupported pool URL scheme: " + protocol);
+            }
+            address.erase(0, scheme + 3);
+        }
         if (!address.empty() && address.front() == '[') {
             const auto end_bracket = address.find(']');
             if (end_bracket == std::string::npos || end_bracket + 2 >= address.size() ||
@@ -200,8 +215,17 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config) {
             throw std::invalid_argument("pool password cannot contain newlines");
         }
         entry.worker = pool.value("rig-id", std::string("rig01"));
-        entry.tls = pool.value("tls", false);
-        entry.keepalive = pool.value("keepalive", false);
+        entry.tls = pool.value("tls", false) || scheme_tls;
+        if (pool.contains("keepalive") && !pool["keepalive"].is_null()) {
+            const auto& keepalive = pool["keepalive"];
+            if (keepalive.is_boolean()) {
+                entry.keepalive = keepalive.get<bool>();
+            } else if (keepalive.is_number_integer()) {
+                entry.keepalive = keepalive.get<std::int64_t>() != 0;
+            } else {
+                throw std::invalid_argument("pool.keepalive must be boolean or integer");
+            }
+        }
         std::string normalized_host = entry.host;
         std::transform(normalized_host.begin(), normalized_host.end(), normalized_host.begin(),
             [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
