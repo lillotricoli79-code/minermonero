@@ -13,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace unique_rx::core {
 
