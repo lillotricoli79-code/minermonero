@@ -266,6 +266,60 @@ inline bool pin_current_thread(std::uint32_t logical_cpu) noexcept {
     }
 }
 
+inline bool pin_current_thread_by_id(std::uint32_t cpu_id) noexcept {
+    try {
+#ifdef _WIN32
+        for (const auto& processor : available_processors()) {
+            if (processor.second != cpu_id) continue;
+            GROUP_AFFINITY affinity{};
+            affinity.Group = processor.first;
+            affinity.Mask = static_cast<KAFFINITY>(1) << processor.second;
+            return SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr) != 0;
+        }
+        return false;
+#elif defined(__linux__)
+        const auto allowed = linux_cpu::allowed_cpus();
+        if (std::find(allowed.begin(), allowed.end(), cpu_id) == allowed.end())
+            return false;
+        return linux_cpu::pin_current_thread(cpu_id);
+#else
+        (void)cpu_id;
+        return false;
+#endif
+    } catch (...) {
+        return false;
+    }
+}
+
+inline int numa_node_for_cpu_id(std::uint32_t cpu_id) noexcept {
+    try {
+#ifdef _WIN32
+        for (const auto& processor : available_processors()) {
+            if (processor.second != cpu_id) continue;
+            PROCESSOR_NUMBER number{};
+            number.Group = processor.first;
+            number.Number = static_cast<BYTE>(processor.second);
+            USHORT node = 0;
+            return GetNumaProcessorNodeEx(&number, &node) ? static_cast<int>(node) : -1;
+        }
+#elif defined(__linux__)
+        const auto root = std::filesystem::path("/sys/devices/system/cpu") /
+            ("cpu" + std::to_string(cpu_id));
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(root, ec)) {
+            const auto name = entry.path().filename().string();
+            if (name.size() > 4 && name.starts_with("node") &&
+                std::all_of(name.begin() + 4, name.end(),
+                    [](unsigned char ch) { return ch >= '0' && ch <= '9'; })) {
+                return std::stoi(name.substr(4));
+            }
+        }
+#endif
+    } catch (...) {
+    }
+    return -1;
+}
+
 // XMRig Platform_unix.cpp / Platform_win.cpp priority mapping (GPL-3.0;
 // see LICENSES/XMRIG-GPL-3.0.txt). Priority -1 preserves the OS default.
 inline bool set_current_thread_priority(int priority) noexcept {
