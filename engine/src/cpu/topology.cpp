@@ -474,11 +474,11 @@ std::uint32_t select_cpu_threads(const nlohmann::json& cpu_config) {
                     if (affinity < -1)
                         throw std::invalid_argument("cpu.threads affinity must be -1 or a non-negative CPU index");
                 } else if (thread.is_array() && thread.size() >= 2 &&
-                           thread[0].is_number_unsigned() &&
+                           thread[0].is_number_integer() &&
                            thread[1].is_number_integer()) {
-                    const auto intensity = thread[0].get<std::uint64_t>();
+                    const auto signed_intensity = thread[0].get<std::int64_t>();
                     const auto affinity = thread[1].get<std::int64_t>();
-                    if (intensity > 5 || affinity < -1)
+                    if (signed_intensity < 0 || signed_intensity > 5 || affinity < -1)
                         throw std::invalid_argument("cpu.threads entry must use [intensity:0..5, affinity:-1 or CPU index]");
                 } else {
                     throw std::invalid_argument("cpu.threads array entries must be affinity integers or [intensity, affinity]");
