@@ -117,17 +117,17 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME unique-rx-stratum-job-validation COMMAND unique-rx-stratum-tests)
 
+  # This harness only hosts a mock TCP pool and launches the production
+  # unique-rx executable as a child. Do not link the miner engine into the
+  # harness: doing so duplicates its CRT, logger and worker runtime on Windows.
   add_executable(unique-rx-stratum-integration-tests
-    tests/stratum/loopback_test.cpp src/logging/log.cpp src/stratum/client.cpp src/stratum/job.cpp
-    src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp
-    src/stratum/transport.cpp src/telemetry/system.cpp)
+    tests/stratum/loopback_test.cpp)
   target_compile_features(unique-rx-stratum-integration-tests PRIVATE cxx_std_20)
-  target_include_directories(unique-rx-stratum-integration-tests PRIVATE src
-    "${randomx_SOURCE_DIR}/src")
-  target_link_libraries(unique-rx-stratum-integration-tests PRIVATE randomx
-    Threads::Threads OpenSSL::SSL OpenSSL::Crypto nlohmann_json::nlohmann_json)
+  target_include_directories(unique-rx-stratum-integration-tests PRIVATE src)
+  target_link_libraries(unique-rx-stratum-integration-tests PRIVATE
+    Threads::Threads nlohmann_json::nlohmann_json)
   if(WIN32)
-    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32 advapi32 psapi powrprof)
+    target_link_libraries(unique-rx-stratum-integration-tests PRIVATE ws2_32)
   endif()
   add_test(NAME unique-rx-stratum-loopback COMMAND unique-rx-stratum-integration-tests $<TARGET_FILE:unique-rx>)
   set_tests_properties(unique-rx-stratum-loopback PROPERTIES TIMEOUT 45)
