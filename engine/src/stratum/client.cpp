@@ -260,7 +260,7 @@ int run_miner(const std::filesystem::path& config_path,
             return use_full;
         };
         bool full_memory = randomx_config.contains("full-memory")
-            ? randomx_config["full-memory"].get<bool>() : select_auto_memory_mode();
+            ? randomx_config["full-memory"].get<bool>() : true;
         if (randomx_config.contains("mode") && !randomx_config["mode"].is_null()) {
             const auto& configured_mode = randomx_config["mode"];
             std::string mode;
@@ -280,6 +280,10 @@ int run_miner(const std::filesystem::path& config_path,
             else if (mode == "light") full_memory = false;
             else if (mode == "auto") full_memory = select_auto_memory_mode();
             else throw std::runtime_error("randomx.mode must be auto, fast, or light");
+        } else if (!randomx_config.contains("full-memory")) {
+            // XMRig default is auto: choose fast/full dataset only when RAM
+            // headroom is sufficient; explicit legacy full-memory overrides it.
+            full_memory = select_auto_memory_mode();
         }
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
         // Imported XMRig configurations may contain a boolean, a preset index,
