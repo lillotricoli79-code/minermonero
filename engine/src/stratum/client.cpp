@@ -343,6 +343,7 @@ int run_miner(const std::filesystem::path& config_path,
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     std::array<std::uint64_t, 256> previous_worker_hashes{};
                     std::array<double, 256> worker_hashrates{};
+                    std::deque<double> shell_rate_history;
                     auto previous_sample = Clock::now();
                     double shell_hashrate = 0.0;
                     const auto process_command = [&](const std::string& line) {
@@ -355,6 +356,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  status          stato, hashrate, pool e uptime\n"
                                       << "  shares          accepted/rejected/stale/pending\n"
                                       << "  workers         hashrate e contatori per worker\n"
+                                      << "  graph           grafico ASCII hashrate ultimi 60 secondi\n"
                                       << "  cpu             CPU, core, thread e feature rilevate\n"
                                       << "  logs [N]        ultimi N log (default 30, max 200)\n"
                                       << "  pool            endpoint e opzioni pool (segreti nascosti)\n"
@@ -466,6 +468,18 @@ int run_miner(const std::filesystem::path& config_path,
                                               ? state.worker_hashes[id]->load(std::memory_order_relaxed) : 0)
                                           << '\n';
                             }
+                        } else if (command == "graph") {
+                            const double peak = shell_rate_history.empty()
+                                ? 0.0 : *std::max_element(shell_rate_history.begin(), shell_rate_history.end());
+                            std::cout << "Hashrate ultimi " << shell_rate_history.size()
+                                      << " secondi (picco " << std::fixed << std::setprecision(2)
+                                      << peak << " H/s)\\n";
+                            for (const double rate : shell_rate_history) {
+                                const auto bars = peak > 0.0
+                                    ? static_cast<std::size_t>(rate / peak * 40.0) : 0U;
+                                std::cout << std::setw(9) << std::fixed << std::setprecision(1)
+                                          << rate << " H/s | " << std::string(bars, '#') << '\\n';
+                            }
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
                         } else if (command == "logs") {
@@ -532,6 +546,8 @@ int run_miner(const std::filesystem::path& config_path,
                                         worker_hashes - previous_worker_hashes[id]) / elapsed;
                                     previous_worker_hashes[id] = worker_hashes;
                                 }
+                                shell_rate_history.push_back(shell_hashrate);
+                                if (shell_rate_history.size() > 60) shell_rate_history.pop_front();
                             }
                             previous_hashes = hashes;
                             previous_sample = now;
