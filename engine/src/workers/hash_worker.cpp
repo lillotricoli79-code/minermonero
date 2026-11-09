@@ -59,7 +59,7 @@ std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
     }
     ++local_worker_hashes;
     if (worker_id < state.worker_hashes.size() && state.worker_hashes[worker_id] &&
-        ((local_worker_hashes & 0xffU) == 0 ||
+        ((local_worker_hashes & 0x3fU) == 0 ||
          (maximum_hashes != 0 && count >= maximum_hashes))) {
         state.worker_hashes[worker_id]->store(local_worker_hashes, std::memory_order_relaxed);
     }
