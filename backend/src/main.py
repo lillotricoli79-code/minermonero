@@ -484,7 +484,7 @@ class MinerController:
                 "connected": None,
             }
 
-    def start(self) -> None:
+    def start(self, thread_override: int | None = None) -> None:
         config = load_config()
         pool = first_enabled_pool(config)
         if not str(pool.get("user", "")).strip():
@@ -497,6 +497,10 @@ class MinerController:
         if native_path and not msr_requires_xmrig:
             executable_path = native_path
             command = [native_path, "--mine", str(CONFIG_PATH)]
+            if thread_override is not None:
+                if isinstance(thread_override, bool) or not 1 <= thread_override <= 256:
+                    raise HTTPException(status_code=400, detail="Il numero di thread deve essere tra 1 e 256")
+                command.extend(["--threads", str(thread_override)])
             engine_kind = "unique-rx"
         else:
             executable_path = shutil.which("xmrig") or shutil.which("xmrig.exe")
@@ -681,6 +685,122 @@ class MinerController:
     def recent_logs(self, after: int = 0) -> list[dict[str, Any]]:
         with self.log_lock:
             return [entry for entry in self.logs if entry["id"] > after]
+
+
+    def execute_shell_command(self, raw_command: str) -> dict[str, Any]:
+        """Execute operator commands without writing to config.json."""
+        command = raw_command.strip()
+        if not command:
+            raise HTTPException(status_code=400, detail="Inserisci un comando. Digita help per l'elenco.")
+        if len(command) > 120:
+            raise HTTPException(status_code=400, detail="Comando troppo lungo.")
+        parts = command.split()
+        verb = parts[0].lower()
+        status = self.status()
+
+        if verb in {"help", "?"} and len(parts) == 1:
+            return {"command": command, "restart": False, "lines": [
+                "help                 Elenco comandi",
+                "status               Stato miner, pool e CPU",
+                "threads              Thread attivi",
+                "threads N            Riavvio controllato con N worker (config invariato)",
+                "threads auto         Riavvio con selezione automatica del config",
+                "workers              Dettaglio worker reali, se disponibile",
+                "shares               Accepted / rejected / stale / pending",
+                "graph                Hashrate 10s / 60s / 15m",
+                "pool                 Pool e connessione",
+                "logs [N]             Ultime N righe (default 20)",
+            ]}
+
+        if verb == "threads":
+            if len(parts) == 1:
+                return {"command": command, "restart": False, "lines": [
+                    "Thread attivi: " + str(status.get("threads") if status.get("threads") is not None else "non disponibili"),
+                    "Uso: threads N oppure threads auto",
+                ]}
+            if len(parts) != 2:
+                raise HTTPException(status_code=400, detail="Uso: threads N oppure threads auto")
+            if not status.get("managed") or not self.is_running():
+                raise HTTPException(status_code=409, detail="Avvia prima il miner dalla dashboard.")
+            with self.lock:
+                engine_kind = self.engine_kind
+            if engine_kind != "unique-rx":
+                raise HTTPException(status_code=409, detail="Regolazione thread disponibile solo con il motore nativo UNIQUE RX.")
+            value = parts[1].lower()
+            if value == "auto":
+                override = None
+                label = "automatici secondo config.json"
+            else:
+                try:
+                    override = int(value, 10)
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail="Usa un intero tra 1 e 256 oppure auto.") from exc
+                if not 1 <= override <= 256:
+                    raise HTTPException(status_code=400, detail="Il numero di thread deve essere tra 1 e 256.")
+                label = str(override)
+            self._log("Shell: cambio thread richiesto; riavvio controllato del motore.")
+            self.stop()
+            self.start(override)
+            return {"command": command, "restart": True, "lines": [
+                "Riavvio richiesto con thread " + label + ".",
+                "config.json non è stato modificato.",
+                "Il numero effettivo sarà confermato dalla telemetria del motore.",
+            ]}
+
+        if verb == "status" and len(parts) == 1:
+            cpu = status.get("cpu") or {}
+            return {"command": command, "restart": False, "lines": [
+                "Miner: " + str(status.get("state", "SCONOSCIUTO")) + " · gestito: " + ("sì" if status.get("managed") else "no"),
+                "Pool: " + str(status.get("pool") or "n/d") + " · " + ("connesso" if status.get("connected") else "non connesso/n.d."),
+                "Hashrate: 10s " + str((status.get("hashrate") or {}).get("10s")) + " H/s · 60s " + str((status.get("hashrate") or {}).get("60s")) + " H/s · 15m " + str((status.get("hashrate") or {}).get("15m")) + " H/s",
+                "Thread: " + str(status.get("threads") if status.get("threads") is not None else "n/d") + " · uptime: " + str(status.get("uptime_seconds") if status.get("uptime_seconds") is not None else "n/d") + " s",
+                "CPU: " + str(cpu.get("brand") or "n/d") + " · core fisici: " + str(cpu.get("physical_cores", "n/d")) + " · logici: " + str(cpu.get("logical_threads", "n/d")),
+                "Errore: " + str(status.get("error") or "nessuno"),
+            ]}
+
+        if verb == "graph" and len(parts) == 1:
+            rates = status.get("hashrate") or {}
+            numeric = [v for v in rates.values() if isinstance(v, (int, float)) and v >= 0]
+            maximum = max(numeric, default=1) or 1
+            lines = ["Hashrate reale riportato dal motore:"]
+            for label, key in (("10 secondi", "10s"), ("60 secondi", "60s"), ("15 minuti", "15m")):
+                value = rates.get(key)
+                if isinstance(value, (int, float)) and value >= 0:
+                    bar = "#" * min(40, int(value / maximum * 40))
+                    lines.append(f"{label:12} {value:,.2f} H/s |{bar}")
+                else:
+                    lines.append(f"{label:12} non disponibile")
+            return {"command": command, "restart": False, "lines": lines}
+
+        if verb == "workers" and len(parts) == 1:
+            workers = status.get("workers")
+            if not isinstance(workers, list) or not workers:
+                return {"command": command, "restart": False, "lines": ["Dettaglio worker non pubblicato dal motore; nessun dato viene simulato."]}
+            lines = [f"Worker #{w.get('id')}: {'attivo' if w.get('active') else 'inattivo'} · {w.get('hashrate_hps', 0):,.2f} H/s · {w.get('hashes', 0)} hash" for w in workers if isinstance(w, dict)]
+            return {"command": command, "restart": False, "lines": lines or ["Nessun worker disponibile."]}
+
+        if verb == "shares" and len(parts) == 1:
+            shares = status.get("shares") or {}
+            return {"command": command, "restart": False, "lines": [f"{key}: {shares.get(key) if shares.get(key) is not None else 'n/d'}" for key in ("accepted", "rejected", "stale", "pending")]}
+
+        if verb == "pool" and len(parts) == 1:
+            return {"command": command, "restart": False, "lines": [
+                "Pool: " + str(status.get("pool") or "n/d"),
+                "Connessione: " + ("connesso" if status.get("connected") else "non connesso/n.d."),
+                "Latenza: " + str(status.get("pool_latency_ms") if status.get("pool_latency_ms") is not None else "n/d") + " ms",
+                "Riconnessioni: " + str(status.get("reconnects") if status.get("reconnects") is not None else "n/d"),
+            ]}
+
+        if verb == "logs" and len(parts) <= 2:
+            try:
+                limit = int(parts[1], 10) if len(parts) == 2 else 20
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Uso: logs [1..100]") from exc
+            if not 1 <= limit <= 100:
+                raise HTTPException(status_code=400, detail="Il limite logs deve essere tra 1 e 100.")
+            return {"command": command, "restart": False, "lines": self.shell_log.recent_lines(limit)}
+
+        raise HTTPException(status_code=400, detail="Comando sconosciuto o argomenti non validi. Digita help.")
 
 
 controller = MinerController()
@@ -878,6 +998,15 @@ def get_log_history(limit: int = 200) -> dict[str, Any]:
         return {"lines": controller.shell_log.recent_lines(limit)}
     except OSError as exc:
         raise HTTPException(status_code=500, detail="Impossibile leggere lo storico shell") from exc
+
+
+class ShellCommand(BaseModel):
+    command: str = Field(min_length=1, max_length=120)
+
+
+@app.post("/api/shell/command")
+def shell_command(request: ShellCommand) -> dict[str, Any]:
+    return controller.execute_shell_command(request.command)
 
 
 @app.post("/api/miner/start", status_code=202)
