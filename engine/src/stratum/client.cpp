@@ -576,7 +576,7 @@ std::uint64_t hash_value = 0;
                                          {"pending", pending.size()},
                                          {"total", state.accepted.load() + state.rejected.load() + state.stale_shares.load()}}},
                             {"uptime_seconds", uptime},
-                            // XMRMiner StratumJob.getDifficulty() port: UINT64_MAX / pool target.
+                            // XMRMiner StratumJob.getDifficulty() port at 131d20e363e41491ece6086e9e72fcbdc5edddcb: UINT64_MAX / pool target.
                             {"algorithm", "rx/0"}, {"job_id", work->job.id},
                             {"job_difficulty", work->job.target == 0 ? nlohmann::json(nullptr) : nlohmann::json(static_cast<double>(std::numeric_limits<std::uint64_t>::max()) / static_cast<double>(work->job.target))},
                             {"height", work->job.height
