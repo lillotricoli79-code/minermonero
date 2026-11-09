@@ -288,7 +288,8 @@ int run_miner(const std::filesystem::path& config_path,
         // configuration data but are never written by this native backend.
         const bool msr_enabled = wrmsr.is_boolean() && wrmsr.get<bool>();
         const bool msr_custom_requested =
-            wrmsr.is_array() || wrmsr.is_number_integer();
+            wrmsr.is_array() ||
+            (wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() >= 0);
         const bool msr_explicitly_disabled = !msr_enabled;
         if (!wrmsr.is_null() && !wrmsr.is_boolean() &&
             !wrmsr.is_array() && !wrmsr.is_number_integer()) {
