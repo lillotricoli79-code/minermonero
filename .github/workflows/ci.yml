@@ -163,7 +163,7 @@ jobs:
           $config.pools = @([pscustomobject]@{
             enabled = $true
             url = "pool.hashvault.pro:443"
-            user = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumb"
+            user = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ+7500"
             pass = "x"
             'rig-id' = "lillot"
             tls = $true
