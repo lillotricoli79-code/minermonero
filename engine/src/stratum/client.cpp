@@ -361,7 +361,7 @@ int run_miner(const std::filesystem::path& config_path,
             if (!cpu_config["hw-aes"].is_boolean())
                 throw std::runtime_error("cpu.hw-aes must be boolean or null");
             if (!cpu_config["hw-aes"].get<bool>()) {
-                flags &= ~RANDOMX_FLAG_HARD_AES;
+                flags = static_cast<randomx_flags>(static_cast<unsigned int>(flags) & ~static_cast<unsigned int>(RANDOMX_FLAG_HARD_AES));
                 logging::info("cpu", "hardware AES disabled by XMRig-compatible cpu.hw-aes setting");
             }
         }
@@ -1495,7 +1495,7 @@ std::uint64_t hash_value = 0;
                         {"process_memory_bytes", reconnect_optional(reconnect_system.process_memory_bytes)},
                         {"temperature_c", reconnect_optional(reconnect_system.temperature_c)},
                         {"package_power_watts", reconnect_optional(reconnect_system.package_power_watts)},
-                        {"on_battery", reconnect_system.on_battery ? nlohmann::json(*reconnect_system.on_battery) : nlohmann::json(nullptr)}
+                        {"on_battery", reconnect_system.on_battery.has_value() ? nlohmann::json(static_cast<bool>(reconnect_system.on_battery.value())) : nlohmann::json(nullptr)}
                     }},
                     {"pool", pool.host + ":" + pool.port}, {"connected", false},
                     {"pool_latency_ms", state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0 ? nlohmann::json(state.last_share_latency_ms.load(std::memory_order_relaxed)) : nlohmann::json(nullptr)},
