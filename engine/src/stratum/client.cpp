@@ -240,27 +240,62 @@ int run_miner(const std::filesystem::path& config_path,
         bool full_memory = randomx_config.contains("full-memory")
             ? randomx_config["full-memory"].get<bool>() : select_auto_memory_mode();
         if (randomx_config.contains("mode") && !randomx_config["mode"].is_null()) {
-            const auto mode = randomx_config["mode"].get<std::string>();
+            const auto& configured_mode = randomx_config["mode"];
+            std::string mode;
+            if (configured_mode.is_string()) {
+                mode = configured_mode.get<std::string>();
+            } else if (configured_mode.is_number_integer()) {
+                const auto numeric_mode = configured_mode.get<std::int64_t>();
+                if (numeric_mode < 0 || numeric_mode > 2)
+                    throw std::runtime_error("randomx.mode numeric value must be 0 (auto), 1 (fast), or 2 (light)");
+                mode = numeric_mode == 0 ? "auto" : numeric_mode == 1 ? "fast" : "light";
+            } else {
+                throw std::runtime_error("randomx.mode must be auto, fast, light, or XMRig numeric mode 0..2");
+            }
+            std::transform(mode.begin(), mode.end(), mode.begin(),
+                [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
             if (mode == "fast") full_memory = true;
             else if (mode == "light") full_memory = false;
             else if (mode == "auto") full_memory = select_auto_memory_mode();
             else throw std::runtime_error("randomx.mode must be auto, fast, or light");
         }
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
-        // XMRig defaults wrmsr to false. Keep MSR writes opt-in; never apply a
-        // preset merely because the option is absent from an imported config.
+        // Imported XMRig configurations may contain a boolean, a preset index,
+        // or an explicit register list. Only the boolean true can select the
+        // native CPU-specific preset. Numeric/list forms are accepted as
+        // configuration data but are never written by this native backend.
         const bool msr_enabled = wrmsr.is_boolean() && wrmsr.get<bool>();
+        const bool msr_custom_requested =
+            wrmsr.is_array() || wrmsr.is_number_integer();
         const bool msr_explicitly_disabled = !msr_enabled;
         if (!wrmsr.is_null() && !wrmsr.is_boolean() &&
-            !(wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() < 0)) {
-            throw std::runtime_error(
-                "Native engine supports wrmsr=false or true (CPU preset); custom XMRig MSR register lists require the external XMRig backend.");
+            !wrmsr.is_array() && !wrmsr.is_number_integer()) {
+            throw std::runtime_error("randomx.wrmsr must be boolean, integer preset, or XMRig register array");
+        }
+        if (wrmsr.is_number_integer()) {
+            const auto preset = wrmsr.get<std::int64_t>();
+            if (preset < -1 || preset > 15)
+                throw std::runtime_error("randomx.wrmsr numeric preset must be -1..15");
+        }
+        if (wrmsr.is_array()) {
+            for (const auto& item : wrmsr) {
+                if (!item.is_array() || item.size() < 2 ||
+                    !item[0].is_number_integer() || !item[1].is_number_integer()) {
+                    throw std::runtime_error("randomx.wrmsr entries must be XMRig [register, value, optional mask] arrays");
+                }
+            }
         }
         MsrManager msr(randomx_config.value("msr-module", std::string()));
         std::string msr_status;
         if (msr_explicitly_disabled) {
-            msr_status = "Disattivato (default XMRig/configurazione)";
-            logging::info("msr", "MSR tuning disabled (XMRig default or explicit configuration)");
+            msr_status = msr_custom_requested
+                ? "Configurazione XMRig MSR personalizzata riconosciuta ma non applicata dal backend nativo"
+                : "Disattivato (default XMRig/configurazione)";
+            if (msr_custom_requested) {
+                logging::warning("msr", "XMRig custom/numeric wrmsr profile parsed but not applied; native backend only supports its guarded CPU-specific preset. No custom register writes were attempted.");
+            } else {
+                logging::info("msr", "MSR tuning disabled (XMRig default or explicit configuration)");
+            }
         } else {
             try {
                 msr.apply_randomx_preset();
