@@ -226,35 +226,35 @@ int run_miner(const std::filesystem::path& config_path,
         if (console_input_available()) {
             std::thread([desired_threads, automatic_threads] {
                 std::string command_line;
-                std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\\n";
+                std::cout << "Shell comandi: threads N | threads auto | help (CTRL+C per uscire)\n";
                 while (std::getline(std::cin, command_line)) {
                     std::istringstream input(command_line);
                     std::string command;
                     std::string value;
                     input >> command;
                     if (command == "help") {
-                        std::cout << "Comandi: threads N (1-256), threads auto\\n";
+                        std::cout << "Comandi: threads N (1-256), threads auto\n";
                     } else if (command == "threads" && (input >> value)) {
                         if (value == "auto") {
                             desired_threads->store(automatic_threads, std::memory_order_release);
-                            std::cout << "Richiesto profilo automatico: " << automatic_threads << " thread\\n";
+                            std::cout << "Richiesto profilo automatico: " << automatic_threads << " thread\n";
                         } else {
                             try {
                                 std::size_t used = 0;
                                 const auto requested = std::stoul(value, &used, 10);
                                 if (used != value.size() || requested == 0 || requested > 256) {
-                                    std::cout << "Valore non valido. Usa un numero da 1 a 256.\\n";
+                                    std::cout << "Valore non valido. Usa un numero da 1 a 256.\n";
                                     continue;
                                 }
                                 desired_threads->store(static_cast<std::uint32_t>(requested),
                                                         std::memory_order_release);
-                                std::cout << "Richiesti " << requested << " thread; applicazione in corso...\\n";
+                                std::cout << "Richiesti " << requested << " thread; applicazione in corso...\n";
                             } catch (...) {
-                                std::cout << "Valore non valido. Usa threads N oppure threads auto.\\n";
+                                std::cout << "Valore non valido. Usa threads N oppure threads auto.\n";
                             }
                         }
                     } else if (!command.empty()) {
-                        std::cout << "Comando sconosciuto. Digita help.\\n";
+                        std::cout << "Comando sconosciuto. Digita help.\n";
                     }
                 }
             }).detach();
