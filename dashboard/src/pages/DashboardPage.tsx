@@ -918,47 +918,170 @@ function App() {
             </>
           ) : page === "shell" ? (
             <>
-              <section className="page-heading">
+              <section className="page-heading shell-heading">
                 <div>
                   <div className="eyebrow"><i /> OPERATOR CONSOLE / 02</div>
-                  <h1>Shell <span>operativa</span></h1>
-                  <p>Comandi collegati allo stato reale del miner. La shell non riscrive config.json.</p>
+                  <h1>UNIQUE RX <span>· RandomX CPU</span></h1>
+                  <p>Monitoraggio in tempo reale del motore nativo · telemetria effettiva, nessun dato simulato.</p>
                 </div>
-                <div className="primary-actions">
-                  <button className="button button-start" type="button" onClick={() => setShellCommand("help")}>
-                    <Terminal size={15} /> Comandi disponibili
-                  </button>
+                <div className="shell-live-state">
+                  <i className={status.connected ? "status-dot good" : "status-dot"} />
+                  <strong>{status.connected ? "CONNECTED" : status.state}</strong>
+                  <span>{status.threads ?? 0} THREAD</span>
                 </div>
               </section>
-              <section className="shell-panel">
-                <div className="shell-panel-head">
-                  <div><span className="status-dot good" /> UNIQUE RX · LOCALE</div>
-                  <span>LOG PERSISTENTE · COMANDI REALI</span>
+
+              <section className="rx-shell">
+                <div className="rx-shell-topline">
+                  <div><span className="status-dot good" /> UNIQUE RX <span className="rx-muted">MONERO RANDOMX CPU MINER</span></div>
+                  <div className="rx-top-meta"><span>{status.algorithm ?? "rx/0"}</span><span>UPTIME {formatUptime(status.uptime_seconds)}</span></div>
                 </div>
-                <pre className="shell-output" aria-live="polite">{shellLines.join("\n")}</pre>
-                <form className="shell-input-row" onSubmit={(event) => void runShellCommand(event)}>
-                  <label htmlFor="shell-command">&gt;</label>
-                  <input
-                    id="shell-command"
-                    value={shellCommand}
-                    onChange={(event) => setShellCommand(event.target.value)}
-                    placeholder="help, status, threads 4, graph..."
-                    autoComplete="off"
-                    spellCheck={false}
-                    maxLength={120}
-                  />
-                  <button className="button button-start" type="submit" disabled={shellBusy || !shellCommand.trim()}>
-                    {shellBusy ? "ESECUZIONE…" : "ESEGUI"}
-                  </button>
-                </form>
-                <div className="shell-hint">
-                  <span>threads N / threads auto: regolazione live dei worker</span>
-                  <span>config.json: sola lettura</span>
+
+                <div className="rx-shell-grid rx-overview-grid">
+                  <article className="rx-card rx-hashrate-card">
+                    <div className="rx-card-title">HASHRATE <span>LIVE</span></div>
+                    <div className="rx-rate-row"><span>10 SEC</span><strong>{formatHashrate(status.hashrate["10s"])}</strong></div>
+                    <div className="rx-rate-row"><span>60 SEC</span><strong>{formatHashrate(status.hashrate["60s"])}</strong></div>
+                    <div className="rx-rate-row"><span>15 MIN</span><strong>{formatHashrate(status.hashrate["15m"])}</strong></div>
+                    <div className="rx-chart-wrap">
+                      <div className="rx-card-title">HASHRATE HISTORY <span>ULTIMI 4 MIN</span></div>
+                      <ResponsiveContainer width="100%" height={118}>
+                        <AreaChart data={history.slice(-120)}>
+                          <defs><linearGradient id="rxShellRateFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a6d96a" stopOpacity={0.38} /><stop offset="100%" stopColor="#a6d96a" stopOpacity={0.02} /></linearGradient></defs>
+                          <Tooltip formatter={(value) => formatHashrate(Number(value))} labelFormatter={() => "Hashrate"} />
+                          <Area type="monotone" dataKey="hashrate" stroke="#a6d96a" strokeWidth={2} fill="url(#rxShellRateFill)" isAnimationActive={false} connectNulls />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </article>
+
+                  <article className="rx-card rx-best-card">
+                    <div className="rx-card-title">BEST DIFFICULTIES <span>SESSION</span></div>
+                    <div className="rx-table-head"><span>#</span><span>DIFFICULTY</span><span>EFFORT</span><span>AGE</span></div>
+                    {(status.best?.top_difficulties ?? []).slice(0, 8).map((entry, index) => (
+                      <div className="rx-best-row" key={`${entry.at_unix_seconds}-${index}`}>
+                        <span>{index + 1}</span>
+                        <strong>{entry.difficulty.toLocaleString("it-IT", { maximumFractionDigits: 0 })}</strong>
+                        <span>{status.best?.effort_percent != null && index === 0 ? status.best.effort_percent.toFixed(2) + "%" : "—"}</span>
+                        <span>{Math.max(0, Math.floor(Date.now() / 1000 - entry.at_unix_seconds))}s</span>
+                      </div>
+                    ))}
+                    {(!status.best?.top_difficulties?.length) && <div className="rx-empty">Nessuna share accettata nella sessione</div>}
+                    <div className="rx-best-total">HASH STIMATI <strong>{status.best?.estimated_hashes != null ? formatCount(Math.round(status.best.estimated_hashes)) : "—"}</strong></div>
+                  </article>
+
+                  <article className="rx-card rx-shares-card">
+                    <div className="rx-card-title">SHARES <span>POOL</span></div>
+                    <div className="rx-share-total"><strong>{formatCount(status.shares.accepted)}</strong><span>ACCEPTED</span></div>
+                    <div className="rx-share-meter"><i style={{ width: `${Math.min(100, (status.shares.accepted ?? 0) / Math.max(1, (status.shares.accepted ?? 0) + (status.shares.rejected ?? 0)) * 100)}%` }} /></div>
+                    <div className="rx-share-row"><span>Found</span><strong>{formatCount(status.shares.found ?? null)}</strong></div>
+                    <div className="rx-share-row"><span>Submitted</span><strong>{formatCount(status.shares.submitted ?? null)}</strong></div>
+                    <div className="rx-share-row"><span>Rejected</span><strong>{formatCount(status.shares.rejected)}</strong></div>
+                    <div className="rx-share-row"><span>Stale</span><strong>{formatCount(status.shares.stale)}</strong></div>
+                    <div className="rx-share-row"><span>Pending</span><strong>{formatCount(status.shares.pending)}</strong></div>
+                    <div className="rx-share-row"><span>Expired</span><strong>{formatCount(status.shares.expired)}</strong></div>
+                    <div className="rx-share-row"><span>Lost</span><strong>{formatCount(status.shares.dropped)}</strong></div>
+                  </article>
                 </div>
+
+                <div className="rx-shell-grid rx-connection-grid">
+                  <article className="rx-card">
+                    <div className="rx-card-title">POOL <span>STRATUM</span></div>
+                    <div className="rx-detail-row"><span>STATE</span><strong className={status.connected ? "rx-good" : "rx-warn"}>{status.connected ? "CONNECTED" : status.state}</strong></div>
+                    <div className="rx-detail-row"><span>ENDPOINT</span><strong>{status.pool ?? config?.pool ?? "—"}</strong></div>
+                    <div className="rx-detail-row"><span>SECURITY</span><strong>{config ? (config.tls ? "TLS ENABLED" : "TLS DISABLED") : "—"}</strong></div>
+                    <div className="rx-detail-row"><span>LATENCY</span><strong>{status.pool_latency_ms != null ? `${status.pool_latency_ms} ms` : "—"}</strong></div>
+                    <div className="rx-detail-row"><span>RETRIES</span><strong>{formatCount(status.reconnects)}</strong></div>
+                  </article>
+                  <article className="rx-card">
+                    <div className="rx-card-title">JOB / RANDOMX <span>WORK</span></div>
+                    <div className="rx-detail-row"><span>ALGORITHM</span><strong>{status.algorithm ?? "—"}</strong></div>
+                    <div className="rx-detail-row"><span>HEIGHT</span><strong>{status.height?.toLocaleString("it-IT") ?? "—"}</strong></div>
+                    <div className="rx-detail-row"><span>JOB ID</span><strong>{status.job_id ?? "—"}</strong></div>
+                    <div className="rx-detail-row"><span>DIFFICULTY</span><strong>{status.job_difficulty != null ? status.job_difficulty.toLocaleString("it-IT", { maximumFractionDigits: 2 }) : "—"}</strong></div>
+                    <div className="rx-detail-row"><span>MEMORY MODE</span><strong>{status.full_memory == null ? "—" : status.full_memory ? "RANDOMX FAST" : "RANDOMX LIGHT"}</strong></div>
+                  </article>
+                  <article className="rx-card rx-system-card">
+                    <div className="rx-card-title">SYSTEM <span>CPU / MEMORY</span></div>
+                    <div className="rx-detail-row"><span>CPU LOAD</span><strong>{status.system?.cpu_percent != null ? `${status.system.cpu_percent.toFixed(1)}%` : "—"}</strong></div>
+                    <div className="rx-detail-row"><span>UNIQUE RX</span><strong>{status.system?.process_cpu_percent != null ? `${status.system.process_cpu_percent.toFixed(1)}%` : "—"}</strong></div>
+                    <div className="rx-detail-row"><span>FREQUENCY</span><strong>{status.system?.cpu_frequency_mhz != null ? `${Math.round(status.system.cpu_frequency_mhz)} MHz` : "—"}</strong></div>
+                    <div className="rx-detail-row"><span>TEMPERATURE</span><strong>{status.system?.temperature_c != null ? `${status.system.temperature_c.toFixed(1)} °C` : "n/a"}</strong></div>
+                    <div className="rx-detail-row"><span>PROCESS RAM</span><strong>{status.system?.process_memory_bytes != null ? `${(status.system.process_memory_bytes / 1048576).toFixed(0)} MiB` : "—"}</strong></div>
+                  </article>
+                </div>
+
+                <div className="rx-shell-grid rx-bottom-grid">
+                  <article className="rx-card rx-cpu-card">
+                    <div className="rx-card-title">CPU / WORKERS <span>{status.threads ?? 0} THREADS</span></div>
+                    <div className="rx-cpu-name">{status.cpu?.brand ?? "CPU non rilevata"}</div>
+                    <div className="rx-cpu-meta">{status.cpu ? `${status.cpu.physical_cores} CORE / ${status.cpu.logical_threads} THREADS · ${status.cpu.numa_nodes} NUMA · L3 ${(status.cpu.l3_cache_bytes / 1048576).toFixed(0)} MiB` : "—"}</div>
+                    <div className="rx-feature-list">
+                      {(["aes", "ssse3", "avx2", "vaes", "bmi2"] as const).map((feature) => (
+                        <span className={status.cpu?.features[feature] ? "enabled" : "disabled"} key={feature}>{feature.toUpperCase()} {status.cpu?.features[feature] ? "ON" : "OFF"}</span>
+                      ))}
+                    </div>
+                    <div className="rx-worker-list">
+                      {(status.workers ?? []).map((worker) => (
+                        <div className="rx-worker-row" key={worker.id}>
+                          <span>W{worker.id}</span><i><b style={{ width: `${Math.max(0, Math.min(100, (worker.hashrate_hps / Math.max(1, ...((status.workers ?? []).map((item) => item.hashrate_hps)))) * 100))}%` }} /></i><strong>{formatHashrate(worker.hashrate_hps)}</strong>
+                        </div>
+                      ))}
+                      {(!status.workers?.length) && <div className="rx-empty">Worker non ancora disponibili</div>}
+                    </div>
+                  </article>
+
+                  <article className="rx-card rx-memory-card">
+                    <div className="rx-card-title">MEMORY / MSR <span>RANDOMX</span></div>
+                    <div className="rx-detail-row"><span>MODE</span><strong>{status.full_memory == null ? "—" : status.full_memory ? "FULL DATASET" : "LIGHT CACHE"}</strong></div>
+                    <div className="rx-detail-row"><span>HUGE PAGES</span><strong className={status.large_pages_active ? "rx-good" : "rx-warn"}>{status.large_pages_active == null ? "—" : status.large_pages_active ? "ACTIVE" : status.large_pages_requested ? "REQUESTED / INACTIVE" : "NOT REQUESTED"}</strong></div>
+                    <div className="rx-detail-row"><span>MSR</span><strong>{status.msr_status ?? (status.msr_active == null ? "—" : status.msr_active ? "ACTIVE" : "INACTIVE")}</strong></div>
+                    <div className="rx-detail-row"><span>CPU PRIORITY</span><strong>{status.cpu_priority ?? "—"}</strong></div>
+                    <div className="rx-detail-row"><span>THREAD CONTROL</span><strong>LIVE VIA SHELL</strong></div>
+                  </article>
+
+                  <article className="rx-card rx-events-card">
+                    <div className="rx-card-title">EVENTS <span>RECENTI</span></div>
+                    <div className="rx-events-list">
+                      {logs.slice(-8).reverse().map((entry) => (
+                        <div className="rx-event-row" key={entry.id}>
+                          <time>{new Date(entry.time * 1000).toLocaleTimeString("it-IT")}</time>
+                          <span>{entry.engine ? `[${entry.engine}] ` : ""}{entry.message}</span>
+                        </div>
+                      ))}
+                      {!logs.length && <div className="rx-empty">In attesa degli eventi del miner</div>}
+                    </div>
+                  </article>
+                </div>
+
+                <article className="rx-card rx-terminal-card">
+                  <div className="rx-card-title">OPERATOR TERMINAL <span>COMANDI LIVE · CONFIG IN SOLA LETTURA</span></div>
+                  <div className="rx-command-shortcuts">
+                    {["help", "status", "diagnose", "workers", "shares", "graph", "pool", "logs 20"].map((command) => (
+                      <button type="button" key={command} onClick={() => setShellCommand(command)}>{command}</button>
+                    ))}
+                  </div>
+                  <pre className="shell-output" aria-live="polite">{shellLines.join("\n")}</pre>
+                  <form className="shell-input-row" onSubmit={(event) => void runShellCommand(event)}>
+                    <label htmlFor="shell-command">&gt;</label>
+                    <input
+                      id="shell-command"
+                      value={shellCommand}
+                      onChange={(event) => setShellCommand(event.target.value)}
+                      placeholder="help, status, threads 4, graph..."
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={120}
+                    />
+                    <button className="button button-start" type="submit" disabled={shellBusy || !shellCommand.trim()}>
+                      {shellBusy ? "ESECUZIONE…" : "ESEGUI"}
+                    </button>
+                  </form>
+                </article>
               </section>
               <footer className="page-footer">
                 <span>UNIQUE RX · SHELL OPERATIVA</span>
-                <span>NESSUNA CREDENZIALE MOSTRATA <ShieldCheck size={13} /></span>
+                <span>TELEMETRIA REALE DAL MOTORE C++ <ShieldCheck size={13} /></span>
               </footer>
             </>
           ) : (
