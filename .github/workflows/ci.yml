@@ -1,6 +1,9 @@
 name: Application CI
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -127,6 +130,41 @@ jobs:
           Add-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ascii -Value "$sourceHash  unique-rx-source.zip"
           git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $out "SOURCE-COMMIT.txt") -Encoding ascii
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "config.example.json") -Destination (Join-Path $out "config.example.json")
+          # Build the user's ready-to-run config from the known working HashVault
+          # settings. This is a public receiving address; no private key/seed is stored.
+          $config = Get-Content -LiteralPath (Join-Path $out "config.example.json") -Raw | ConvertFrom-Json
+          $config.cpu.enabled = $true
+          $config.cpu.'max-threads-hint' = 0
+          $config.cpu.'huge-pages' = $false
+          $config.cpu.'jit-huge-pages' = $false
+          $config.cpu.'prefetch-mode' = 1
+          if ($null -eq $config.cpu.rx) { $config.cpu | Add-Member -NotePropertyName rx -NotePropertyValue ([pscustomobject]@{}) }
+          $config.cpu.rx.threads = 0
+          $config.randomx.'full-memory' = $true
+          $config.randomx.wrmsr = $false
+          $config.randomx.'msr-module' = "msr/IntelMSR.bin"
+          $config.pools = @([pscustomobject]@{
+            enabled = $true
+            url = "pool.hashvault.pro:443"
+            user = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumb"
+            pass = "x"
+            'rig-id' = "lillot"
+            tls = $true
+            'tls-fingerprint' = "420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14"
+            keepalive = $false
+            nicehash = $false
+          })
+          $config | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $out "config.json") -Encoding utf8
+          # Bundle the exact Python runtime and dependencies used by the tested backend.
+          $pythonRoot = (& python -c "import sys; print(sys.base_prefix)").Trim()
+          if (-not $pythonRoot -or -not (Test-Path -LiteralPath (Join-Path $pythonRoot "python.exe"))) { throw "Python runtime root not found." }
+          $pythonOut = Join-Path $out "python"
+          Copy-Item -LiteralPath $pythonRoot -Destination $pythonOut -Recurse -Force
+          $sitePackages = Join-Path $env:GITHUB_WORKSPACE ".venv\\Lib\\site-packages"
+          if (-not (Test-Path -LiteralPath $sitePackages)) { throw "Tested backend site-packages not found: $sitePackages" }
+          $pythonSitePackages = Join-Path $pythonOut "Lib\\site-packages"
+          New-Item -ItemType Directory -Force -Path $pythonSitePackages | Out-Null
+          Copy-Item -Path (Join-Path $sitePackages "*") -Destination $pythonSitePackages -Recurse -Force
           Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "requirements.txt") -Destination $out
           $backendOut = Join-Path $out "backend"
           New-Item -ItemType Directory -Force -Path $backendOut | Out-Null
