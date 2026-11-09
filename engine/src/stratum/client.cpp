@@ -180,7 +180,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::string user_agent = config.value("user-agent",
             std::string("UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)"));
         if (user_agent.empty() || user_agent.size() > 256 ||
-            user_agent.find_first_of("\\r\\n") != std::string::npos)
+            user_agent.find_first_of("\r\n") != std::string::npos)
             throw std::runtime_error("user-agent must contain 1 to 256 characters without newlines");
         const auto randomx_config = config.value("randomx", nlohmann::json::object());
         bool full_memory = randomx_config.value("full-memory", true);
