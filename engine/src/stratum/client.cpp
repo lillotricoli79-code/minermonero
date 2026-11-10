@@ -28,6 +28,7 @@
 #include <atomic>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <csignal>
 #include <cstring>
 #include <deque>
@@ -865,9 +866,7 @@ int run_miner(const std::filesystem::path& config_path,
                             (work->job.height ? std::to_string(*work->job.height) : "n/d")
                             : std::string("in attesa del job"));
                         line("RANDOMX SEED", work
-                            ? (work->job.seed.size() > 16
-                                ? work->job.seed.substr(0, 16) + "..."
-                                : work->job.seed)
+                            ? hex_encode(work->job.seed.data(), work->job.seed.size()).substr(0, 16) + "..."
                             : std::string("n/d"));
                         line("RECONNECT", std::to_string(state.reconnects.load()) +
                             " | RTT share " +
