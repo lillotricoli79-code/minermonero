@@ -1095,13 +1095,17 @@ int run_miner(const std::filesystem::path& config_path,
                                 right_lines.emplace_back(std::string(label) + ": n/d");
                                 return;
                             }
-                            std::ostringstream row;
-                            row << label << " " << std::fixed << std::setprecision(5) << xmr
-                                << " XMR | $" << std::setprecision(2) << xmr * market.value("price_usd", 0.0)
-                                << " | " << xmr * market.value("price_eur", 0.0) << " EUR"
-                                << " | " << std::setprecision(8) << xmr * market.value("price_btc", 0.0)
-                                << " BTC";
-                            right_lines.emplace_back(row.str());
+                            std::ostringstream first;
+                            first << label << " XMR " << std::fixed << std::setprecision(5) << xmr
+                                  << " BTC " << std::setprecision(8)
+                                  << xmr * market.value("price_btc", 0.0);
+                            std::ostringstream second;
+                            second << "  USD " << std::fixed << std::setprecision(2)
+                                   << xmr * market.value("price_usd", 0.0)
+                                   << " EUR " << xmr * market.value("price_eur", 0.0)
+                                   << " RUB " << xmr * market.value("price_rub", 0.0);
+                            right_lines.emplace_back(first.str());
+                            right_lines.emplace_back(second.str());
                         };
                         if (api_data.wallet_ready) {
                             right_lines.emplace_back("WALLET REVENUE / XMR USD EUR BTC");
