@@ -299,7 +299,7 @@ void refresh(Snapshot& snapshot, const std::string& wallet, bool solo,
     const auto safe_period = period == "weekly" || period == "monthly" ? period : "daily";
     const auto threshold = std::clamp(inactivity_minutes, 1U, 10080U);
     const auto path = "/v3/monero/wallet/" + encode_path(wallet) +
-        "/stats?chart=true&poolType=" + std::string(solo ? "true" : "false") +
+        "/stats?chart=false&poolType=" + std::string(solo ? "true" : "false") +
         "&workers=true&period=" + safe_period +
         "&inactivityThreshold=" + std::to_string(threshold);
     nlohmann::json wallet_data;
