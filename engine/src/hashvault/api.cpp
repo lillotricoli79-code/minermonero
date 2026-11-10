@@ -25,8 +25,11 @@ namespace unique_rx::hashvault {
 namespace {
 
 struct SocketCloser {
-    void operator()(platform::Socket socket) const noexcept {
-        platform::close_socket(socket);
+    void operator()(platform::Socket* socket) const noexcept {
+        if (socket) {
+            platform::close_socket(*socket);
+            delete socket;
+        }
     }
 };
 struct SslContextCloser {
