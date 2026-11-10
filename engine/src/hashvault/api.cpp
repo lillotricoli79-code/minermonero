@@ -25,6 +25,11 @@
 namespace unique_rx::hashvault {
 namespace {
 
+// SHA-256 leaf-certificate pin for https://api.hashvault.pro:443.
+// This is intentionally separate from the pool.hashvault.pro Stratum pin.
+constexpr char kHashVaultApiTlsFingerprint[] =
+    "2fe5e263092844e831bc4fa87000fc66585d9ba3db4dac6cbd446bc0313f1263";
+
 struct SocketCloser {
     void operator()(platform::Socket* socket) const noexcept {
         if (socket) {
@@ -116,8 +121,7 @@ std::string decode_chunked(const std::string& input) {
     return output;
 }
 
-bool get_https(const std::string& path, const std::string& tls_fingerprint,
-               std::string& body, std::string& error) {
+bool get_https(const std::string& path, std::string& body, std::string& error) {
     platform::NetworkRuntime network;
     addrinfo hints{};
     hints.ai_family = AF_UNSPEC;
@@ -185,7 +189,7 @@ bool get_https(const std::string& path, const std::string& tls_fingerprint,
         error = "Handshake TLS API HashVault fallito";
         return false;
     }
-    if (!verify_pinned_certificate(ssl.get(), tls_fingerprint, error))
+    if (!verify_pinned_certificate(ssl.get(), kHashVaultApiTlsFingerprint, error))
         return false;
 
     const std::string request =
@@ -259,11 +263,11 @@ std::string encode_path(const std::string& value) {
 
 } // namespace
 
-bool fetch_json(const std::string& path, const std::string& tls_fingerprint,
-                nlohmann::json& output, std::string& error) noexcept {
+bool fetch_json(const std::string& path, nlohmann::json& output,
+                std::string& error) noexcept {
     try {
         std::string body;
-        if (!get_https(path, tls_fingerprint, body, error)) return false;
+        if (!get_https(path, body, error)) return false;
         output = nlohmann::json::parse(body);
         return true;
     } catch (const std::exception& exception) {
@@ -275,12 +279,11 @@ bool fetch_json(const std::string& path, const std::string& tls_fingerprint,
     }
 }
 
-void refresh(Snapshot& snapshot, const std::string& wallet,
-             const std::string& tls_fingerprint, bool solo,
+void refresh(Snapshot& snapshot, const std::string& wallet, bool solo,
              const std::string& period, unsigned inactivity_minutes) noexcept {
     nlohmann::json pool;
     std::string pool_error;
-    if (fetch_json("/v3/monero", tls_fingerprint, pool, pool_error)) {
+    if (fetch_json("/v3/monero", pool, pool_error)) {
         snapshot.pool = std::move(pool);
         snapshot.pool_ready = true;
         snapshot.pool_error.clear();
@@ -301,7 +304,7 @@ void refresh(Snapshot& snapshot, const std::string& wallet,
         "&inactivityThreshold=" + std::to_string(threshold);
     nlohmann::json wallet_data;
     std::string wallet_error;
-    if (fetch_json(path, tls_fingerprint, wallet_data, wallet_error)) {
+    if (fetch_json(path, wallet_data, wallet_error)) {
         snapshot.wallet = std::move(wallet_data);
         snapshot.wallet_ready = true;
         snapshot.wallet_error.clear();
