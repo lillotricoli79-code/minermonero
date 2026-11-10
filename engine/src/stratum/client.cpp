@@ -1144,20 +1144,6 @@ int run_miner(const std::filesystem::path& config_path,
                             ? std::to_string(difficulty / calculator_rate / 3600.0) + " hours"
                             : "n/d");
                         right_lines.emplace_back("Revenue / day:");
-                        right_lines.emplace_back("BTC: " + (difficulty > 0.0
-                            ? std::to_string(daily_xmr * market.value("price_btc", 0.0)) : "n/d"));
-                        right_lines.emplace_back("USD: " + (difficulty > 0.0
-                            ? std::to_string(daily_xmr * market.value("price_usd", 0.0)) : "n/d"));
-                        right_lines.emplace_back("EUR: " + (difficulty > 0.0
-                            ? std::to_string(daily_xmr * market.value("price_eur", 0.0)) : "n/d"));
-                        right_lines.emplace_back("RUB: " + (difficulty > 0.0
-                            ? std::to_string(daily_xmr * market.value("price_rub", 0.0)) : "n/d"));
-                        right_lines.emplace_back(" ");
-                        right_lines.emplace_back("MARKET");
-                        right_lines.emplace_back("XMR/BTC: " + number(market, "price_btc"));
-                        right_lines.emplace_back("XMR/USD: " + number(market, "price_usd"));
-                        right_lines.emplace_back("XMR/EUR: " + number(market, "price_eur"));
-                        right_lines.emplace_back("XMR/RUB: " + number(market, "price_rub"));
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("Aggiornamento API: 60s");
                         right_lines.emplace_back("Stime indicative, non garantite");
@@ -1175,11 +1161,6 @@ int run_miner(const std::filesystem::path& config_path,
                                           << right_lines[row].substr(0, right_width);
                             }
                             std::cout << '\n';
-                            ++row;
-                        }
-                        while (row < right_lines.size()) {
-                            std::cout << std::string(shell_width, ' ') << "  |  "
-                                      << right_lines[row].substr(0, right_width) << '\n';
                             ++row;
                         }
                         std::cout << std::flush;
