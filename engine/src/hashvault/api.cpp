@@ -6,6 +6,10 @@
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
+#ifdef _WIN32
+#include <wincrypt.h>
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -44,6 +48,40 @@ std::string lower(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return value;
+}
+
+#ifdef _WIN32
+bool import_windows_store(SSL_CTX* context, const char* store_name) {
+    HCERTSTORE store = CertOpenSystemStoreA(nullptr, store_name);
+    if (!store) return false;
+    std::size_t imported = 0;
+    PCCERT_CONTEXT certificate = nullptr;
+    while ((certificate = CertEnumCertificatesInStore(store, certificate)) != nullptr) {
+        const unsigned char* encoded = certificate->pbCertEncoded;
+        X509* parsed = d2i_X509(nullptr, &encoded,
+                                static_cast<long>(certificate->cbCertEncoded));
+        if (parsed) {
+            if (X509_STORE_add_cert(SSL_CTX_get_cert_store(context), parsed) == 1)
+                ++imported;
+            else
+                ERR_clear_error(); // Certificato già presente nello store OpenSSL.
+            X509_free(parsed);
+        }
+    }
+    CertCloseStore(store, 0);
+    return imported != 0;
+}
+#endif
+
+bool configure_trust_store(SSL_CTX* context) {
+#ifdef _WIN32
+    // OpenSSL non legge automaticamente lo store radice di Windows.
+    // Importiamo le CA attendibili dell'utente/macchina senza disabilitare la verifica TLS.
+    const bool roots = import_windows_store(context, "ROOT");
+    const bool intermediates = import_windows_store(context, "CA");
+    if (roots || intermediates) return true;
+#endif
+    return SSL_CTX_set_default_verify_paths(context) == 1;
 }
 
 std::string decode_chunked(const std::string& input) {
@@ -110,8 +148,8 @@ bool get_https(const std::string& path, std::string& body, std::string& error) {
     }
 
     std::unique_ptr<SSL_CTX, SslContextCloser> context(SSL_CTX_new(TLS_client_method()));
-    if (!context || SSL_CTX_set_default_verify_paths(context.get()) != 1) {
-        error = "Inizializzazione TLS HashVault fallita";
+    if (!context || !configure_trust_store(context.get())) {
+        error = "Store CA attendibili non disponibile per TLS HashVault";
         return false;
     }
     SSL_CTX_set_verify(context.get(), SSL_VERIFY_PEER, nullptr);
@@ -120,12 +158,16 @@ bool get_https(const std::string& path, std::string& body, std::string& error) {
         error = "Creazione sessione TLS fallita";
         return false;
     }
-    SSL_set_tlsext_host_name(ssl.get(), "api.hashvault.pro");
-    SSL_set1_host(ssl.get(), "api.hashvault.pro");
-    SSL_set_fd(ssl.get(), static_cast<int>(*socket));
+    if (SSL_set_tlsext_host_name(ssl.get(), "api.hashvault.pro") != 1 ||
+        SSL_set1_host(ssl.get(), "api.hashvault.pro") != 1 ||
+        SSL_set_fd(ssl.get(), static_cast<int>(*socket)) != 1) {
+        error = "Configurazione TLS/SNI HashVault fallita";
+        return false;
+    }
     if (SSL_connect(ssl.get()) != 1 ||
         SSL_get_verify_result(ssl.get()) != X509_V_OK) {
-        error = "Verifica certificato TLS HashVault fallita";
+        const long verify = SSL_get_verify_result(ssl.get());
+        error = "Verifica TLS HashVault fallita (codice " + std::to_string(verify) + ")";
         return false;
     }
 
