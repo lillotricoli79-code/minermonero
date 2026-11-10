@@ -759,8 +759,8 @@ int run_miner(const std::filesystem::path& config_path,
                             return out.str();
                         };
                         const auto line = [](const std::string& label, const std::string& value) {
-                            std::cout << "  " << std::left << std::setw(18) << label
-                                      << " " << value << '\n';
+                            std::cout << "  \x1b[1;36m" << std::left << std::setw(18) << label
+                                      << "\x1b[0m \x1b[97m" << value << "\x1b[0m\n";
                         };
                         const auto terminal_dimensions = []() {
                             std::array<std::size_t, 2> dimensions{100, 40};
@@ -800,10 +800,14 @@ int run_miner(const std::filesystem::path& config_path,
                             Clock::now() - started).count();
                         const auto system_sample = shell_telemetry.sample();
                         std::cout << "\x1b[2J\x1b[H"
-                                  << "\x1b[1;36m"
-                                  << "  U N I Q U E   R X   |   MONERO RANDOMX CPU MINER"
+                                  << "\x1b[1;96m"
+                                  << "  +======================================================================+\n"
+                                  << "  |  U N I Q U E   R X     //     MONERO RANDOMX CPU MINER                |\n"
+                                  << "  |  NATIVE ENGINE  -  LIVE TELEMETRY  -  HASHVAULT                       |\n"
+                                  << "  +======================================================================+"
                                   << "\x1b[0m\n"
-                                  << "  " << std::string(shell_width - 4, '=') << "\n";
+                                  << "  \x1b[1;34m" << std::string(shell_width - 4, '=') << "\x1b[0m\n"
+                                  << "  \x1b[1;35m[ SYSTEM / RANDOMX ]\x1b[0m\n";
                         line("ALGORITMO", "RandomX rx/0");
                         line("CPU", cpu_summary.value("brand", std::string("non disponibile")));
                         line("FEATURE", std::string("AES ") + (features.value("aes", false) ? "ON" : "OFF") +
@@ -829,10 +833,13 @@ int run_miner(const std::filesystem::path& config_path,
                             worker_summary << 'W' << id << ' ' << rate_text(worker_hashrates[id]);
                         }
                         line("WORKER RATE", worker_summary.str().empty() ? "in inizializzazione" : worker_summary.str());
-                        std::cout << "  " + separator + "\n";
-                        std::cout << "  HASHRATE  10s " << std::setw(16) << rate_text(average_rate(10))
-                                  << "  60s " << std::setw(16) << rate_text(average_rate(60))
-                                  << "  15m " << rate_text(average_rate(900)) << '\n';
+                        std::cout << "  \x1b[1;34m" << separator << "\x1b[0m\n"
+                                  << "  \x1b[1;35m[ PERFORMANCE ]\x1b[0m  "
+                                  << "\x1b[1;97mHASHRATE\x1b[0m  "
+                                  << "\x1b[1;32m10s " << std::setw(16) << rate_text(average_rate(10))
+                                  << "\x1b[0m  \x1b[1;36m60s " << std::setw(16) << rate_text(average_rate(60))
+                                  << "\x1b[0m  \x1b[1;33m15m " << rate_text(average_rate(900))
+                                  << "\x1b[0m\n";
                         line("HASHES TOTAL", std::to_string(state.hashes.load(std::memory_order_relaxed)));
                         const auto graph_begin = shell_rate_history.size() > 900
                             ? shell_rate_history.end() - 900 : shell_rate_history.begin();
@@ -850,16 +857,21 @@ int run_miner(const std::filesystem::path& config_path,
                             graph_buckets[bucket] = sum / static_cast<double>(last - first);
                             graph_peak = std::max(graph_peak, graph_buckets[bucket]);
                         }
-                        std::cout << "  TREND 15m ";
+                        std::cout << "  \x1b[1;35mTREND 15m\x1b[0m ";
                         static constexpr char graph_levels[] = " .:-=+*#@";
+                        static constexpr const char* graph_colors[] = {
+                            "\x1b[90m", "\x1b[37m", "\x1b[36m", "\x1b[96m",
+                            "\x1b[94m", "\x1b[34;1m", "\x1b[35;1m", "\x1b[95m", "\x1b[97;1m"
+                        };
                         for (const auto rate : graph_buckets) {
                             const auto level = graph_peak > 0.0
                                 ? static_cast<std::size_t>(std::clamp(rate / graph_peak, 0.0, 1.0) * 8.0)
                                 : 0U;
-                            std::cout << graph_levels[level];
+                            std::cout << graph_colors[level] << graph_levels[level] << "\x1b[0m";
                         }
                         std::cout << '\n'
-                                  << "  " + separator + "\n";
+                                  << "  \x1b[1;34m" << separator << "\x1b[0m\n"
+                                  << "  \x1b[1;35m[ SHARE STATISTICS ]\x1b[0m\n";
                         const auto accepted = state.accepted.load();
                         const auto rejected = state.rejected.load();
                         const auto stale = state.stale_shares.load();
@@ -867,16 +879,16 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto acceptance = resolved > 0
                             ? 100.0 * static_cast<double>(accepted) / static_cast<double>(resolved)
                             : 0.0;
-                        std::cout << "  SHARES    found " << state.found.load()
-                                  << " | sent " << state.submitted.load()
-                                  << " | \x1b[32maccepted " << accepted
-                                  << "\x1b[0m | \x1b[31mrejected " << rejected
+                        std::cout << "  \x1b[1;97mSHARES\x1b[0m  found \x1b[97m" << state.found.load()
+                                  << "\x1b[0m | sent \x1b[96m" << state.submitted.load()
+                                  << "\x1b[0m | \x1b[1;32maccepted " << accepted
+                                  << "\x1b[0m | \x1b[1;31mrejected " << rejected
                                   << "\x1b[0m | stale " << stale
                                   << " | pending " << state.pending.load()
                                   << " | expired " << state.expired_shares.load()
                                   << " | lost " << state.dropped_shares.load()
-                                  << " | accepted " << std::fixed << std::setprecision(1)
-                                  << acceptance << "%\n";
+                                  << " | \x1b[1;32maccepted " << std::fixed << std::setprecision(1)
+                                  << acceptance << "%\x1b[0m\n";
                         const auto best = state.best_snapshot();
                         const auto difficulty_text = [](double difficulty) {
                             if (!(difficulty > 0.0) || !std::isfinite(difficulty))
@@ -903,7 +915,7 @@ int run_miner(const std::filesystem::path& config_path,
                                   << (best_share_difficulty > 0.0
                                       ? difficulty_text(estimated_effort) + "%"
                                       : std::string("n/d")) << '\n';
-                        std::cout << "  BEST DIFFICULTIES (accepted shares)  #  DIFF       EFFORT     AGE\n";
+                        std::cout << "  \x1b[1;97mBEST DIFFICULTIES (accepted shares)  #  DIFF       EFFORT     AGE\x1b[0m\n";
                         for (std::size_t row = 0; row < 5; ++row) {
                             std::ostringstream entries;
                             for (std::size_t column = 0; column < 2; ++column) {
@@ -986,8 +998,8 @@ int run_miner(const std::filesystem::path& config_path,
                             " | processo " + memory_mib(system_sample.process_memory_bytes) +
                             " | temp " + optional_metric(system_sample.temperature_c, " C") +
                             " | power " + optional_metric(system_sample.package_power_watts, " W"));
-                        std::cout << "  " + separator + "\n"
-                                  << "  LOG EVENTI  [logs up/down/tail]  "
+                        std::cout << "  \x1b[1;34m" << separator << "\x1b[0m\n"
+                                  << "  \x1b[1;35m[ LIVE EVENT LOG ]\x1b[0m  [logs up/down/tail]  "
                                   << (log_scroll == 0 ? "LIVE" : "SCROLL -" + std::to_string(log_scroll))
                                   << "\n";
                         const auto entries = logging::recent_entries(2048);
@@ -1011,7 +1023,7 @@ int run_miner(const std::filesystem::path& config_path,
                         if (entries.empty()) std::cout << "  (nessun evento registrato)\n";
                         std::cout << "  " + separator << "\n"
                                   << "  LOG SCROLL: [ logs up ] piu' vecchi | [ logs down ] recenti | [ logs tail ] live\n"
-                                  << "  COMANDO > " << command_line;
+                                  << "  \x1b[1;33mCOMANDO > \x1b[0m\x1b[97m" << command_line << "\x1b[0m";
                         std::cout.rdbuf(original_output);
                         const auto left_text = left_screen.str();
                         if (!split_columns) {
