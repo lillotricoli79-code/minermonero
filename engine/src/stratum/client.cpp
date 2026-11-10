@@ -695,6 +695,8 @@ int run_miner(const std::filesystem::path& config_path,
                     std::array<std::uint64_t, 256> previous_worker_hashes{};
                     std::array<double, 256> worker_hashrates{};
                     std::deque<double> shell_rate_history;
+                    std::size_t log_scroll = 0;
+                    telemetry::SystemTelemetry shell_telemetry;
                     auto previous_sample = Clock::now();
                     double shell_hashrate = 0.0;
                     auto last_command_at = Clock::time_point::min();
@@ -733,31 +735,39 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << "  " << std::left << std::setw(18) << label
                                       << " " << value << '\n';
                         };
-                        const auto terminal_columns = []() -> std::size_t {
+                        const auto terminal_dimensions = []() {
+                            std::array<std::size_t, 2> dimensions{100, 40};
 #ifdef _WIN32
                             CONSOLE_SCREEN_BUFFER_INFO info{};
                             const auto output = GetStdHandle(STD_OUTPUT_HANDLE);
                             if (output != INVALID_HANDLE_VALUE &&
                                 GetConsoleScreenBufferInfo(output, &info)) {
-                                return static_cast<std::size_t>(
+                                dimensions[0] = static_cast<std::size_t>(
                                     info.srWindow.Right - info.srWindow.Left + 1);
+                                dimensions[1] = static_cast<std::size_t>(
+                                    info.srWindow.Bottom - info.srWindow.Top + 1);
                             }
 #elif defined(__linux__)
-                            struct winsize dimensions{};
-                            if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &dimensions) == 0 &&
-                                dimensions.ws_col > 0) {
-                                return static_cast<std::size_t>(dimensions.ws_col);
+                            struct winsize size{};
+                            if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0) {
+                                if (size.ws_col > 0) dimensions[0] = size.ws_col;
+                                if (size.ws_row > 0) dimensions[1] = size.ws_row;
                             }
 #endif
-                            return 100;
+                            return dimensions;
                         }();
+                        const auto terminal_columns = terminal_dimensions[0];
+                        const auto terminal_rows = terminal_dimensions[1];
                         // Adapt the native shell to the real console width without
                         // resizing or otherwise changing the user's terminal window.
                         const auto shell_width = std::clamp<std::size_t>(
                             terminal_columns, 80, 180);
                         const auto separator = std::string(shell_width - 4, '-');
+                        const auto visible_log_lines = std::clamp<std::size_t>(
+                            terminal_rows > 34 ? terminal_rows - 34 : 3, 3, 18);
                         const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
                             Clock::now() - started).count();
+                        const auto system_sample = shell_telemetry.sample();
                         std::cout << "\x1b[2J\x1b[H"
                                   << "\x1b[1;36m"
                                   << "  U N I Q U E   R X   |   MONERO RANDOMX CPU MINER"
@@ -818,14 +828,23 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         std::cout << '\n'
                                   << "  " + separator + "\n";
+                        const auto accepted = state.accepted.load();
+                        const auto rejected = state.rejected.load();
+                        const auto stale = state.stale_shares.load();
+                        const auto resolved = accepted + rejected + stale;
+                        const auto acceptance = resolved > 0
+                            ? 100.0 * static_cast<double>(accepted) / static_cast<double>(resolved)
+                            : 0.0;
                         std::cout << "  SHARES    found " << state.found.load()
                                   << " | sent " << state.submitted.load()
-                                  << " | \x1b[32maccepted " << state.accepted.load()
-                                  << "\x1b[0m | \x1b[31mrejected " << state.rejected.load()
-                                  << "\x1b[0m | stale " << state.stale_shares.load()
+                                  << " | \x1b[32maccepted " << accepted
+                                  << "\x1b[0m | \x1b[31mrejected " << rejected
+                                  << "\x1b[0m | stale " << stale
                                   << " | pending " << state.pending.load()
                                   << " | expired " << state.expired_shares.load()
-                                  << " | lost " << state.dropped_shares.load() << '\n';
+                                  << " | lost " << state.dropped_shares.load()
+                                  << " | accepted " << std::fixed << std::setprecision(1)
+                                  << acceptance << "%\n";
                         const auto best = state.best_snapshot();
                         const auto difficulty_text = [](double difficulty) {
                             if (!(difficulty > 0.0) || !std::isfinite(difficulty))
@@ -843,12 +862,47 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto estimated_effort = best_share_difficulty > 0.0
                             ? best.estimated_hashes / best_share_difficulty * 100.0
                             : 0.0;
+                        const auto now_unix_seconds =
+                            std::chrono::duration_cast<std::chrono::seconds>(
+                                std::chrono::system_clock::now().time_since_epoch()).count();
                         std::cout << "  DIFFICULTY  JOB " << difficulty_text(job_difficulty)
                                   << " | BEST SHARE " << difficulty_text(best_share_difficulty)
                                   << " | EFFORT STIMATO "
                                   << (best_share_difficulty > 0.0
                                       ? difficulty_text(estimated_effort) + "%"
                                       : std::string("n/d")) << '\n';
+                        std::cout << "  BEST DIFFICULTIES (accepted shares)  #  DIFF       EFFORT     AGE\n";
+                        for (std::size_t row = 0; row < 5; ++row) {
+                            std::ostringstream entries;
+                            for (std::size_t column = 0; column < 2; ++column) {
+                                const auto index = row + column * 5;
+                                if (column != 0) entries << "   ||   ";
+                                if (index >= best.top_difficulties.size()) {
+                                    entries << std::setw(2) << (index + 1)
+                                            << "  --          --         --";
+                                    continue;
+                                }
+                                const auto& result = best.top_difficulties[index];
+                                const auto effort = result.difficulty > 0.0
+                                    ? best.estimated_hashes / result.difficulty * 100.0 : 0.0;
+                                const auto age_seconds = now_unix_seconds >
+                                    static_cast<std::int64_t>(result.at_unix_seconds)
+                                    ? static_cast<std::uint64_t>(now_unix_seconds) -
+                                      result.at_unix_seconds : 0;
+                                std::ostringstream age;
+                                if (age_seconds >= 3600)
+                                    age << age_seconds / 3600 << "h" << (age_seconds % 3600) / 60 << "m";
+                                else if (age_seconds >= 60)
+                                    age << age_seconds / 60 << "m" << age_seconds % 60 << "s";
+                                else
+                                    age << age_seconds << "s";
+                                entries << std::setw(2) << (index + 1) << "  "
+                                        << std::setw(10) << difficulty_text(result.difficulty)
+                                        << "  " << std::setw(8) << difficulty_text(effort) << "%"
+                                        << "  " << std::setw(7) << age.str();
+                            }
+                            std::cout << "  " << entries.str() << '\n';
+                        }
                         if (work && work->job.target != 0) {
                             std::ostringstream target_text;
                             target_text << "0x" << std::hex << std::uppercase
@@ -873,20 +927,57 @@ int run_miner(const std::filesystem::path& config_path,
                             (state.last_share_latency_ms.load() >= 0
                                 ? std::to_string(state.last_share_latency_ms.load()) + " ms" : "n/d"));
                         line("UPTIME", std::to_string(uptime) + " secondi");
-                        line("MEMORIA", std::string(full_memory ? "RandomX FAST" : "RandomX LIGHT") +
-                            " | huge pages " + (state.large_pages_active.load() ? "attive" : "non attive") +
-                            " | JIT HP " + (jit_huge_pages ? "ON" : "OFF") +
-                            " | prefetch " + std::to_string(runtime_prefetch_mode->load()));
-                        line("MSR", msr_status);
+                        line("MEMORIA", std::string(full_memory ? "RandomX FAST / dataset" : "RandomX LIGHT / cache") +
+                            " | dataset " + (work && work->dataset ? "ready" : "in attesa") +
+                            " | huge pages " + (state.large_pages_active.load() ? "attive" : "non attive/non confermate"));
+                        line("RUNTIME", "JIT HP " + std::string(jit_huge_pages ? "ON" : "OFF") +
+                            " | prefetch " + std::to_string(runtime_prefetch_mode->load()) +
+                            " | NUMA " + std::to_string(cpu_summary.value("numa_nodes", 0U)) +
+                            " | MSR " + msr_status);
+                        const auto optional_metric = [](const auto& value, const char* suffix) {
+                            if (!value) return std::string("n/d");
+                            std::ostringstream out;
+                            out << std::fixed << std::setprecision(1) << *value << suffix;
+                            return out.str();
+                        };
+                        const auto memory_mib = [](std::uint64_t bytes) {
+                            std::ostringstream out;
+                            out << std::fixed << std::setprecision(0)
+                                << static_cast<double>(bytes) / (1024.0 * 1024.0) << " MiB";
+                            return out.str();
+                        };
+                        line("SYSTEM CPU", optional_metric(system_sample.system_cpu_percent, "%") +
+                            " | miner " + optional_metric(system_sample.process_cpu_percent, "%") +
+                            " | " + optional_metric(system_sample.cpu_frequency_mhz, " MHz"));
+                        line("SYSTEM HW", "RAM " + memory_mib(system_sample.memory_used_bytes) +
+                            " | processo " + memory_mib(system_sample.process_memory_bytes) +
+                            " | temp " + optional_metric(system_sample.temperature_c, " C") +
+                            " | power " + optional_metric(system_sample.package_power_watts, " W"));
                         std::cout << "  " + separator + "\n"
-                                  << "  EVENTI RECENTI\n";
-                        for (const auto& entry : logging::recent_entries(4)) {
+                                  << "  LOG EVENTI  [logs up/down/tail]  "
+                                  << (log_scroll == 0 ? "LIVE" : "SCROLL -" + std::to_string(log_scroll))
+                                  << "\n";
+                        const auto entries = logging::recent_entries(2048);
+                        log_scroll = std::min(log_scroll, entries.size());
+                        const auto log_end = entries.size() - log_scroll;
+                        const auto log_begin = log_end > visible_log_lines
+                            ? log_end - visible_log_lines : 0;
+                        for (std::size_t index = log_begin; index < log_end; ++index) {
+                            const auto& entry = entries[index];
                             std::string message = entry.message;
-                            if (message.size() > 76) message.resize(76);
-                            std::cout << "  [" << entry.timestamp << "] " << entry.level
-                                      << ' ' << entry.category << ' ' << message << '\n';
+                            const auto max_message = shell_width > 70 ? shell_width - 70 : 10;
+                            if (message.size() > max_message) message.resize(max_message);
+                            const char* color = entry.level == "ERROR" || entry.level == "FATAL"
+                                ? "\x1b[31;1m" : entry.level == "WARN" ? "\x1b[33;1m"
+                                : entry.level == "INFO" ? "\x1b[36m" : "\x1b[0m";
+                            std::cout << "  " << color << '[' << entry.timestamp << "] "
+                                      << std::left << std::setw(5) << entry.level
+                                      << ' ' << std::setw(7) << entry.category
+                                      << "\x1b[0m " << message << '\n';
                         }
-                        std::cout << "  " + separator + "\n"
+                        if (entries.empty()) std::cout << "  (nessun evento registrato)\n";
+                        std::cout << "  " + separator << "\n"
+                                  << "  LOG SCROLL: [ logs up ] piu' vecchi | [ logs down ] recenti | [ logs tail ] live\n"
                                   << "  COMANDO > " << command_line << std::flush;
                     };
                     const auto process_command = [&](const std::string& line) {
@@ -902,7 +993,9 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  workers         hashrate e contatori per worker\n"
                                       << "  graph           grafico hashrate ASCII ultimi 15 minuti\n"
                                       << "  cpu             CPU, core, thread e feature rilevate\n"
-                                      << "  logs [N]        ultimi N log (default 30, max 200)\n"
+                                      << "  logs [N]        mostra ultimi N log (default 30, max 200)\n"
+                                      << "  logs up/down    scorri il pannello log (vecchi/recenti)\n"
+                                      << "  logs tail       torna agli eventi in tempo reale\n"
                                       << "  pool            endpoint e opzioni pool (segreti nascosti)\n"
                                       << "  memory          profilo RandomX, pagine e prefetch\n"
                                       << "  config          configurazione XMRig (credenziali oscurate)\n"
@@ -1109,14 +1202,24 @@ int run_miner(const std::filesystem::path& config_path,
                         } else if (command == "cpu") {
                             std::cout << cpu_summary.dump(2) << '\n';
                         } else if (command == "logs") {
-                            std::size_t count = 30;
-                            if (input >> value) {
+                            if (!(input >> value) || value == "tail") {
+                                log_scroll = 0;
+                                std::cout << "Pannello log in tempo reale.\n";
+                            } else if (value == "up") {
+                                log_scroll = std::min<std::size_t>(2048, log_scroll + 8);
+                                std::cout << "Pannello log: eventi precedenti.\n";
+                            } else if (value == "down") {
+                                log_scroll = log_scroll > 8 ? log_scroll - 8 : 0;
+                                std::cout << "Pannello log: eventi piu' recenti.\n";
+                            } else {
+                                std::size_t count = 30;
                                 try { count = std::clamp<std::size_t>(std::stoul(value), 1, 200); }
                                 catch (...) { count = 30; }
-                            }
-                            for (const auto& entry : logging::recent_entries(count)) {
-                                std::cout << '[' << entry.timestamp << "] " << entry.level
-                                          << ' ' << entry.category << ' ' << entry.message << '\n';
+                                log_scroll = 0;
+                                for (const auto& entry : logging::recent_entries(count)) {
+                                    std::cout << '[' << entry.timestamp << "] " << entry.level
+                                              << ' ' << entry.category << ' ' << entry.message << '\n';
+                                }
                             }
                         } else if (command == "pool") {
                             for (std::size_t index = 0; index < pools.size(); ++index) {
