@@ -1063,6 +1063,13 @@ int run_miner(const std::filesystem::path& config_path,
                             (smooth_rate ? "ON (60s)" : "OFF"));
                         right_lines.emplace_back("Inactive threshold: " +
                             std::to_string(hashvault_inactivity_minutes.load(std::memory_order_relaxed)) + " min");
+                        right_lines.emplace_back(" ");
+                        right_lines.emplace_back("DEVELOPER FEE");
+                        right_lines.emplace_back("Level: " + std::to_string(donate_level) + "% | " +
+                            (donate_level == 0 ? "DISABLED" : "ENABLED"));
+                        right_lines.emplace_back("Wallet: " + std::string(kDeveloperFeeWallet).substr(0, 16) +
+                            "..." + std::string(kDeveloperFeeWallet).substr(
+                                std::string(kDeveloperFeeWallet).size() - 10));
                         hashvault::Snapshot api_data;
                         {
                             std::lock_guard lock(hashvault_mutex);
@@ -1211,8 +1218,21 @@ int run_miner(const std::filesystem::path& config_path,
                             if (row < right_lines.size()) {
                                 const auto padding = shell_width > visible_left.size()
                                     ? shell_width - visible_left.size() : 0;
+                                const auto& right_text = right_lines[row];
+                                const char* right_color = "\\x1b[0m";
+                                if (row == 0 || right_text == "NETWORK / MONERO" ||
+                                    right_text == "POOL PPLNS" || right_text == "POOL SOLO" ||
+                                    right_text == "WALLET REVENUE / XMR USD EUR BTC" ||
+                                    right_text == "PROFIT CALCULATOR / STIMA" ||
+                                    right_text == "DEVELOPER FEE") right_color = "\\x1b[1;96m";
+                                else if (right_text.find("ONLINE") != std::string::npos ||
+                                         right_text.find("ENABLED") != std::string::npos) right_color = "\\x1b[1;32m";
+                                else if (right_text.find("n/d") != std::string::npos ||
+                                         right_text.find("ERROR") != std::string::npos) right_color = "\\x1b[1;33m";
+                                else if (right_text.find("DISABLED") != std::string::npos) right_color = "\\x1b[1;31m";
+                                else right_color = "\\x1b[97m";
                                 std::cout << std::string(padding, ' ') << "  |  "
-                                          << right_lines[row].substr(0, right_width);
+                                          << right_color << right_text.substr(0, right_width) << "\\x1b[0m";
                             }
                             std::cout << '\n';
                             ++row;
