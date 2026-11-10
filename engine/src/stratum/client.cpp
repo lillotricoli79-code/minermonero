@@ -220,6 +220,15 @@ int run_miner(const std::filesystem::path& config_path,
         auto config = nlohmann::json::parse(file);
         if (!config.is_object())
             throw std::runtime_error("XMRig config root must be a JSON object");
+        std::uint32_t donate_level = 0;
+        if (config.contains("donate-level") && !config["donate-level"].is_null()) {
+            if (!config["donate-level"].is_number_integer())
+                throw std::runtime_error("donate-level must be an integer from 0 to 100");
+            const auto configured_level = config["donate-level"].get<std::int64_t>();
+            if (configured_level < 0 || configured_level > 100)
+                throw std::runtime_error("donate-level must be between 0 and 100");
+            donate_level = static_cast<std::uint32_t>(configured_level);
+        }
         if (config.contains("cpu") && config["cpu"].is_boolean()) {
             config["cpu"] = nlohmann::json{{"enabled", config["cpu"].get<bool>()}};
         } else if (config.contains("cpu") && !config["cpu"].is_object()) {
@@ -311,15 +320,6 @@ int run_miner(const std::filesystem::path& config_path,
             }
         }
         const auto pools = parse_pool_configs(config);
-        std::uint32_t donate_level = 0;
-        if (config.contains("donate-level") && !config["donate-level"].is_null()) {
-            if (!config["donate-level"].is_number_integer())
-                throw std::runtime_error("donate-level must be an integer from 0 to 100");
-            const auto configured_level = config["donate-level"].get<std::int64_t>();
-            if (configured_level < 0 || configured_level > 100)
-                throw std::runtime_error("donate-level must be between 0 and 100");
-            donate_level = static_cast<std::uint32_t>(configured_level);
-        }
         std::string user_agent = config.contains("user-agent") && !config["user-agent"].is_null()
             ? config["user-agent"].get<std::string>()
             : std::string("UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)");
@@ -704,7 +704,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [&state, desired_threads, active_pool_index, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started](std::stop_token stop_token) {
+                [&state, desired_threads, active_pool_index, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started, donate_level](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     std::array<std::uint64_t, 256> previous_worker_hashes{};
@@ -1169,7 +1169,7 @@ int run_miner(const std::filesystem::path& config_path,
                             currency_row("Pending Rewards",
                                 collective_pending >= 0.0 && solo_pending >= 0.0
                                     ? atomic_amount(collective_pending + solo_pending)
-                                    : nlohmann::json());
+                                    : -1.0);
                         }
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("PROFIT CALCULATOR / STIMA");
