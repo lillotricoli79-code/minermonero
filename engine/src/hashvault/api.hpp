@@ -14,10 +14,11 @@ struct Snapshot {
     bool wallet_ready = false;
 };
 
-bool fetch_json(const std::string& path, nlohmann::json& output,
-                std::string& error) noexcept;
+bool fetch_json(const std::string& path, const std::string& tls_fingerprint,
+                nlohmann::json& output, std::string& error) noexcept;
 void refresh(Snapshot& snapshot, const std::string& wallet,
-             bool solo, const std::string& period = "daily",
+             const std::string& tls_fingerprint, bool solo,
+             const std::string& period = "daily",
              unsigned inactivity_minutes = 10) noexcept;
 
 } // namespace unique_rx::hashvault
