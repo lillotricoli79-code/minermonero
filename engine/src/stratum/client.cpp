@@ -764,7 +764,7 @@ int run_miner(const std::filesystem::path& config_path,
                             terminal_columns, 80, 180);
                         const auto separator = std::string(shell_width - 4, '-');
                         const auto visible_log_lines = std::clamp<std::size_t>(
-                            terminal_rows > 34 ? terminal_rows - 34 : 3, 3, 18);
+                            terminal_rows > 36 ? terminal_rows - 36 : 3, 3, 18);
                         const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
                             Clock::now() - started).count();
                         const auto system_sample = shell_telemetry.sample();
@@ -802,6 +802,7 @@ int run_miner(const std::filesystem::path& config_path,
                         std::cout << "  HASHRATE  10s " << std::setw(16) << rate_text(average_rate(10))
                                   << "  60s " << std::setw(16) << rate_text(average_rate(60))
                                   << "  15m " << rate_text(average_rate(900)) << '\n';
+                        line("HASHES TOTAL", std::to_string(state.hashes.load(std::memory_order_relaxed)));
                         const auto graph_begin = shell_rate_history.size() > 900
                             ? shell_rate_history.end() - 900 : shell_rate_history.begin();
                         const auto graph_count = static_cast<std::size_t>(
