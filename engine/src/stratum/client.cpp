@@ -8,6 +8,7 @@
 #include "stratum/transport.hpp"
 #include "logging/log.hpp"
 #include "telemetry/system.hpp"
+#include "hashvault/api.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -696,6 +697,21 @@ int run_miner(const std::filesystem::path& config_path,
                     std::array<double, 256> worker_hashrates{};
                     std::deque<double> shell_rate_history;
                     std::size_t log_scroll = 0;
+                    hashvault::Snapshot hashvault_snapshot;
+                    std::mutex hashvault_mutex;
+                    const std::string hashvault_wallet = pools.empty() ? std::string() : pools.front().wallet;
+                    std::jthread hashvault_worker([&](std::stop_token api_stop) {
+                        while (!api_stop.stop_requested()) {
+                            hashvault::Snapshot next;
+                            hashvault::refresh(next, hashvault_wallet, false, "daily", 10);
+                            {
+                                std::lock_guard lock(hashvault_mutex);
+                                hashvault_snapshot = std::move(next);
+                            }
+                            for (int second = 0; second < 60 && !api_stop.stop_requested(); ++second)
+                                std::this_thread::sleep_for(std::chrono::seconds(1));
+                        }
+                    });
                     telemetry::SystemTelemetry shell_telemetry;
                     auto previous_sample = Clock::now();
                     double shell_hashrate = 0.0;
@@ -718,6 +734,8 @@ int run_miner(const std::filesystem::path& config_path,
                     }
 #endif
                     const auto render_operator_screen = [&] {
+                        std::ostringstream left_screen;
+                        auto* const original_output = std::cout.rdbuf(left_screen.rdbuf());
                         const auto active_index = std::min(
                             active_pool_index->load(std::memory_order_relaxed), pools.size() - 1);
                         const auto& active_pool = pools[active_index];
@@ -760,8 +778,12 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto terminal_rows = terminal_dimensions[1];
                         // Adapt the native shell to the real console width without
                         // resizing or otherwise changing the user's terminal window.
-                        const auto shell_width = std::clamp<std::size_t>(
-                            terminal_columns, 80, 180);
+                        const bool split_columns = terminal_columns >= 150;
+                        const auto shell_width = split_columns
+                            ? std::clamp<std::size_t>(terminal_columns * 58 / 100, 92, 120)
+                            : std::clamp<std::size_t>(terminal_columns, 80, 180);
+                        const auto right_width = split_columns
+                            ? terminal_columns - shell_width - 5 : 0;
                         const auto separator = std::string(shell_width - 4, '-');
                         const auto visible_log_lines = std::clamp<std::size_t>(
                             terminal_rows > 36 ? terminal_rows - 36 : 3, 3, 18);
@@ -980,7 +1002,126 @@ int run_miner(const std::filesystem::path& config_path,
                         if (entries.empty()) std::cout << "  (nessun evento registrato)\n";
                         std::cout << "  " + separator << "\n"
                                   << "  LOG SCROLL: [ logs up ] piu' vecchi | [ logs down ] recenti | [ logs tail ] live\n"
-                                  << "  COMANDO > " << command_line << std::flush;
+                                  << "  COMANDO > " << command_line;
+                        std::cout.rdbuf(original_output);
+                        const auto left_text = left_screen.str();
+                        if (!split_columns) {
+                            std::cout << left_text << std::flush;
+                            return;
+                        }
+                        std::vector<std::string> right_lines;
+                        right_lines.emplace_back("HASHVAULT API v3");
+                        right_lines.emplace_back(std::string(right_width, '='));
+                        hashvault::Snapshot api_data;
+                        {
+                            std::lock_guard lock(hashvault_mutex);
+                            api_data = hashvault_snapshot;
+                        }
+                        const auto number = [](const nlohmann::json& object,
+                                               const char* key) -> std::string {
+                            if (!object.is_object() || !object.contains(key) ||
+                                !object[key].is_number()) return "n/d";
+                            std::ostringstream out;
+                            out << std::fixed << std::setprecision(2)
+                                << object[key].get<double>();
+                            return out.str();
+                        };
+                        const auto object_at = [](const nlohmann::json& object,
+                                                  const char* key) -> nlohmann::json {
+                            return object.is_object() && object.contains(key) &&
+                                object[key].is_object() ? object[key] : nlohmann::json::object();
+                        };
+                        const auto collective = object_at(object_at(api_data.pool, "pool_statistics"), "collective");
+                        const auto solo_stats = object_at(object_at(api_data.pool, "pool_statistics"), "solo");
+                        const auto network = object_at(api_data.pool, "network_statistics");
+                        const auto market = object_at(api_data.pool, "market");
+                        const auto config_api = object_at(api_data.pool, "config");
+                        right_lines.emplace_back(api_data.pool_ready ? "POOL: ONLINE" :
+                            "POOL: " + (api_data.pool_error.empty() ? std::string("attesa dati") : api_data.pool_error));
+                        right_lines.emplace_back("NETWORK / MONERO");
+                        right_lines.emplace_back("Height: " + number(network, "height"));
+                        right_lines.emplace_back("Difficulty: " + number(network, "difficulty"));
+                        right_lines.emplace_back("Block reward: " + number(network, "value") +
+                            " atomic");
+                        right_lines.emplace_back(" ");
+                        right_lines.emplace_back("POOL PPLNS");
+                        right_lines.emplace_back("Hashrate: " + number(collective, "hashRate") + " H/s");
+                        right_lines.emplace_back("Miners: " + number(collective, "miners"));
+                        right_lines.emplace_back("Effort: " + number(collective, "currentEffort") + "%");
+                        right_lines.emplace_back("Shares: " + number(collective, "validShares") +
+                            " / invalid " + number(collective, "invalidShares"));
+                        right_lines.emplace_back(" ");
+                        right_lines.emplace_back("POOL SOLO");
+                        right_lines.emplace_back("Hashrate: " + number(solo_stats, "hashRate") + " H/s");
+                        right_lines.emplace_back("Miners: " + number(solo_stats, "miners"));
+                        right_lines.emplace_back("Effort: " + number(solo_stats, "currentEffort") + "%");
+                        right_lines.emplace_back(" ");
+                        right_lines.emplace_back("WALLET / " + (hashvault_wallet.empty()
+                            ? std::string("non configurato")
+                            : hashvault_wallet.substr(0, 12) + "..."));
+                        right_lines.emplace_back(api_data.wallet_ready ? "Wallet API: ONLINE" :
+                            "Wallet API: " + (api_data.wallet_error.empty() ?
+                                std::string("in attesa") : api_data.wallet_error));
+                        if (api_data.wallet_ready && api_data.wallet.is_object()) {
+                            right_lines.emplace_back("Campi wallet:");
+                            std::size_t shown = 0;
+                            for (auto it = api_data.wallet.begin();
+                                 it != api_data.wallet.end() && shown < 5; ++it, ++shown) {
+                                right_lines.emplace_back(it.key() + ": " +
+                                    (it.value().is_primitive() ? it.value().dump() : "[dati]"));
+                            }
+                        }
+                        right_lines.emplace_back(" ");
+                        right_lines.emplace_back("PROFIT CALCULATOR / STIMA");
+                        right_lines.emplace_back("Miner: " + rate_text(shell_hashrate));
+                        const double difficulty = network.value("difficulty", 0.0);
+                        const double reward_atomic = network.value("value", 0.0);
+                        const double divisor = config_api.value("sigDivisor", 1.0e12);
+                        const double block_seconds = config_api.value("coinDiffTarget", 120.0);
+                        const double fee_percent = config_api.value("pplns_fee", 0.0);
+                        const double reward_xmr = divisor > 0.0 ? reward_atomic / divisor : 0.0;
+                        const double daily_xmr = difficulty > 0.0
+                            ? shell_hashrate * 86400.0 / difficulty * reward_xmr *
+                              std::max(0.0, 1.0 - fee_percent / 100.0) : 0.0;
+                        right_lines.emplace_back("Effort corrente: " + number(collective, "currentEffort") + "%");
+                        right_lines.emplace_back("Pool fee: " + std::to_string(fee_percent) + "%");
+                        right_lines.emplace_back("Expected XMR/day: " +
+                            (difficulty > 0.0 ? std::to_string(daily_xmr) : std::string("n/d")));
+                        right_lines.emplace_back("Solo expected block:");
+                        right_lines.emplace_back(shell_hashrate > 0.0
+                            ? std::to_string(difficulty / shell_hashrate / 3600.0) + " hours"
+                            : "n/d");
+                        right_lines.emplace_back(" ");
+                        right_lines.emplace_back("MARKET");
+                        right_lines.emplace_back("XMR/BTC: " + number(market, "price_btc"));
+                        right_lines.emplace_back("XMR/USD: " + number(market, "price_usd"));
+                        right_lines.emplace_back("XMR/EUR: " + number(market, "price_eur"));
+                        right_lines.emplace_back("XMR/RUB: " + number(market, "price_rub"));
+                        right_lines.emplace_back(" ");
+                        right_lines.emplace_back("Aggiornamento API: 60s");
+                        right_lines.emplace_back("Stime indicative, non garantite");
+                        std::istringstream left_rows(left_text);
+                        std::string left_line;
+                        std::size_t row = 0;
+                        while (std::getline(left_rows, left_line)) {
+                            const auto visible_left = left_line.size() > shell_width
+                                ? left_line.substr(0, shell_width) : left_line;
+                            std::cout << visible_left;
+                            if (row < right_lines.size()) {
+                                const auto padding = shell_width > visible_left.size()
+                                    ? shell_width - visible_left.size() : 0;
+                                std::cout << std::string(padding, ' ') << "  |  "
+                                          << right_lines[row].substr(0, right_width);
+                            }
+                            std::cout << '\\n';
+                            ++row;
+                        }
+                        while (row < right_lines.size()) {
+                            std::cout << std::string(shell_width, ' ') << "  |  "
+                                      << right_lines[row].substr(0, right_width) << '\\n';
+                            ++row;
+                        }
+                        std::cout << std::flush;
                     };
                     const auto process_command = [&](const std::string& line) {
                         std::istringstream input(line);
