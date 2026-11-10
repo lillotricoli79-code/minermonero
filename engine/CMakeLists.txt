@@ -15,7 +15,8 @@ add_library(nlohmann_json::nlohmann_json ALIAS nlohmann_json)
 target_include_directories(nlohmann_json INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/src/third_party")
 
-add_executable(unique-rx src/logging/log.cpp src/main.cpp src/stratum/client.cpp src/stratum/job.cpp\n  src/hashvault/api.cpp
+add_executable(unique-rx src/logging/log.cpp src/main.cpp src/stratum/client.cpp src/stratum/job.cpp
+  src/hashvault/api.cpp
   src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/randomx/benchmark.cpp
   src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp
   src/telemetry/system.cpp)
