@@ -1099,7 +1099,9 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("PROFIT CALCULATOR / STIMA");
-                        const double calculator_rate = smooth_rate ? average_rate(60) : shell_hashrate;
+                        const double smoothed_rate = average_rate(60);
+                        const double calculator_rate = smooth_rate && smoothed_rate > 0.0
+                            ? smoothed_rate : shell_hashrate;
                         right_lines.emplace_back("Miner: " + rate_text(calculator_rate));
                         const double difficulty = network.value("difficulty", 0.0);
                         const double reward_atomic = network.value("value", 0.0);
