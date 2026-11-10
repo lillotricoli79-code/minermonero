@@ -105,7 +105,7 @@ if(BUILD_TESTING)
   target_link_libraries(unique-rx-msr-tests PRIVATE Threads::Threads)
   add_test(NAME unique-rx-msr-lifecycle COMMAND unique-rx-msr-tests)
 
-  add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/logging/log.cpp src/stratum/client.cpp
+  add_executable(unique-rx-stratum-tests tests/stratum/job_validation_test.cpp src/logging/log.cpp src/hashvault/api.cpp src/stratum/client.cpp
     src/stratum/job.cpp src/cpu/topology.cpp src/randomx/cache.cpp src/randomx/dataset.cpp src/core/mining.cpp src/workers/hash_worker.cpp src/msr/msr.cpp src/stratum/transport.cpp src/telemetry/system.cpp)
   target_compile_features(unique-rx-stratum-tests PRIVATE cxx_std_20)
   target_include_directories(unique-rx-stratum-tests PRIVATE src
