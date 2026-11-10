@@ -700,10 +700,17 @@ int run_miner(const std::filesystem::path& config_path,
                     hashvault::Snapshot hashvault_snapshot;
                     std::mutex hashvault_mutex;
                     const std::string hashvault_wallet = pools.empty() ? std::string() : pools.front().wallet;
+                    std::atomic<bool> hashvault_solo{false};
+                    std::atomic<bool> hashvault_smooth{true};
+                    std::atomic<unsigned> hashvault_period_index{0};
                     std::jthread hashvault_worker([&](std::stop_token api_stop) {
                         while (!api_stop.stop_requested()) {
                             hashvault::Snapshot next;
-                            hashvault::refresh(next, hashvault_wallet, false, "daily", 10);
+                            const auto period_index = hashvault_period_index.load(std::memory_order_relaxed);
+                            const std::string period = period_index == 1 ? "weekly" :
+                                period_index == 2 ? "monthly" : "daily";
+                            hashvault::refresh(next, hashvault_wallet,
+                                hashvault_solo.load(std::memory_order_relaxed), period, 10);
                             {
                                 std::lock_guard lock(hashvault_mutex);
                                 hashvault_snapshot = std::move(next);
@@ -1012,6 +1019,15 @@ int run_miner(const std::filesystem::path& config_path,
                         std::vector<std::string> right_lines;
                         right_lines.emplace_back("HASHVAULT API v3");
                         right_lines.emplace_back(std::string(right_width, '='));
+                        const bool selected_solo = hashvault_solo.load(std::memory_order_relaxed);
+                        const bool smooth_rate = hashvault_smooth.load(std::memory_order_relaxed);
+                        const auto period_index = hashvault_period_index.load(std::memory_order_relaxed);
+                        const auto period_name = period_index == 1 ? "weekly" :
+                            period_index == 2 ? "monthly" : "daily";
+                        right_lines.emplace_back(std::string("Mode: ") +
+                            (selected_solo ? "SOLO" : "POOL") + " | Period: " + period_name);
+                        right_lines.emplace_back(std::string("Smoothing: ") +
+                            (smooth_rate ? "ON (60s)" : "OFF"));
                         hashvault::Snapshot api_data;
                         {
                             std::lock_guard lock(hashvault_mutex);
@@ -1073,23 +1089,28 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("PROFIT CALCULATOR / STIMA");
-                        right_lines.emplace_back("Miner: " + rate_text(shell_hashrate));
+                        const double calculator_rate = smooth_rate ? average_rate(60) : shell_hashrate;
+                        right_lines.emplace_back("Miner: " + rate_text(calculator_rate));
                         const double difficulty = network.value("difficulty", 0.0);
                         const double reward_atomic = network.value("value", 0.0);
                         const double divisor = config_api.value("sigDivisor", 1.0e12);
                         const double block_seconds = config_api.value("coinDiffTarget", 120.0);
-                        const double fee_percent = config_api.value("pplns_fee", 0.0);
+                        const double fee_percent = selected_solo
+                            ? config_api.value("solo_fee", 0.0)
+                            : config_api.value("pplns_fee", 0.0);
                         const double reward_xmr = divisor > 0.0 ? reward_atomic / divisor : 0.0;
                         const double daily_xmr = difficulty > 0.0
-                            ? shell_hashrate * 86400.0 / difficulty * reward_xmr *
+                            ? calculator_rate * 86400.0 / difficulty * reward_xmr *
                               std::max(0.0, 1.0 - fee_percent / 100.0) : 0.0;
-                        right_lines.emplace_back("Effort corrente: " + number(collective, "currentEffort") + "%");
+                        right_lines.emplace_back("Current difficulty: " + number(network, "difficulty"));
+                        right_lines.emplace_back("Effort corrente: " + number(
+                            selected_solo ? solo_stats : collective, "currentEffort") + "%");
                         right_lines.emplace_back("Pool fee: " + std::to_string(fee_percent) + "%");
                         right_lines.emplace_back("Expected XMR/day: " +
                             (difficulty > 0.0 ? std::to_string(daily_xmr) : std::string("n/d")));
                         right_lines.emplace_back("Solo expected block:");
-                        right_lines.emplace_back(shell_hashrate > 0.0
-                            ? std::to_string(difficulty / shell_hashrate / 3600.0) + " hours"
+                        right_lines.emplace_back(calculator_rate > 0.0
+                            ? std::to_string(difficulty / calculator_rate / 3600.0) + " hours"
                             : "n/d");
                         right_lines.emplace_back("Revenue / day:");
                         right_lines.emplace_back("BTC: " + (difficulty > 0.0
@@ -1137,7 +1158,26 @@ int run_miner(const std::filesystem::path& config_path,
                         std::string command;
                         std::string value;
                         input >> command;
-                        if (command == "help") {
+                        if (command == "hashvault" && (input >> value)) {
+                            if (value == "pool") hashvault_solo.store(false, std::memory_order_relaxed);
+                            else if (value == "solo") hashvault_solo.store(true, std::memory_order_relaxed);
+                            else if (value == "smooth") {
+                                std::string mode;
+                                input >> mode;
+                                if (mode == "on") hashvault_smooth.store(true, std::memory_order_relaxed);
+                                else if (mode == "off") hashvault_smooth.store(false, std::memory_order_relaxed);
+                                else std::cout << "Uso: hashvault smooth on|off\\n";
+                            } else if (value == "period") {
+                                std::string period;
+                                input >> period;
+                                if (period == "daily") hashvault_period_index.store(0, std::memory_order_relaxed);
+                                else if (period == "weekly") hashvault_period_index.store(1, std::memory_order_relaxed);
+                                else if (period == "monthly") hashvault_period_index.store(2, std::memory_order_relaxed);
+                                else std::cout << "Uso: hashvault period daily|weekly|monthly\\n";
+                            } else {
+                                std::cout << "Uso: hashvault pool|solo|smooth on|off|period daily|weekly|monthly\\n";
+                            }
+                        } else if (command == "help") {
                             std::cout << "Comandi shell UNIQUE RX:\n"
                                       << "  status          stato, hashrate, pool e uptime\n"
                                       << "  shares          accepted/rejected/stale/pending\n"
@@ -1148,6 +1188,9 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  logs [N]        mostra ultimi N log (default 30, max 200)\n"
                                       << "  logs up/down    scorri il pannello log (vecchi/recenti)\n"
                                       << "  logs tail       torna agli eventi in tempo reale\n"
+                                      << "  hashvault pool|solo             seleziona il profilo wallet API\n"
+                                      << "  hashvault period daily|weekly|monthly cambia periodo grafico API\n"
+                                      << "  hashvault smooth on|off         media hashrate del calcolatore\n"
                                       << "  pool            endpoint e opzioni pool (segreti nascosti)\n"
                                       << "  memory          profilo RandomX, pagine e prefetch\n"
                                       << "  config          configurazione XMRig (credenziali oscurate)\n"
