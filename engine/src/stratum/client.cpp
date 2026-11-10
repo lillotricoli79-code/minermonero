@@ -1083,23 +1083,35 @@ int run_miner(const std::filesystem::path& config_path,
                             "Wallet API: " + (api_data.wallet_error.empty() ?
                                 std::string("in attesa") : api_data.wallet_error));
                         const auto revenue = object_at(api_data.wallet, "revenue");
-                        const auto atomic_xmr = [&](const char* key) {
+                        const auto atomic_amount = [&](const char* key) {
                             if (!revenue.contains(key) || !revenue[key].is_number() ||
                                 !config_api.contains("sigDivisor") ||
-                                !config_api["sigDivisor"].is_number()) return std::string("n/d");
+                                !config_api["sigDivisor"].is_number()) return -1.0;
                             const double units = config_api["sigDivisor"].get<double>();
-                            if (units <= 0.0) return std::string("n/d");
-                            std::ostringstream amount;
-                            amount << std::fixed << std::setprecision(8)
-                                   << revenue[key].get<double>() / units << " XMR";
-                            return amount.str();
+                            return units > 0.0 ? revenue[key].get<double>() / units : -1.0;
+                        };
+                        const auto currency_row = [&](const char* label, double xmr) {
+                            if (xmr < 0.0) {
+                                right_lines.emplace_back(std::string(label) + ": n/d");
+                                return;
+                            }
+                            std::ostringstream row;
+                            row << label << " " << std::fixed << std::setprecision(5) << xmr
+                                << " XMR | $" << std::setprecision(2) << xmr * market.value("price_usd", 0.0)
+                                << " | " << xmr * market.value("price_eur", 0.0) << " EUR"
+                                << " | " << std::setprecision(8) << xmr * market.value("price_btc", 0.0)
+                                << " BTC";
+                            right_lines.emplace_back(row.str());
                         };
                         if (api_data.wallet_ready) {
-                            right_lines.emplace_back("CONFIRMED BALANCE: " + atomic_xmr("confirmedBalance"));
-                            right_lines.emplace_back("TOTAL PAID: " + atomic_xmr("totalPaid"));
-                            right_lines.emplace_back("DAILY PAID: " + atomic_xmr("dailyPaid"));
-                            right_lines.emplace_back("DAILY CREDITED: " + atomic_xmr("dailyCredited"));
-                            right_lines.emplace_back("PENDING: " + atomic_xmr("pendingBalance"));
+                            right_lines.emplace_back("WALLET REVENUE / XMR USD EUR BTC");
+                            currency_row("Pool Maturing", atomic_amount("poolMaturing"));
+                            currency_row("Solo Maturing", atomic_amount("soloMaturing"));
+                            currency_row("Confirmed", atomic_amount("confirmedBalance"));
+                            currency_row("Total Paid", atomic_amount("totalPaid"));
+                            currency_row("Daily Paid", atomic_amount("dailyPaid"));
+                            currency_row("Daily Credited", atomic_amount("dailyCredited"));
+                            currency_row("Pending Rewards", atomic_amount("pendingBalance"));
                         }
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("PROFIT CALCULATOR / STIMA");
