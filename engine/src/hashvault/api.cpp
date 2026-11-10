@@ -6,10 +6,6 @@
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
-#ifdef _WIN32
-#include <wincrypt.h>
-#endif
-
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -50,38 +46,56 @@ std::string lower(std::string value) {
     return value;
 }
 
-#ifdef _WIN32
-bool import_windows_store(SSL_CTX* context, const char* store_name) {
-    HCERTSTORE store = CertOpenSystemStoreA(nullptr, store_name);
-    if (!store) return false;
-    std::size_t imported = 0;
-    PCCERT_CONTEXT certificate = nullptr;
-    while ((certificate = CertEnumCertificatesInStore(store, certificate)) != nullptr) {
-        const unsigned char* encoded = certificate->pbCertEncoded;
-        X509* parsed = d2i_X509(nullptr, &encoded,
-                                static_cast<long>(certificate->cbCertEncoded));
-        if (parsed) {
-            if (X509_STORE_add_cert(SSL_CTX_get_cert_store(context), parsed) == 1)
-                ++imported;
-            else
-                ERR_clear_error(); // Certificato già presente nello store OpenSSL.
-            X509_free(parsed);
-        }
+std::string normalize_fingerprint(const std::string& value) {
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (const unsigned char c : value) {
+        if (c == ':' || std::isspace(c)) continue;
+        normalized.push_back(static_cast<char>(std::tolower(c)));
     }
-    CertCloseStore(store, 0);
-    return imported != 0;
+    return normalized;
 }
-#endif
 
-bool configure_trust_store(SSL_CTX* context) {
-#ifdef _WIN32
-    // OpenSSL non legge automaticamente lo store radice di Windows.
-    // Importiamo le CA attendibili dell'utente/macchina senza disabilitare la verifica TLS.
-    const bool roots = import_windows_store(context, "ROOT");
-    const bool intermediates = import_windows_store(context, "CA");
-    if (roots || intermediates) return true;
-#endif
-    return SSL_CTX_set_default_verify_paths(context) == 1;
+bool verify_pinned_certificate(SSL* ssl, const std::string& expected,
+                               std::string& error) {
+    const auto fingerprint = normalize_fingerprint(expected);
+    if (fingerprint.size() != 64 ||
+        !std::all_of(fingerprint.begin(), fingerprint.end(),
+            [](unsigned char c) { return std::isxdigit(c) != 0; })) {
+        error = "Fingerprint TLS HashVault mancante o non valido nel config.json";
+        return false;
+    }
+
+    std::unique_ptr<X509, decltype(&X509_free)> certificate(
+        SSL_get1_peer_certificate(ssl), X509_free);
+    if (!certificate) {
+        error = "HashVault non ha presentato un certificato TLS";
+        return false;
+    }
+    if (X509_check_host(certificate.get(), "api.hashvault.pro", 0, 0, nullptr) != 1) {
+        error = "Hostname del certificato API HashVault non corrispondente";
+        return false;
+    }
+
+    std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
+    unsigned int digest_length = 0;
+    if (X509_digest(certificate.get(), EVP_sha256(), digest.data(), &digest_length) != 1 ||
+        digest_length != 32) {
+        error = "Impossibile calcolare SHA-256 del certificato HashVault";
+        return false;
+    }
+    static constexpr char hex[] = "0123456789abcdef";
+    std::string actual;
+    actual.reserve(64);
+    for (unsigned int i = 0; i < digest_length; ++i) {
+        actual.push_back(hex[digest[i] >> 4]);
+        actual.push_back(hex[digest[i] & 0x0f]);
+    }
+    if (actual != fingerprint) {
+        error = "Fingerprint TLS API HashVault non corrispondente (SHA-256)";
+        return false;
+    }
+    return true;
 }
 
 std::string decode_chunked(const std::string& input) {
@@ -102,7 +116,8 @@ std::string decode_chunked(const std::string& input) {
     return output;
 }
 
-bool get_https(const std::string& path, std::string& body, std::string& error) {
+bool get_https(const std::string& path, const std::string& tls_fingerprint,
+               std::string& body, std::string& error) {
     platform::NetworkRuntime network;
     addrinfo hints{};
     hints.ai_family = AF_UNSPEC;
@@ -148,11 +163,13 @@ bool get_https(const std::string& path, std::string& body, std::string& error) {
     }
 
     std::unique_ptr<SSL_CTX, SslContextCloser> context(SSL_CTX_new(TLS_client_method()));
-    if (!context || !configure_trust_store(context.get())) {
-        error = "Store CA attendibili non disponibile per TLS HashVault";
+    if (!context) {
+        error = "Inizializzazione TLS HashVault fallita";
         return false;
     }
-    SSL_CTX_set_verify(context.get(), SSL_VERIFY_PEER, nullptr);
+    // Il certificato leaf è autenticato tramite il fingerprint SHA-256 già
+    // configurato per HashVault; l'hostname API viene comunque verificato.
+    SSL_CTX_set_verify(context.get(), SSL_VERIFY_NONE, nullptr);
     std::unique_ptr<SSL, SslCloser> ssl(SSL_new(context.get()));
     if (!ssl) {
         error = "Creazione sessione TLS fallita";
@@ -164,12 +181,12 @@ bool get_https(const std::string& path, std::string& body, std::string& error) {
         error = "Configurazione TLS/SNI HashVault fallita";
         return false;
     }
-    if (SSL_connect(ssl.get()) != 1 ||
-        SSL_get_verify_result(ssl.get()) != X509_V_OK) {
-        const long verify = SSL_get_verify_result(ssl.get());
-        error = "Verifica TLS HashVault fallita (codice " + std::to_string(verify) + ")";
+    if (SSL_connect(ssl.get()) != 1) {
+        error = "Handshake TLS API HashVault fallito";
         return false;
     }
+    if (!verify_pinned_certificate(ssl.get(), tls_fingerprint, error))
+        return false;
 
     const std::string request =
         "GET " + path + " HTTP/1.1\r\n"
@@ -242,11 +259,11 @@ std::string encode_path(const std::string& value) {
 
 } // namespace
 
-bool fetch_json(const std::string& path, nlohmann::json& output,
-                std::string& error) noexcept {
+bool fetch_json(const std::string& path, const std::string& tls_fingerprint,
+                nlohmann::json& output, std::string& error) noexcept {
     try {
         std::string body;
-        if (!get_https(path, body, error)) return false;
+        if (!get_https(path, tls_fingerprint, body, error)) return false;
         output = nlohmann::json::parse(body);
         return true;
     } catch (const std::exception& exception) {
@@ -258,11 +275,12 @@ bool fetch_json(const std::string& path, nlohmann::json& output,
     }
 }
 
-void refresh(Snapshot& snapshot, const std::string& wallet, bool solo,
+void refresh(Snapshot& snapshot, const std::string& wallet,
+             const std::string& tls_fingerprint, bool solo,
              const std::string& period, unsigned inactivity_minutes) noexcept {
     nlohmann::json pool;
     std::string pool_error;
-    if (fetch_json("/v3/monero", pool, pool_error)) {
+    if (fetch_json("/v3/monero", tls_fingerprint, pool, pool_error)) {
         snapshot.pool = std::move(pool);
         snapshot.pool_ready = true;
         snapshot.pool_error.clear();
@@ -283,7 +301,7 @@ void refresh(Snapshot& snapshot, const std::string& wallet, bool solo,
         "&inactivityThreshold=" + std::to_string(threshold);
     nlohmann::json wallet_data;
     std::string wallet_error;
-    if (fetch_json(path, wallet_data, wallet_error)) {
+    if (fetch_json(path, tls_fingerprint, wallet_data, wallet_error)) {
         snapshot.wallet = std::move(wallet_data);
         snapshot.wallet_ready = true;
         snapshot.wallet_error.clear();
