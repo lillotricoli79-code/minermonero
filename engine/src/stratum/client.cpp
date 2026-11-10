@@ -1091,6 +1091,15 @@ int run_miner(const std::filesystem::path& config_path,
                         right_lines.emplace_back(shell_hashrate > 0.0
                             ? std::to_string(difficulty / shell_hashrate / 3600.0) + " hours"
                             : "n/d");
+                        right_lines.emplace_back("Revenue / day:");
+                        right_lines.emplace_back("BTC: " + (difficulty > 0.0
+                            ? std::to_string(daily_xmr * market.value("price_btc", 0.0)) : "n/d"));
+                        right_lines.emplace_back("USD: " + (difficulty > 0.0
+                            ? std::to_string(daily_xmr * market.value("price_usd", 0.0)) : "n/d"));
+                        right_lines.emplace_back("EUR: " + (difficulty > 0.0
+                            ? std::to_string(daily_xmr * market.value("price_eur", 0.0)) : "n/d"));
+                        right_lines.emplace_back("RUB: " + (difficulty > 0.0
+                            ? std::to_string(daily_xmr * market.value("price_rub", 0.0)) : "n/d"));
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("MARKET");
                         right_lines.emplace_back("XMR/BTC: " + number(market, "price_btc"));
