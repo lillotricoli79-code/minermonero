@@ -1303,7 +1303,9 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         const int key = _getch();
                         if (key == 0 || key == 224) {
-                            (void)_getch();
+                            const int scan = _getch();
+                            if (scan == 73) log_scroll = std::min<std::size_t>(2048, log_scroll + 8);
+                            else if (scan == 81) log_scroll = log_scroll > 8 ? log_scroll - 8 : 0;
                             continue;
                         }
                         character = static_cast<char>(key);
@@ -1333,6 +1335,10 @@ int run_miner(const std::filesystem::path& config_path,
                             command_line.clear();
                         } else if (character == '\b' || character == 127) {
                             if (!command_line.empty()) command_line.pop_back();
+                        } else if (command_line.empty() && character == '[') {
+                            log_scroll = std::min<std::size_t>(2048, log_scroll + 8);
+                        } else if (command_line.empty() && character == ']') {
+                            log_scroll = log_scroll > 8 ? log_scroll - 8 : 0;
                         } else if (character >= 32 && character <= 126 &&
                                    command_line.size() < 128) {
                             command_line.push_back(character);
