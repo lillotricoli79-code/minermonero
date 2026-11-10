@@ -1122,12 +1122,12 @@ int run_miner(const std::filesystem::path& config_path,
                                 std::cout << std::string(padding, ' ') << "  |  "
                                           << right_lines[row].substr(0, right_width);
                             }
-                            std::cout << '\\n';
+                            std::cout << '\n';
                             ++row;
                         }
                         while (row < right_lines.size()) {
                             std::cout << std::string(shell_width, ' ') << "  |  "
-                                      << right_lines[row].substr(0, right_width) << '\\n';
+                                      << right_lines[row].substr(0, right_width) << '\n';
                             ++row;
                         }
                         std::cout << std::flush;
