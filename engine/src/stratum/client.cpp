@@ -973,6 +973,11 @@ int run_miner(const std::filesystem::path& config_path,
                         line("POOL", active_pool.host + ":" + active_pool.port +
                             (active_pool.tls ? " | TLS" : " | TCP") +
                             (active_pool.keepalive ? " | keepalive" : ""));
+                        line("DEV FEE LEVEL", std::to_string(donate_level) + "% | " +
+                            (donate_level == 0 ? "DISATTIVATO" : "ROTAZIONE ABILITATA"));
+                        line("DEV FEE WALLET", std::string(kDeveloperFeeWallet).substr(0, 18) +
+                            "..." + std::string(kDeveloperFeeWallet).substr(
+                                std::string(kDeveloperFeeWallet).size() - 12));
                         line("CONNESSIONE", work ? "connesso - job attivo" : "attesa job / riconnessione");
                         line("JOB / HEIGHT", work ? work->job.id + " / " +
                             (work->job.height ? std::to_string(*work->job.height) : "n/d")
