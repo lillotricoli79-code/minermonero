@@ -1193,16 +1193,21 @@ int run_miner(const std::filesystem::path& config_path,
                                 input >> mode;
                                 if (mode == "on") hashvault_smooth.store(true, std::memory_order_relaxed);
                                 else if (mode == "off") hashvault_smooth.store(false, std::memory_order_relaxed);
-                                else std::cout << "Uso: hashvault smooth on|off\\n";
+                                else std::cout << "Uso: hashvault smooth on|off\n";
                             } else if (value == "period") {
                                 std::string period;
                                 input >> period;
                                 if (period == "daily") hashvault_period_index.store(0, std::memory_order_relaxed);
                                 else if (period == "weekly") hashvault_period_index.store(1, std::memory_order_relaxed);
                                 else if (period == "monthly") hashvault_period_index.store(2, std::memory_order_relaxed);
-                                else std::cout << "Uso: hashvault period daily|weekly|monthly\\n";
+                                else std::cout << "Uso: hashvault period daily|weekly|monthly\n";
+                            } else if (value == "inactivity") {
+                                unsigned minutes = 0;
+                                if ((input >> minutes) && minutes >= 1 && minutes <= 10080)
+                                    hashvault_inactivity_minutes.store(minutes, std::memory_order_relaxed);
+                                else std::cout << "Uso: hashvault inactivity 1..10080 (minuti)\n";
                             } else {
-                                std::cout << "Uso: hashvault pool|solo|smooth on|off|period daily|weekly|monthly\\n";
+                                std::cout << "Uso: hashvault pool|solo|smooth on|off|period daily|weekly|monthly|inactivity N\n";
                             }
                         } else if (command == "help") {
                             std::cout << "Comandi shell UNIQUE RX:\n"
@@ -1217,7 +1222,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  logs tail       torna agli eventi in tempo reale\n"
                                       << "  hashvault pool|solo             seleziona il profilo wallet API\n"
                                       << "  hashvault period daily|weekly|monthly cambia periodo grafico API\n"
-                                      << "  hashvault smooth on|off         media hashrate del calcolatore\n"
+                                      << "  hashvault smooth on|off         media hashrate del calcolatore\n"                                      << "  hashvault inactivity N          soglia worker inattivo (1-10080 min)\n"
                                       << "  pool            endpoint e opzioni pool (segreti nascosti)\n"
                                       << "  memory          profilo RandomX, pagine e prefetch\n"
                                       << "  config          configurazione XMRig (credenziali oscurate)\n"
