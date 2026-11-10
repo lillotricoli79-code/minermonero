@@ -710,9 +710,7 @@ int run_miner(const std::filesystem::path& config_path,
                             const auto period_index = hashvault_period_index.load(std::memory_order_relaxed);
                             const std::string period = period_index == 1 ? "weekly" :
                                 period_index == 2 ? "monthly" : "daily";
-                            const std::string hashvault_fingerprint =
-                                pools.empty() ? std::string() : pools.front().tls_fingerprint;
-                            hashvault::refresh(next, hashvault_wallet, hashvault_fingerprint,
+                            hashvault::refresh(next, hashvault_wallet,
                                 hashvault_solo.load(std::memory_order_relaxed), period,
                                 hashvault_inactivity_minutes.load(std::memory_order_relaxed));
                             {
