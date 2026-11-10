@@ -1083,12 +1083,14 @@ int run_miner(const std::filesystem::path& config_path,
                             "Wallet API: " + (api_data.wallet_error.empty() ?
                                 std::string("in attesa") : api_data.wallet_error));
                         const auto revenue = object_at(api_data.wallet, "revenue");
-                        const auto atomic_amount = [&](const char* key) {
-                            if (!revenue.contains(key) || !revenue[key].is_number() ||
-                                !config_api.contains("sigDivisor") ||
-                                !config_api["sigDivisor"].is_number()) return -1.0;
-                            const double units = config_api["sigDivisor"].get<double>();
-                            return units > 0.0 ? revenue[key].get<double>() / units : -1.0;
+                        const auto unconfirmed = object_at(revenue, "unconfirmedBalance");
+                        const auto collective_unconfirmed = object_at(unconfirmed, "collective");
+                        const auto solo_unconfirmed = object_at(unconfirmed, "solo");
+                        constexpr double kAtomicUnitsPerXmr = 1000000000000.0;
+                        const auto atomic_amount = [&](const nlohmann::json& value) {
+                            return value.is_number()
+                                ? value.get<double>() / kAtomicUnitsPerXmr
+                                : -1.0;
                         };
                         const auto currency_row = [&](const char* label, double xmr) {
                             if (xmr < 0.0) {
@@ -1109,13 +1111,34 @@ int run_miner(const std::filesystem::path& config_path,
                         };
                         if (api_data.wallet_ready) {
                             right_lines.emplace_back("WALLET REVENUE / XMR USD EUR BTC");
-                            currency_row("Pool Maturing", atomic_amount("poolMaturing"));
-                            currency_row("Solo Maturing", atomic_amount("soloMaturing"));
-                            currency_row("Confirmed", atomic_amount("confirmedBalance"));
-                            currency_row("Total Paid", atomic_amount("totalPaid"));
-                            currency_row("Daily Paid", atomic_amount("dailyPaid"));
-                            currency_row("Daily Credited", atomic_amount("dailyCredited"));
-                            currency_row("Pending Rewards", atomic_amount("pendingBalance"));
+                            currency_row("Pool Maturing", atomic_amount(
+                                collective_unconfirmed.contains("total")
+                                    ? collective_unconfirmed["total"] : nlohmann::json()));
+                            currency_row("Solo Maturing", atomic_amount(
+                                solo_unconfirmed.contains("total")
+                                    ? solo_unconfirmed["total"] : nlohmann::json()));
+                            currency_row("Confirmed", atomic_amount(
+                                revenue.contains("confirmedBalance")
+                                    ? revenue["confirmedBalance"] : nlohmann::json()));
+                            currency_row("Total Paid", atomic_amount(
+                                revenue.contains("totalPaid")
+                                    ? revenue["totalPaid"] : nlohmann::json()));
+                            currency_row("Daily Paid", atomic_amount(
+                                revenue.contains("dailyPaid")
+                                    ? revenue["dailyPaid"] : nlohmann::json()));
+                            currency_row("Daily Credited", atomic_amount(
+                                revenue.contains("dailyCredited")
+                                    ? revenue["dailyCredited"] : nlohmann::json()));
+                            const auto collective_pending = collective_unconfirmed.contains("total") &&
+                                collective_unconfirmed["total"].is_number()
+                                    ? collective_unconfirmed["total"].get<double>() : -1.0;
+                            const auto solo_pending = solo_unconfirmed.contains("total") &&
+                                solo_unconfirmed["total"].is_number()
+                                    ? solo_unconfirmed["total"].get<double>() : -1.0;
+                            currency_row("Pending Rewards",
+                                collective_pending >= 0.0 && solo_pending >= 0.0
+                                    ? atomic_amount(collective_pending + solo_pending)
+                                    : nlohmann::json());
                         }
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("PROFIT CALCULATOR / STIMA");
