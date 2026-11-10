@@ -940,10 +940,11 @@ int run_miner(const std::filesystem::path& config_path,
                             out << std::fixed << std::setprecision(1) << *value << suffix;
                             return out.str();
                         };
-                        const auto memory_mib = [](std::uint64_t bytes) {
+                        const auto memory_mib = [](const auto& bytes) {
+                            if (!bytes) return std::string("n/d");
                             std::ostringstream out;
                             out << std::fixed << std::setprecision(0)
-                                << static_cast<double>(bytes) / (1024.0 * 1024.0) << " MiB";
+                                << static_cast<double>(*bytes) / (1024.0 * 1024.0) << " MiB";
                             return out.str();
                         };
                         line("SYSTEM CPU", optional_metric(system_sample.system_cpu_percent, "%") +
