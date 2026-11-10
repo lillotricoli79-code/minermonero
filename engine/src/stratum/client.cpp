@@ -703,6 +703,7 @@ int run_miner(const std::filesystem::path& config_path,
                     std::atomic<bool> hashvault_solo{false};
                     std::atomic<bool> hashvault_smooth{true};
                     std::atomic<unsigned> hashvault_period_index{0};
+                    std::atomic<unsigned> hashvault_inactivity_minutes{10};
                     std::jthread hashvault_worker([&](std::stop_token api_stop) {
                         while (!api_stop.stop_requested()) {
                             hashvault::Snapshot next;
@@ -710,7 +711,8 @@ int run_miner(const std::filesystem::path& config_path,
                             const std::string period = period_index == 1 ? "weekly" :
                                 period_index == 2 ? "monthly" : "daily";
                             hashvault::refresh(next, hashvault_wallet,
-                                hashvault_solo.load(std::memory_order_relaxed), period, 10);
+                                hashvault_solo.load(std::memory_order_relaxed), period,
+                                hashvault_inactivity_minutes.load(std::memory_order_relaxed));
                             {
                                 std::lock_guard lock(hashvault_mutex);
                                 hashvault_snapshot = std::move(next);
@@ -1028,6 +1030,8 @@ int run_miner(const std::filesystem::path& config_path,
                             (selected_solo ? "SOLO" : "POOL") + " | Period: " + period_name);
                         right_lines.emplace_back(std::string("Smoothing: ") +
                             (smooth_rate ? "ON (60s)" : "OFF"));
+                        right_lines.emplace_back("Inactive threshold: " +
+                            std::to_string(hashvault_inactivity_minutes.load(std::memory_order_relaxed)) + " min");
                         hashvault::Snapshot api_data;
                         {
                             std::lock_guard lock(hashvault_mutex);
