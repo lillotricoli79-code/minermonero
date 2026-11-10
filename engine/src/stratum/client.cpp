@@ -47,6 +47,7 @@
 #include <unordered_map>
 #ifdef __linux__
 #include <sys/sysinfo.h>
+#include <sys/ioctl.h>
 #endif
 
 namespace unique_rx {
@@ -731,13 +732,36 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << "  " << std::left << std::setw(18) << label
                                       << " " << value << '\n';
                         };
+                        const auto terminal_columns = []() -> std::size_t {
+#ifdef _WIN32
+                            CONSOLE_SCREEN_BUFFER_INFO info{};
+                            const auto output = GetStdHandle(STD_OUTPUT_HANDLE);
+                            if (output != INVALID_HANDLE_VALUE &&
+                                GetConsoleScreenBufferInfo(output, &info)) {
+                                return static_cast<std::size_t>(
+                                    info.srWindow.Right - info.srWindow.Left + 1);
+                            }
+#elif defined(__linux__)
+                            struct winsize dimensions{};
+                            if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &dimensions) == 0 &&
+                                dimensions.ws_col > 0) {
+                                return static_cast<std::size_t>(dimensions.ws_col);
+                            }
+#endif
+                            return 100;
+                        }();
+                        // Adapt the native shell to the real console width without
+                        // resizing or otherwise changing the user's terminal window.
+                        const auto shell_width = std::clamp<std::size_t>(
+                            terminal_columns, 80, 180);
+                        const auto separator = std::string(shell_width - 4, '-');
                         const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
                             Clock::now() - started).count();
                         std::cout << "\x1b[2J\x1b[H"
                                   << "\x1b[1;36m"
                                   << "  U N I Q U E   R X   |   MONERO RANDOMX CPU MINER"
                                   << "\x1b[0m\n"
-                                  << "  ================================================================================\n";
+                                  << "  " << std::string(shell_width - 4, '=') << "\n";
                         line("ALGORITMO", "RandomX rx/0");
                         line("CPU", cpu_summary.value("brand", std::string("non disponibile")));
                         line("FEATURE", std::string("AES ") + (features.value("aes", false) ? "ON" : "OFF") +
@@ -753,14 +777,17 @@ int run_miner(const std::filesystem::path& config_path,
                             " fisici | " + std::to_string(cpu_summary.value("logical_threads", 0U)) +
                             " logici | " + std::to_string(desired_threads->load()) + " worker");
                         std::ostringstream worker_summary;
+                        const auto worker_columns = std::max<std::size_t>(
+                            4, std::min<std::size_t>(12, (shell_width - 30) / 20));
                         const auto visible_workers = std::min<std::size_t>(
-                            desired_threads->load(), std::min<std::size_t>(worker_hashrates.size(), 4));
+                            desired_threads->load(),
+                            std::min<std::size_t>(worker_hashrates.size(), worker_columns));
                         for (std::size_t id = 0; id < visible_workers; ++id) {
                             if (id != 0) worker_summary << " | ";
                             worker_summary << 'W' << id << ' ' << rate_text(worker_hashrates[id]);
                         }
                         line("WORKER RATE", worker_summary.str().empty() ? "in inizializzazione" : worker_summary.str());
-                        std::cout << "  -------------------------------------------------------------------------------\n";
+                        std::cout << "  " + separator + "\n";
                         std::cout << "  HASHRATE  10s " << std::setw(16) << rate_text(average_rate(10))
                                   << "  60s " << std::setw(16) << rate_text(average_rate(60))
                                   << "  15m " << rate_text(average_rate(900)) << '\n';
@@ -789,7 +816,7 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << graph_levels[level];
                         }
                         std::cout << '\n'
-                                  << "  -------------------------------------------------------------------------------\n";
+                                  << "  " + separator + "\n";
                         std::cout << "  SHARES    found " << state.found.load()
                                   << " | sent " << state.submitted.load()
                                   << " | \x1b[32maccepted " << state.accepted.load()
@@ -798,6 +825,38 @@ int run_miner(const std::filesystem::path& config_path,
                                   << " | pending " << state.pending.load()
                                   << " | expired " << state.expired_shares.load()
                                   << " | lost " << state.dropped_shares.load() << '\n';
+                        const auto best = state.best_snapshot();
+                        const auto difficulty_text = [](double difficulty) {
+                            if (!(difficulty > 0.0) || !std::isfinite(difficulty))
+                                return std::string("n/d");
+                            std::ostringstream value;
+                            value << std::fixed << std::setprecision(2) << difficulty;
+                            return value.str();
+                        };
+                        const auto job_difficulty = work && work->job.target != 0
+                            ? static_cast<double>(std::numeric_limits<std::uint64_t>::max()) /
+                              static_cast<double>(work->job.target)
+                            : 0.0;
+                        const auto best_share_difficulty = !best.top_difficulties.empty()
+                            ? best.top_difficulties.front().difficulty : 0.0;
+                        const auto estimated_effort = best_share_difficulty > 0.0
+                            ? best.estimated_hashes / best_share_difficulty * 100.0
+                            : 0.0;
+                        std::cout << "  DIFFICULTY  JOB " << difficulty_text(job_difficulty)
+                                  << " | BEST SHARE " << difficulty_text(best_share_difficulty)
+                                  << " | EFFORT STIMATO "
+                                  << (best_share_difficulty > 0.0
+                                      ? difficulty_text(estimated_effort) + "%"
+                                      : std::string("n/d")) << '\n';
+                        if (work && work->job.target != 0) {
+                            std::ostringstream target_text;
+                            target_text << "0x" << std::hex << std::uppercase
+                                        << std::setw(16) << std::setfill('0')
+                                        << work->job.target;
+                            line("SHARE TARGET", target_text.str());
+                        } else {
+                            line("SHARE TARGET", "in attesa del job");
+                        }
                         line("POOL", active_pool.host + ":" + active_pool.port +
                             (active_pool.tls ? " | TLS" : " | TCP") +
                             (active_pool.keepalive ? " | keepalive" : ""));
@@ -805,6 +864,11 @@ int run_miner(const std::filesystem::path& config_path,
                         line("JOB / HEIGHT", work ? work->job.id + " / " +
                             (work->job.height ? std::to_string(*work->job.height) : "n/d")
                             : std::string("in attesa del job"));
+                        line("RANDOMX SEED", work
+                            ? (work->job.seed.size() > 16
+                                ? work->job.seed.substr(0, 16) + "..."
+                                : work->job.seed)
+                            : std::string("n/d"));
                         line("RECONNECT", std::to_string(state.reconnects.load()) +
                             " | RTT share " +
                             (state.last_share_latency_ms.load() >= 0
@@ -815,7 +879,7 @@ int run_miner(const std::filesystem::path& config_path,
                             " | JIT HP " + (jit_huge_pages ? "ON" : "OFF") +
                             " | prefetch " + std::to_string(runtime_prefetch_mode->load()));
                         line("MSR", msr_status);
-                        std::cout << "  -------------------------------------------------------------------------------\n"
+                        std::cout << "  " + separator + "\n"
                                   << "  EVENTI RECENTI\n";
                         for (const auto& entry : logging::recent_entries(4)) {
                             std::string message = entry.message;
@@ -823,7 +887,7 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << "  [" << entry.timestamp << "] " << entry.level
                                       << ' ' << entry.category << ' ' << message << '\n';
                         }
-                        std::cout << "  -------------------------------------------------------------------------------\n"
+                        std::cout << "  " + separator + "\n"
                                   << "  COMANDO > " << command_line << std::flush;
                     };
                     const auto process_command = [&](const std::string& line) {
