@@ -1078,14 +1078,24 @@ int run_miner(const std::filesystem::path& config_path,
                         right_lines.emplace_back(api_data.wallet_ready ? "Wallet API: ONLINE" :
                             "Wallet API: " + (api_data.wallet_error.empty() ?
                                 std::string("in attesa") : api_data.wallet_error));
-                        if (api_data.wallet_ready && api_data.wallet.is_object()) {
-                            right_lines.emplace_back("Campi wallet:");
-                            std::size_t shown = 0;
-                            for (auto it = api_data.wallet.begin();
-                                 it != api_data.wallet.end() && shown < 5; ++it, ++shown) {
-                                right_lines.emplace_back(it.key() + ": " +
-                                    (it.value().is_primitive() ? it.value().dump() : "[dati]"));
-                            }
+                        const auto revenue = object_at(api_data.wallet, "revenue");
+                        const auto atomic_xmr = [&](const char* key) {
+                            if (!revenue.contains(key) || !revenue[key].is_number() ||
+                                !config_api.contains("sigDivisor") ||
+                                !config_api["sigDivisor"].is_number()) return std::string("n/d");
+                            const double units = config_api["sigDivisor"].get<double>();
+                            if (units <= 0.0) return std::string("n/d");
+                            std::ostringstream amount;
+                            amount << std::fixed << std::setprecision(8)
+                                   << revenue[key].get<double>() / units << " XMR";
+                            return amount.str();
+                        };
+                        if (api_data.wallet_ready) {
+                            right_lines.emplace_back("CONFIRMED BALANCE: " + atomic_xmr("confirmedBalance"));
+                            right_lines.emplace_back("TOTAL PAID: " + atomic_xmr("totalPaid"));
+                            right_lines.emplace_back("DAILY PAID: " + atomic_xmr("dailyPaid"));
+                            right_lines.emplace_back("DAILY CREDITED: " + atomic_xmr("dailyCredited"));
+                            right_lines.emplace_back("PENDING: " + atomic_xmr("pendingBalance"));
                         }
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("PROFIT CALCULATOR / STIMA");
@@ -1094,7 +1104,6 @@ int run_miner(const std::filesystem::path& config_path,
                         const double difficulty = network.value("difficulty", 0.0);
                         const double reward_atomic = network.value("value", 0.0);
                         const double divisor = config_api.value("sigDivisor", 1.0e12);
-                        const double block_seconds = config_api.value("coinDiffTarget", 120.0);
                         const double fee_percent = selected_solo
                             ? config_api.value("solo_fee", 0.0)
                             : config_api.value("pplns_fee", 0.0);
