@@ -63,6 +63,10 @@ using core::hash_worker;
 
 volatile std::sig_atomic_t g_stop_requested = 0;
 
+// Developer-fee destination is intentionally compiled into the native engine.
+// The user controls only donate-level in config.json.
+constexpr char kDeveloperFeeWallet[] = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ";
+
 // The backend reads machine telemetry from redirected stdout. When the miner
 // is launched directly in a console, keep that JSON off-screen and show only
 // the human-readable XMRig-style shell.
@@ -263,8 +267,9 @@ int run_miner(const std::filesystem::path& config_path,
             config["http"].contains("enabled") && !config["http"]["enabled"].is_null() &&
             config["http"]["enabled"].get<bool>())
             logging::warning("config", "XMRig http API settings are recognized but the integrated dashboard/backend owns the local API; no separate XMRig HTTP listener is started");
-        if (config.contains("donate-level"))
-            logging::warning("config", "donate-level is not applied: UNIQUE RX does not redirect mining time to a developer pool");
+        logging::info("devfee", "donate-level " + std::to_string(donate_level) +
+            "% | developer wallet embedded in native engine | " +
+            (donate_level == 0 ? "DISABLED" : "ENABLED"));
         if (config.contains("syslog") && config["syslog"].is_boolean() &&
             config["syslog"].get<bool>())
             logging::warning("config", "syslog output is not implemented; file and console logging remain active");
@@ -306,6 +311,15 @@ int run_miner(const std::filesystem::path& config_path,
             }
         }
         const auto pools = parse_pool_configs(config);
+        std::uint32_t donate_level = 0;
+        if (config.contains("donate-level") && !config["donate-level"].is_null()) {
+            if (!config["donate-level"].is_number_integer())
+                throw std::runtime_error("donate-level must be an integer from 0 to 100");
+            const auto configured_level = config["donate-level"].get<std::int64_t>();
+            if (configured_level < 0 || configured_level > 100)
+                throw std::runtime_error("donate-level must be between 0 and 100");
+            donate_level = static_cast<std::uint32_t>(configured_level);
+        }
         std::string user_agent = config.contains("user-agent") && !config["user-agent"].is_null()
             ? config["user-agent"].get<std::string>()
             : std::string("UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)");
@@ -1797,8 +1811,17 @@ struct PendingShare {
             state.set_work(std::move(work));
         };
 
+        bool developer_fee_phase = false;
+        auto developer_phase_started = Clock::now();
         while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
-            const auto& pool = pools[pool_index];
+            const auto& configured_pool = pools[pool_index];
+            PoolConfig developer_pool = configured_pool;
+            if (developer_fee_phase) developer_pool.wallet = kDeveloperFeeWallet;
+            const auto& pool = developer_pool;
+            const auto developer_phase_minutes = developer_fee_phase
+                ? donate_level : 100U - donate_level;
+            const auto developer_phase_deadline = developer_phase_started +
+                std::chrono::minutes(developer_phase_minutes);
             state.set_work(nullptr);
             pending.clear();
             state.pending.store(0, std::memory_order_relaxed);
@@ -1960,6 +1983,9 @@ std::uint64_t hash_value = 0;
                         }
                     }
                     const auto now = Clock::now();
+                    if (donate_level > 0 && now >= developer_phase_deadline) {
+                        throw std::runtime_error("UNIQUE_RX_DEV_FEE_ROTATION");
+                    }
                     if (session_id.empty() && now >= login_deadline) {
                         throw std::runtime_error("pool login timed out");
                     }
@@ -2199,9 +2225,21 @@ std::uint64_t hash_value = 0;
                 }
             } catch (const std::exception& error) {
                 if (state.stop.load(std::memory_order_acquire) || g_stop_requested) break;
-                state.reconnects.fetch_add(1, std::memory_order_relaxed);
-                log_event("POOL_EXCEPTION", {{"host", pool.host}, {"port", pool.port},
-                                             {"error", error.what()}});
+                const bool developer_fee_rotation =
+                    std::string(error.what()) == "UNIQUE_RX_DEV_FEE_ROTATION";
+                if (developer_fee_rotation) {
+                    developer_fee_phase = !developer_fee_phase;
+                    developer_phase_started = Clock::now();
+                    pool_failures = 0;
+                    retry_delay = std::chrono::seconds(retry_pause_seconds);
+                    logging::info("devfee", developer_fee_phase
+                        ? "developer fee session starting; shares are submitted to embedded wallet"
+                        : "developer fee window complete; returning to configured wallet");
+                } else {
+                    state.reconnects.fetch_add(1, std::memory_order_relaxed);
+                    log_event("POOL_EXCEPTION", {{"host", pool.host}, {"port", pool.port},
+                                                 {"error", error.what()}});
+                }
                 state.set_work(nullptr);
                 if (!pending.empty()) {
                     state.expired_shares.fetch_add(pending.size(), std::memory_order_relaxed);
@@ -2295,17 +2333,20 @@ std::uint64_t hash_value = 0;
                 if (machine_status_channel_required()) {
                     std::cout << "UNIQUE_RX_STATUS " << reconnect_status.dump() << '\n' << std::flush;
                 }
-                logging::warning("net", "switching pool; retrying in " +
-                    std::to_string(retry_delay.count()) + "s");
-                ++pool_failures;
-                if (retries_per_pool == 0 || pool_failures >= retries_per_pool) {
+                if (!developer_fee_rotation) {
+                    logging::warning("net", "switching pool; retrying in " +
+                        std::to_string(retry_delay.count()) + "s");
+                    ++pool_failures;
+                }
+                if (!developer_fee_rotation && (retries_per_pool == 0 || pool_failures >= retries_per_pool)) {
                     pool_index = (pool_index + 1) % pools.size();
                     active_pool_index->store(pool_index, std::memory_order_release);
                     pool_failures = 0;
                     logging::warning("net", "retry limit reached; switching to next configured pool");
                 }
-                auto remaining_delay =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(retry_delay);
+                auto remaining_delay = developer_fee_rotation
+                    ? std::chrono::milliseconds::zero()
+                    : std::chrono::duration_cast<std::chrono::milliseconds>(retry_delay);
                 auto next_reconnect_snapshot = Clock::now();
                 while (remaining_delay > std::chrono::milliseconds::zero() &&
                        !g_stop_requested && !state.stop.load(std::memory_order_acquire)) {
@@ -2323,7 +2364,8 @@ std::uint64_t hash_value = 0;
                     std::this_thread::sleep_for(step);
                     remaining_delay -= step;
                 }
-                retry_delay = std::min(retry_delay * 2, std::chrono::seconds(30));
+                if (!developer_fee_rotation)
+                    retry_delay = std::min(retry_delay * 2, std::chrono::seconds(30));
             }
         }
 
