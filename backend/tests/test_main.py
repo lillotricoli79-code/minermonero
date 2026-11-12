@@ -236,6 +236,20 @@ class ConfigValidationTests(unittest.TestCase):
         self.assertEqual(public["prefetch_mode"], 2)
         self.assertEqual(public["priority"], 3)
 
+    def test_dashboard_thread_update_keeps_randomx_profile_in_sync(self):
+        current = {
+            "http": {"port": 18088},
+            "cpu": {"threads": 4, "rx": {"threads": 4, "affinity": -1}},
+            "pools": [],
+        }
+        saved = apply_config_update(
+            current,
+            MinerConfigUpdate(threads=6),
+        )
+        self.assertEqual(saved["cpu"]["threads"], 6)
+        self.assertEqual(saved["cpu"]["rx"]["threads"], 6)
+        self.assertEqual(public_config(saved)["threads"], 6)
+
     def test_updates_only_the_native_xmrig_config(self):
         current = {
             "http": {"access-token": "secret-token", "port": 18088},
