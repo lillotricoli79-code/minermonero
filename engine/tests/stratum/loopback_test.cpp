@@ -331,11 +331,11 @@ int main(int argc, char** argv) {
                         unique_rx::platform::close_socket(client);
                         return;
                     }
-                    // XMRig treats a JSON-RPC submit response with no error
-                    // as accepted even when the pool returns an empty result object.
+                    // Match the explicit successful acknowledgement required by the
+                    // native Stratum share-response validator.
                     const nlohmann::json accepted{
                         {"id", submit.value("id", 0ULL)}, {"jsonrpc", "2.0"},
-                        {"result", nlohmann::json::object()},
+                        {"result", {{"status", "OK"}}},
                     };
                     first_session_ok = send_all(client, accepted.dump() + "\n");
                     unique_rx::platform::close_socket(client);
