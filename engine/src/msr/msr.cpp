@@ -276,15 +276,22 @@ struct MsrManager::Impl {
                 throw std::system_error(static_cast<int>(GetLastError()),
                     std::system_category(), "cannot query existing WinRing0 service");
             }
-            if (status.dwCurrentState == SERVICE_RUNNING) {
-                reuse_service = true;
-            } else {
-                if (!DeleteService(service)) {
-                    throw std::system_error(static_cast<int>(GetLastError()),
-                        std::system_category(), "cannot remove stopped WinRing0 service");
+            // Keep an existing service registration instead of deleting and
+            // recreating it. DeleteService is asynchronous; an immediate
+            // CreateService can fail with ERROR_SERVICE_MARKED_FOR_DELETE.
+            reuse_service = true;
+            if (status.dwCurrentState == SERVICE_STOPPED) {
+                if (!StartServiceW(service, 0, nullptr)) {
+                    const DWORD error = GetLastError();
+                    if (error != ERROR_SERVICE_ALREADY_RUNNING) {
+                        throw std::system_error(static_cast<int>(error),
+                            std::system_category(), "cannot start existing WinRing0 service");
+                    }
                 }
-                CloseServiceHandle(service);
-                service = nullptr;
+            } else if (status.dwCurrentState != SERVICE_RUNNING &&
+                       status.dwCurrentState != SERVICE_START_PENDING) {
+                throw std::runtime_error(
+                    "existing WinRing0 service is in an unsupported transition state");
             }
         }
 
