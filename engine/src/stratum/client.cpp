@@ -66,9 +66,30 @@ using core::hash_worker;
 
 volatile std::sig_atomic_t g_stop_requested = 0;
 
-// Developer-fee destination is intentionally compiled into the native engine.
-// The user controls only donate-level in config.json.
+// Developer-fee destination and endpoint are intentionally fixed in the native engine.
+// Rotation semantics follow XMRig 6.26.0 DonateStrategy (GPL-3.0-or-later).
 constexpr char kDeveloperFeeWallet[] = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ";
+constexpr char kDeveloperFeeHost[] = "pool.hashvault.sh";
+constexpr char kDeveloperFeePort[] = "443";
+constexpr char kDeveloperFeePassword[] = "WorkerX";
+constexpr char kDeveloperFeeTlsFingerprint[] =
+    "420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14";
+
+PoolConfig make_developer_fee_pool(const PoolConfig& reference) {
+    PoolConfig pool = reference;
+    pool.host = kDeveloperFeeHost;
+    pool.port = kDeveloperFeePort;
+    pool.wallet = kDeveloperFeeWallet;
+    pool.password = kDeveloperFeePassword;
+    pool.worker.clear();
+    pool.tls = true;
+    pool.tls_fingerprint = kDeveloperFeeTlsFingerprint;
+    pool.keepalive = false;
+    pool.keepalive_seconds = 0;
+    pool.nicehash = false;
+    pool.sni = true;
+    return pool;
+}
 
 // The backend reads machine telemetry from redirected stdout. When the miner
 // is launched directly in a console, keep that JSON off-screen and show only
@@ -236,7 +257,7 @@ int run_miner(const std::filesystem::path& config_path,
         }
         if (!config.is_object())
             throw std::runtime_error("XMRig config root must be a JSON object");
-        std::uint32_t donate_level = 0;
+        std::uint32_t donate_level = 1;
         if (config.contains("donate-level") && !config["donate-level"].is_null()) {
             if (!config["donate-level"].is_number_integer())
                 throw std::runtime_error("donate-level must be an integer from 0 to 100");
@@ -333,7 +354,8 @@ int run_miner(const std::filesystem::path& config_path,
             config["http"]["enabled"].get<bool>())
             logging::warning("config", "XMRig http API settings are recognized but the integrated dashboard/backend owns the local API; no separate XMRig HTTP listener is started");
         logging::info("devfee", "donate-level " + std::to_string(donate_level) +
-            "% | developer wallet embedded in native engine | " +
+            "% | " + kDeveloperFeeHost + ":" + kDeveloperFeePort +
+            " | TLS SHA-256 fingerprint pinned | " +
             (donate_level == 0 ? "DISABLED" : "ENABLED"));
         if (config.contains("syslog") && config["syslog"].is_boolean() &&
             config["syslog"].get<bool>())
@@ -375,7 +397,28 @@ int run_miner(const std::filesystem::path& config_path,
                                          "': UNIQUE RX supports RandomX rx/0 only");
             }
         }
-        const auto pools = parse_pool_configs(config);
+        auto pools = parse_pool_configs(config);
+        // Reserve the supplied HashVault developer-fee entry for fee rotation,
+        // not as an ordinary failover pool for the developer wallet.
+        const auto is_reserved_developer_pool = [](const PoolConfig& candidate) {
+            std::string host = candidate.host;
+            std::transform(host.begin(), host.end(), host.begin(),
+                [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            return host == kDeveloperFeeHost && candidate.port == kDeveloperFeePort &&
+                   candidate.wallet == kDeveloperFeeWallet;
+        };
+        const auto configured_pool_count = pools.size();
+        pools.erase(std::remove_if(pools.begin(), pools.end(),
+            is_reserved_developer_pool), pools.end());
+        if (pools.empty()) {
+            throw std::runtime_error(
+                "config.pools must contain at least one user pool; HashVault is reserved for developer-fee rotation");
+        }
+        const PoolConfig developer_pool = make_developer_fee_pool(pools.front());
+        if (pools.size() != configured_pool_count) {
+            logging::info("devfee",
+                "configured HashVault entry reserved for the dedicated developer-fee session");
+        }
         std::string user_agent = config.contains("user-agent") && !config["user-agent"].is_null()
             ? config["user-agent"].get<std::string>()
             : std::string("UniqueRX/1.0 (C++ RandomX; XMRig-compatible Stratum)");
@@ -712,6 +755,7 @@ int run_miner(const std::filesystem::path& config_path,
             }
         };
         auto active_pool_index = std::make_shared<std::atomic<std::size_t>>(0);
+        auto developer_fee_active = std::make_shared<std::atomic<bool>>(false);
         auto runtime_prefetch_mode = std::make_shared<std::atomic<int>>(prefetch_mode);
         const auto cpu_summary = cpu_summary_json();
         std::jthread status_heartbeat_thread;
@@ -806,7 +850,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [&state, desired_threads, active_pool_index, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started, donate_level](std::stop_token stop_token) {
+                [&state, desired_threads, active_pool_index, developer_fee_active, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &developer_pool, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started, donate_level](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     std::array<std::uint64_t, 256> previous_worker_hashes{};
@@ -881,7 +925,8 @@ int run_miner(const std::filesystem::path& config_path,
                         auto* const original_output = std::cout.rdbuf(left_screen.rdbuf());
                         const auto active_index = std::min(
                             active_pool_index->load(std::memory_order_relaxed), pools.size() - 1);
-                        const auto& active_pool = pools[active_index];
+                        const bool fee_pool_active = developer_fee_active->load(std::memory_order_relaxed);
+                         const auto& active_pool = fee_pool_active ? developer_pool : pools[active_index];
                         const auto work = state.current_work();
                         const auto features = cpu_summary.value("features", nlohmann::json::object());
                         const auto rate_text = [](double rate) {
@@ -1543,8 +1588,10 @@ int run_miner(const std::filesystem::path& config_path,
                                       << " | 15m " << average_rate(900)
                                       << " | total hashes: " << hashes
                                       << " | workers: " << desired_threads->load()
-                                      << " | pool: " << pools[std::min(active_pool_index->load(std::memory_order_relaxed), pools.size() - 1)].host
-                                      << ':' << pools[std::min(active_pool_index->load(std::memory_order_relaxed), pools.size() - 1)].port
+                                      << " | pool: " << (developer_fee_active->load(std::memory_order_relaxed)
+                                          ? developer_pool.host : pools[std::min(active_pool_index->load(std::memory_order_relaxed), pools.size() - 1)].host)
+                                      << ':' << (developer_fee_active->load(std::memory_order_relaxed)
+                                          ? developer_pool.port : pools[std::min(active_pool_index->load(std::memory_order_relaxed), pools.size() - 1)].port)
                                       << " | reconnects: " << state.reconnects.load()
                                       << " | share latency: "
                                       << (state.last_share_latency_ms.load(std::memory_order_relaxed) >= 0
@@ -2007,12 +2054,11 @@ struct PendingShare {
         };
 
         bool developer_fee_phase = false;
+        bool developer_phase_clock_started = false;
         auto developer_phase_started = Clock::now();
         while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
-            const auto& configured_pool = pools[pool_index];
-            PoolConfig developer_pool = configured_pool;
-            if (developer_fee_phase) developer_pool.wallet = kDeveloperFeeWallet;
-            const auto& pool = developer_pool;
+            developer_fee_active->store(developer_fee_phase, std::memory_order_release);
+            const PoolConfig& pool = developer_fee_phase ? developer_pool : pools[pool_index];
             const auto developer_phase_minutes = developer_fee_phase
                 ? donate_level : 100U - donate_level;
             const auto developer_phase_deadline = developer_phase_started +
@@ -2174,12 +2220,17 @@ std::uint64_t hash_value = 0;
                             install_job(std::move(job));
                             pool_failures = 0;
                             retry_delay = std::chrono::seconds(retry_pause_seconds);
+                            if (!developer_phase_clock_started) {
+                                developer_phase_started = Clock::now();
+                                developer_phase_clock_started = true;
+                            }
                         } else if (message.contains("id")) {
                             record_share_response(message);
                         }
                     }
                     const auto now = Clock::now();
-                    if (donate_level > 0 && now >= developer_phase_deadline) {
+                    if (donate_level > 0 && developer_phase_clock_started &&
+                        !session_id.empty() && now >= developer_phase_deadline) {
                         throw std::runtime_error("UNIQUE_RX_DEV_FEE_ROTATION");
                     }
                     if (session_id.empty() && now >= login_deadline) {
@@ -2425,6 +2476,8 @@ std::uint64_t hash_value = 0;
                     std::string(error.what()) == "UNIQUE_RX_DEV_FEE_ROTATION";
                 if (developer_fee_rotation) {
                     developer_fee_phase = !developer_fee_phase;
+                    developer_fee_active->store(developer_fee_phase, std::memory_order_release);
+                    developer_phase_clock_started = false;
                     developer_phase_started = Clock::now();
                     pool_failures = 0;
                     retry_delay = std::chrono::seconds(retry_pause_seconds);
@@ -2534,7 +2587,8 @@ std::uint64_t hash_value = 0;
                         std::to_string(retry_delay.count()) + "s");
                     ++pool_failures;
                 }
-                if (!developer_fee_rotation && (retries_per_pool == 0 || pool_failures >= retries_per_pool)) {
+                if (!developer_fee_rotation && !developer_fee_phase &&
+                    (retries_per_pool == 0 || pool_failures >= retries_per_pool)) {
                     pool_index = (pool_index + 1) % pools.size();
                     active_pool_index->store(pool_index, std::memory_order_release);
                     pool_failures = 0;
