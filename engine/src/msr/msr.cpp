@@ -112,6 +112,7 @@ constexpr DWORD kWinRingWriteMsrIoctl =
 struct ThreadAffinity {
     GROUP_AFFINITY previous{};
     bool active = false;
+    bool restore_on_exit = true;
 
     ThreadAffinity(WORD group, BYTE processor) {
         GROUP_AFFINITY desired{};
@@ -568,10 +569,14 @@ struct MsrManager::Impl {
 
     ~Impl() {
         const bool had_snapshots = !snapshots.empty();
-        restore();
-        if (active) restore();
+        if (restore_on_exit) {
+            restore();
+            if (active) restore();
+        }
         try {
-            if (had_snapshots && !active) {
+            if (!restore_on_exit && active) {
+                logging::warning("msr", "original CPU register values intentionally left modified by randomx.rdmsr=false");
+            } else if (had_snapshots && !active) {
                 logging::info("msr", "original CPU register values restored");
             } else if (active) {
                 logging::error("msr", "register restore remains pending after retry");
@@ -596,12 +601,22 @@ MsrManager::~MsrManager() = default;
 MsrManager::MsrManager(MsrManager&&) noexcept = default;
 MsrManager& MsrManager::operator=(MsrManager&&) noexcept = default;
 
-void MsrManager::apply_randomx_preset() {
+void MsrManager::apply_randomx_preset(std::optional<std::uint64_t> intel_prefetch_value) {
     const auto cpu = detect_cpu_identity();
     if (!cpu) {
         throw std::runtime_error("cannot identify CPU vendor/family/model for MSR tuning");
     }
-    const auto preset = msr_preset_for_cpu(cpu->vendor, cpu->family, cpu->model);
+    std::optional<MsrPreset> preset;
+    if (intel_prefetch_value && cpu->vendor == "GenuineIntel") {
+        if (*intel_prefetch_value > 0x0f) {
+            throw std::invalid_argument("Intel RandomX prefetch preset must be between 0 and 15");
+        }
+        preset = MsrPreset{"intel_custom", {
+            MsrWrite{0x1a4, *intel_prefetch_value, UINT64_MAX}
+        }};
+    } else {
+        preset = msr_preset_for_cpu(cpu->vendor, cpu->family, cpu->model);
+    }
     if (!preset) {
         throw std::runtime_error(
             "no verified RandomX MSR preset exists for this CPU family/model");
@@ -620,6 +635,24 @@ void MsrManager::apply_randomx_preset() {
             value << std::hex << cpu->model;
             return value.str();
         }());
+}
+
+void MsrManager::apply_custom_writes(const std::vector<MsrWrite>& writes) {
+    if (writes.empty()) {
+        throw std::invalid_argument("custom MSR register list is empty");
+    }
+    for (const auto& item : writes) {
+        if (item.register_id == 0 || item.register_id > UINT32_MAX) {
+            throw std::invalid_argument("custom MSR register address must be between 1 and 0xffffffff");
+        }
+    }
+    impl_->apply(MsrPreset{"custom", writes});
+    logging::info("msr", "applied " + std::to_string(writes.size()) +
+        " custom XMRig MSR register entries");
+}
+
+void MsrManager::set_restore_on_exit(bool enabled) noexcept {
+    if (impl_) impl_->restore_on_exit = enabled;
 }
 
 void MsrManager::restore() noexcept {
