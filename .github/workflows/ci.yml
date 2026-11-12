@@ -151,11 +151,6 @@ jobs:
           $config.randomx.mode = "fast"
           if ($config.randomx.PSObject.Properties["full-memory"]) { $config.randomx.PSObject.Properties.Remove("full-memory") }
           $config.randomx.wrmsr = $false
-          # msr-module is a UNIQUE RX extension, not present in stock XMRig configs.
-          # Add it safely because ConvertFrom-Json objects reject assignment to absent keys.
-          # Always add/replace the extension through Add-Member; this is reliable
-          # for ConvertFrom-Json PSCustomObjects even when optional members vary.
-          $config.randomx | Add-Member -Force -NotePropertyName "msr-module" -NotePropertyValue "msr/IntelMSR.bin"
           $config.pools = @(
             [pscustomobject]@{
               algo = $null
