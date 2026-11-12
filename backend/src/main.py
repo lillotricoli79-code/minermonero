@@ -1096,7 +1096,7 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
     elif wrmsr is False or (isinstance(wrmsr, int) and not isinstance(wrmsr, bool) and wrmsr < 0):
         msr_mode = "off"
     elif wrmsr is True or (
-        isinstance(wrmsr, int) and not isinstance(wrmsr, bool) and 0 <= wrmsr <= 15
+        isinstance(wrmsr, int) and not isinstance(wrmsr, bool) and wrmsr >= 0
     ):
         msr_mode = "fast"
     elif isinstance(wrmsr, list) and wrmsr:
