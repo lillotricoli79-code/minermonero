@@ -190,6 +190,7 @@ function App() {
           });
           return [...unseen, ...current].slice(-400);
         });
+      })
       .catch(() => {
         // The live log stream remains available if the history file cannot be read.
       });
