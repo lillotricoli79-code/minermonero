@@ -423,51 +423,102 @@ int run_miner(const std::filesystem::path& config_path,
             full_memory = select_auto_memory_mode();
         }
         const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json(true));
-        // Imported XMRig configurations may contain a boolean, a preset index,
-        // or an explicit register list. Only the boolean true can select the
-        // native CPU-specific preset. Numeric/list forms are accepted as
-        // configuration data but are never written by this native backend.
-        const bool msr_enabled = wrmsr.is_boolean() && wrmsr.get<bool>();
-        const bool msr_custom_requested =
-            wrmsr.is_array() ||
-            (wrmsr.is_number_integer() && wrmsr.get<std::int64_t>() >= 0);
-        const bool msr_explicitly_disabled = !msr_enabled;
-        if (!wrmsr.is_null() && !wrmsr.is_boolean() &&
-            !wrmsr.is_array() && !wrmsr.is_number_integer()) {
-            throw std::runtime_error("randomx.wrmsr must be boolean, integer preset, or XMRig register array");
-        }
-        if (wrmsr.is_number_integer()) {
-            const auto preset = wrmsr.get<std::int64_t>();
-            if (preset < -1 || preset > 15)
-                throw std::runtime_error("randomx.wrmsr numeric preset must be -1..15");
-        }
-        if (wrmsr.is_array()) {
-            for (const auto& item : wrmsr) {
-                if (!item.is_array() || item.size() < 2 ||
-                    !item[0].is_number_integer() || !item[1].is_number_integer()) {
-                    throw std::runtime_error("randomx.wrmsr entries must be XMRig [register, value, optional mask] arrays");
+        bool msr_enabled = true;
+        bool msr_custom_requested = false;
+        std::optional<std::uint64_t> intel_prefetch_value;
+        std::vector<MsrWrite> custom_msr_writes;
+
+        if (wrmsr.is_boolean()) {
+            msr_enabled = wrmsr.get<bool>();
+        } else if (wrmsr.is_number_integer()) {
+            if (wrmsr.is_number_unsigned()) {
+                const auto requested = wrmsr.get<std::uint64_t>();
+                intel_prefetch_value = std::min<std::uint64_t>(requested, 15);
+            } else {
+                const auto requested = wrmsr.get<std::int64_t>();
+                if (requested < 0) {
+                    msr_enabled = false;
+                } else {
+                    intel_prefetch_value = std::min<std::uint64_t>(
+                        static_cast<std::uint64_t>(requested), 15);
                 }
             }
-        }
-        MsrManager msr(randomx_config.value("msr-module", std::string()));
-        std::string msr_status;
-        if (msr_explicitly_disabled) {
-            msr_status = msr_custom_requested
-                ? "Configurazione XMRig MSR personalizzata riconosciuta ma non applicata dal backend nativo"
-                : "Disattivato (default XMRig/configurazione)";
-            if (msr_custom_requested) {
-                logging::warning("msr", "XMRig custom/numeric wrmsr profile parsed but not applied; native backend only supports its guarded CPU-specific preset. No custom register writes were attempted.");
-            } else {
-                logging::info("msr", "MSR tuning disabled by configuration");
+        } else if (wrmsr.is_array()) {
+            msr_custom_requested = true;
+            const auto parse_msr_number = [](std::string_view text) -> std::uint64_t {
+                if (text.empty()) throw std::runtime_error("empty number in randomx.wrmsr entry");
+                std::size_t used = 0;
+                std::uint64_t value = 0;
+                try {
+                    value = std::stoull(std::string(text), &used, 0);
+                } catch (...) {
+                    throw std::runtime_error("invalid number in randomx.wrmsr entry");
+                }
+                if (used != text.size()) {
+                    throw std::runtime_error("invalid trailing characters in randomx.wrmsr entry");
+                }
+                return value;
+            };
+            for (const auto& item : wrmsr) {
+                if (!item.is_string()) {
+                    throw std::runtime_error(
+                        "randomx.wrmsr entries must use XMRig strings: \"0x1a4:0xf[:mask]\"");
+                }
+                const auto entry = item.get<std::string>();
+                const auto first = entry.find(':');
+                const auto second = first == std::string::npos
+                    ? std::string::npos : entry.find(':', first + 1);
+                if (first == std::string::npos ||
+                    (second != std::string::npos && entry.find(':', second + 1) != std::string::npos)) {
+                    throw std::runtime_error(
+                        "randomx.wrmsr entries must be register:value[:mask]");
+                }
+                const auto reg = parse_msr_number(std::string_view(entry).substr(0, first));
+                const auto value = parse_msr_number(
+                    std::string_view(entry).substr(first + 1,
+                        (second == std::string::npos ? entry.size() : second) - first - 1));
+                const auto mask = second == std::string::npos
+                    ? UINT64_MAX
+                    : parse_msr_number(std::string_view(entry).substr(second + 1));
+                if (reg == 0 || reg > UINT32_MAX) {
+                    throw std::runtime_error("randomx.wrmsr register address must be between 1 and 0xffffffff");
+                }
+                custom_msr_writes.push_back({reg, value, mask});
             }
+            msr_enabled = !custom_msr_writes.empty();
+        } else if (!wrmsr.is_null()) {
+            throw std::runtime_error(
+                "randomx.wrmsr must be boolean, integer preset, or XMRig string array");
+        }
+
+        bool restore_msr_on_exit = true;
+        if (randomx_config.contains("rdmsr") && !randomx_config["rdmsr"].is_null()) {
+            if (!randomx_config["rdmsr"].is_boolean()) {
+                throw std::runtime_error("randomx.rdmsr must be boolean");
+            }
+            restore_msr_on_exit = randomx_config["rdmsr"].get<bool>();
+        }
+
+        MsrManager msr(randomx_config.value("msr-module", std::string()));
+        msr.set_restore_on_exit(restore_msr_on_exit);
+        std::string msr_status;
+        if (!msr_enabled) {
+            msr_status = "Disattivato dalla configurazione";
+            logging::info("msr", "MSR tuning disabled by configuration");
         } else {
             try {
-                msr.apply_randomx_preset();
-                msr_status = "Preset CPU applicato; ripristino automatico alla chiusura";
-                logging::info("msr", "CPU-specific RandomX preset applied; original registers will be restored on exit");
+                if (msr_custom_requested) {
+                    msr.apply_custom_writes(custom_msr_writes);
+                } else {
+                    msr.apply_randomx_preset(intel_prefetch_value);
+                }
+                msr_status = restore_msr_on_exit
+                    ? "Preset CPU applicato; ripristino automatico alla chiusura"
+                    : "Preset CPU applicato; valori lasciati modificati alla chiusura (rdmsr=false)";
+                logging::info("msr", restore_msr_on_exit
+                    ? "RandomX MSR preset applied; original registers will be restored on exit"
+                    : "RandomX MSR preset applied; original registers will be left modified on exit");
             } catch (const std::exception& error) {
-                // MSR tuning is an optional optimization. An unknown CPU, a missing
-                // driver, or unavailable permissions must never prevent rx/0 mining.
                 msr_status = std::string("Non disponibile: ") + error.what();
                 logging::warning("msr", std::string("tuning skipped safely: ") + error.what() +
                                   "; continuing with standard CPU settings");
@@ -519,13 +570,6 @@ int run_miner(const std::filesystem::path& config_path,
                 state.cpu_numa_enabled.store(randomx_config["numa"].get<bool>(),
                                              std::memory_order_relaxed);
             }
-        }
-        if (randomx_config.contains("rdmsr") && !randomx_config["rdmsr"].is_null()) {
-            if (!randomx_config["rdmsr"].is_boolean())
-                throw std::runtime_error("randomx.rdmsr must be boolean");
-            logging::info("config", randomx_config["rdmsr"].get<bool>()
-                ? "randomx.rdmsr recognized; native RandomX engine does not require MSR reads"
-                : "randomx.rdmsr=false accepted; native engine does not read MSRs for mining");
         }
         if (randomx_config.contains("cache_qos") && !randomx_config["cache_qos"].is_null() &&
             randomx_config["cache_qos"].get<bool>()) {
