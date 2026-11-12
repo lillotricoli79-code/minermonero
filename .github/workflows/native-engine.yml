@@ -150,11 +150,10 @@ jobs:
           $ErrorActionPreference = "Stop"
           $out = Join-Path $env:GITHUB_WORKSPACE "build\Release"
           $licenses = Join-Path $out "licenses"
-          $msr = Join-Path $out "msr"
           $backend = Join-Path $out "backend"
           $dashboard = Join-Path $out "dashboard\dist"
           $scripts = Join-Path $out "scripts\windows"
-          New-Item -ItemType Directory -Force -Path $licenses, $msr, $backend, $dashboard, $scripts | Out-Null
+          New-Item -ItemType Directory -Force -Path $licenses, $backend, $dashboard, $scripts | Out-Null
           Copy-Item -LiteralPath "README.md", "config.example.json", "requirements.txt" -Destination $out
           Copy-Item -Path "backend\*" -Destination $backend -Recurse -Force
           Copy-Item -Path "dashboard\dist\*" -Destination $dashboard -Recurse -Force
