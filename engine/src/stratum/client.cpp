@@ -2089,7 +2089,8 @@ std::uint64_t hash_value = 0;
                             log_event("LOGIN_ACCEPTED", {{"session_id", session_id},
                                 {"job_id", result.at("job").value("job_id", std::string())}});
                             if (pool.keepalive) {
-                                next_keepalive = Clock::now() + std::chrono::seconds(60);
+                                next_keepalive = Clock::now() + std::chrono::seconds(
+                                    pool.keepalive_seconds == 0 ? 60U : pool.keepalive_seconds);
                             }
                             auto job = parse_job(result.at("job"));
                             apply_nicehash_extension(job, session_nicehash);
