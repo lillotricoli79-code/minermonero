@@ -1,9 +1,6 @@
 name: Native miner engine validation
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
