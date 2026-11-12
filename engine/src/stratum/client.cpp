@@ -422,7 +422,7 @@ int run_miner(const std::filesystem::path& config_path,
             // headroom is sufficient; explicit legacy full-memory overrides it.
             full_memory = select_auto_memory_mode();
         }
-        const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json());
+        const auto wrmsr = randomx_config.value("wrmsr", nlohmann::json(true));
         // Imported XMRig configurations may contain a boolean, a preset index,
         // or an explicit register list. Only the boolean true can select the
         // native CPU-specific preset. Numeric/list forms are accepted as
@@ -458,7 +458,7 @@ int run_miner(const std::filesystem::path& config_path,
             if (msr_custom_requested) {
                 logging::warning("msr", "XMRig custom/numeric wrmsr profile parsed but not applied; native backend only supports its guarded CPU-specific preset. No custom register writes were attempted.");
             } else {
-                logging::info("msr", "MSR tuning disabled (XMRig default or explicit configuration)");
+                logging::info("msr", "MSR tuning disabled by configuration");
             }
         } else {
             try {
