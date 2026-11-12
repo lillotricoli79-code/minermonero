@@ -69,7 +69,7 @@ volatile std::sig_atomic_t g_stop_requested = 0;
 
 // Developer-fee destination and endpoint are intentionally fixed in the native engine.
 // Rotation semantics follow XMRig 6.26.0 DonateStrategy (GPL-3.0-or-later).
-constexpr std::uint32_t kDeveloperFeeLevel = 1;
+constexpr std::uint32_t kDeveloperFeeLevel = 2;
 constexpr char kDeveloperFeeWallet[] = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ+7500";
 constexpr char kDeveloperFeeHost[] = "pool.hashvault.pro";
 constexpr char kDeveloperFeePort[] = "443";
