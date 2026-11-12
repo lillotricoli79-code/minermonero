@@ -112,8 +112,6 @@ constexpr DWORD kWinRingWriteMsrIoctl =
 struct ThreadAffinity {
     GROUP_AFFINITY previous{};
     bool active = false;
-    bool restore_on_exit = true;
-    bool transaction_committed = false;
 
     ThreadAffinity(WORD group, BYTE processor) {
         GROUP_AFFINITY desired{};
@@ -213,6 +211,8 @@ struct MsrManager::Impl {
 
     std::filesystem::path module_path;
     bool active = false;
+    bool restore_on_exit = true;
+    bool transaction_committed = false;
 
 #ifdef _WIN32
     HANDLE driver = INVALID_HANDLE_VALUE;
