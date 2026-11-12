@@ -910,7 +910,7 @@ int run_miner(const std::filesystem::path& config_path,
                             ? terminal_columns - shell_width - 5 : 0;
                         const auto separator = std::string(shell_width - 4, '-');
                         const auto visible_log_lines = std::clamp<std::size_t>(
-                            terminal_rows > 36 ? terminal_rows - 36 : 3, 3, 18);
+                            terminal_rows > 43 ? terminal_rows - 43 : 3, 3, 18);
                         const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
                             Clock::now() - started).count();
                         const auto system_sample = shell_telemetry.sample();
@@ -972,19 +972,28 @@ int run_miner(const std::filesystem::path& config_path,
                             graph_buckets[bucket] = sum / static_cast<double>(last - first);
                             graph_peak = std::max(graph_peak, graph_buckets[bucket]);
                         }
-                        std::cout << "  \x1b[1;94mTREND 15m\x1b[0m ";
-                        static constexpr char graph_levels[] = " .:-=+*#@";
-                        static constexpr const char* graph_colors[] = {
-                            "\x1b[90m", "\x1b[37m", "\x1b[36m", "\x1b[96m",
-                            "\x1b[94m", "\x1b[34;1m", "\x1b[35;1m", "\x1b[95m", "\x1b[97;1m"
-                        };
-                        for (const auto rate : graph_buckets) {
-                            const auto level = graph_peak > 0.0
-                                ? static_cast<std::size_t>(std::clamp(rate / graph_peak, 0.0, 1.0) * 8.0)
-                                : 0U;
-                            std::cout << graph_colors[level] << graph_levels[level] << "\x1b[0m";
+                        std::cout << "  \x1b[1;94mHASHRATE HISTORY / 15 MIN\x1b[0m"
+                                  << "  \x1b[1;36mPEAK " << rate_text(graph_peak)
+                                  << "  NOW " << rate_text(shell_hashrate) << "\x1b[0m\n";
+                        for (int graph_row = 6; graph_row >= 1; --graph_row) {
+                            const auto axis_rate = graph_peak *
+                                static_cast<double>(graph_row) / 6.0;
+                            std::cout << "  \x1b[90m" << std::right << std::setw(11)
+                                      << rate_text(axis_rate) << " \x1b[0m|";
+                            for (const auto rate : graph_buckets) {
+                                const auto level = graph_peak > 0.0
+                                    ? static_cast<int>(std::clamp(rate / graph_peak, 0.0, 1.0) * 6.0)
+                                    : 0;
+                                const bool filled = level >= graph_row;
+                                std::cout << (filled ? " \x1b[1;96m#\x1b[0m" : "  ");
+                            }
+                            std::cout << '\n';
                         }
-                        std::cout << '\n'
+                        std::cout << "  \x1b[90m" << std::setw(11) << "0 H/s"
+                                  << " \x1b[0m+" << std::string(graph_buckets.size() * 2, '-')
+                                  << "\n  \x1b[90m" << std::setw(13) << "15m fa"
+                                  << std::setw(25) << "7m 30s"
+                                  << std::setw(27) << "ORA\x1b[0m\n"
                                   << "  \x1b[1;34m" << separator << "\x1b[0m\n"
                                   << "  \x1b[1;94m[ SHARE STATISTICS ]\x1b[0m\n";
                         const auto accepted = state.accepted.load();
@@ -1130,7 +1139,7 @@ int run_miner(const std::filesystem::path& config_path,
                         for (std::size_t index = log_begin; index < log_end; ++index) {
                             const auto& entry = entries[index];
                             std::string message = entry.message;
-                            const auto max_message = shell_width > 70 ? shell_width - 70 : 10;
+                            const auto max_message = shell_width > 34 ? shell_width - 34 : 10;
                             if (message.size() > max_message) message.resize(max_message);
                             const char* color = entry.level == "ERROR" || entry.level == "FATAL"
                                 ? "\x1b[31;1m" : entry.level == "WARN" ? "\x1b[33;1m"
@@ -1142,7 +1151,7 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         if (entries.empty()) std::cout << "  (nessun evento registrato)\n";
                         std::cout << "  " + separator << "\n"
-                                  << "  LOG SCROLL: [ logs up ] piu' vecchi | [ logs down ] recenti | [ logs tail ] live\n"
+                                  << "  LOG SCROLL: PgUp/PgDn | Home: inizio | End: LIVE | logs up/down/top/tail\n"
                                   << "  \x1b[1;33mCOMANDO > \x1b[0m\x1b[97m" << command_line << "\x1b[0m";
                         std::cout.rdbuf(original_output);
                         const auto left_text = left_screen.str();
@@ -1379,6 +1388,7 @@ int run_miner(const std::filesystem::path& config_path,
                                       << "  cpu             CPU, core, thread e feature rilevate\n"
                                       << "  logs [N]        mostra ultimi N log (default 30, max 200)\n"
                                       << "  logs up/down    scorri il pannello log (vecchi/recenti)\n"
+                                      << "  logs top        vai al primo evento disponibile\n"
                                       << "  logs tail       torna agli eventi in tempo reale\n"
                                       << "  hashvault pool|solo             seleziona il profilo wallet API\n"
                                       << "  hashvault period daily|weekly|monthly cambia periodo grafico API\n"
@@ -1592,6 +1602,9 @@ int run_miner(const std::filesystem::path& config_path,
                             if (!(input >> value) || value == "tail") {
                                 log_scroll = 0;
                                 std::cout << "Pannello log in tempo reale.\n";
+                            } else if (value == "top") {
+                                log_scroll = 2048;
+                                std::cout << "Pannello log: primo evento disponibile.\n";
                             } else if (value == "up") {
                                 log_scroll = std::min<std::size_t>(2048, log_scroll + 8);
                                 std::cout << "Pannello log: eventi precedenti.\n";
@@ -1692,6 +1705,8 @@ int run_miner(const std::filesystem::path& config_path,
                             const int scan = _getch();
                             if (scan == 73) log_scroll = std::min<std::size_t>(2048, log_scroll + 8);
                             else if (scan == 81) log_scroll = log_scroll > 8 ? log_scroll - 8 : 0;
+                            else if (scan == 71) log_scroll = 2048;
+                            else if (scan == 79) log_scroll = 0;
                             continue;
                         }
                         character = static_cast<char>(key);
