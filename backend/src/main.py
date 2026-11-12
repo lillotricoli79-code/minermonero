@@ -133,12 +133,18 @@ def load_config() -> dict[str, Any]:
         config["cpu"] = {**DEFAULTS["cpu"], **(saved.get("cpu") or {})}
         config["http"] = {**DEFAULTS["http"], **(saved.get("http") or {})}
     configured_api_port = config["http"].get("port", DEFAULTS["http"]["port"])
-    if (
-        isinstance(configured_api_port, bool)
-        or not isinstance(configured_api_port, int)
-        or not 1024 <= configured_api_port <= 65535
-    ):
-        raise ValueError("config.json: la porta API deve essere un intero tra 1024 e 65535")
+    http_enabled = config["http"].get("enabled", DEFAULTS["http"]["enabled"])
+    if not isinstance(http_enabled, bool):
+        raise ValueError("config.json: http.enabled deve essere booleano")
+    valid_api_port = (
+        isinstance(configured_api_port, int)
+        and not isinstance(configured_api_port, bool)
+        and 1024 <= configured_api_port <= 65535
+    )
+    # XMRig permits port 0 when its optional HTTP listener is disabled.
+    # The integrated dashboard uses the backend's separate 127.0.0.1:8000 API.
+    if not valid_api_port and not (configured_api_port == 0 and not http_enabled):
+        raise ValueError("config.json: la porta API deve essere 0 (solo con http.enabled=false) oppure un intero tra 1024 e 65535")
     if not config["http"].get("access-token"):
         config["http"]["access-token"] = secrets.token_urlsafe(32)
         save_config(config)
@@ -188,26 +194,35 @@ def first_enabled_pool(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def find_native_engine(root: Path = ROOT) -> Path | None:
-    # Several historical build directories may coexist. Select the most
-    # recently produced project binary instead of silently launching an
-    # older engine just because its directory has higher search priority.
-    candidates = [
-        root / "unique-rx",
-        root / "unique-rx.exe",
-        root / "engine" / "build" / "unique-rx",
-        root / "engine" / "build" / "unique-rx.exe",
-        root / "engine" / "build-mingw" / "unique-rx.exe",
-        root / "engine" / "build-mingw-ninja" / "unique-rx.exe",
-        root / "engine" / "build-mingw-make" / "unique-rx.exe",
-        root / "engine" / "build-msvc" / "unique-rx.exe",
-        root / "engine" / "build-msvc" / "Release" / "unique-rx.exe",
-    ]
+    # Never choose a binary for another operating system just because its
+    # timestamp is newer. Windows builds use .exe; Unix builds use no suffix.
+    if sys.platform == "win32":
+        candidates = [
+            root / "unique-rx.exe",
+            root / "engine" / "build" / "unique-rx.exe",
+            root / "engine" / "build-mingw" / "unique-rx.exe",
+            root / "engine" / "build-mingw-ninja" / "unique-rx.exe",
+            root / "engine" / "build-mingw-make" / "unique-rx.exe",
+            root / "engine" / "build-msvc" / "unique-rx.exe",
+            root / "engine" / "build-msvc" / "Release" / "unique-rx.exe",
+        ]
+        path_names = ("unique-rx.exe", "unique-rx")
+    else:
+        candidates = [
+            root / "unique-rx",
+            root / "engine" / "build" / "unique-rx",
+        ]
+        path_names = ("unique-rx",)
+
     existing = [candidate for candidate in candidates if candidate.is_file()]
     if existing:
         return max(existing, key=lambda candidate: candidate.stat().st_mtime_ns)
 
-    path_executable = shutil.which("unique-rx") or shutil.which("unique-rx.exe")
-    return Path(path_executable) if path_executable else None
+    for name in path_names:
+        path_executable = shutil.which(name)
+        if path_executable:
+            return Path(path_executable)
+    return None
 
 
 def normalize_summary(summary: dict[str, Any]) -> dict[str, Any]:
@@ -358,6 +373,19 @@ def native_msr_available(executable_path: str | None) -> bool:
     """Check that the native MSR provider and the signed Intel module are present."""
     if sys.platform == "win32":
         program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+        # The native engine currently uses the WinRing0 device interface.
+        # PawnIO/IntelMSR.bin belongs to a different provider and must not be
+        # reported as satisfying this backend's driver requirement.
+        driver_candidates = [
+            program_files / "WinRing0" / "WinRing0x64.sys",
+            ROOT / "WinRing0x64.sys",
+            ROOT / "engine" / "msr" / "WinRing0x64.sys",
+        ]
+        if executable_path:
+            driver_candidates.insert(
+                0, Path(executable_path).resolve().parent / "WinRing0x64.sys"
+            )
+        return any(path.is_file() for path in driver_candidates)
         libraries = [program_files / "PawnIO" / "PawnIOLib.dll"]
         try:
             import winreg
@@ -426,11 +454,10 @@ def msr_override_enabled(randomx: dict[str, Any]) -> bool:
     the whole miner to a different implementation.
     """
     value = randomx.get("wrmsr")
-    if value is None or isinstance(value, bool):
-        return False
-    if isinstance(value, int) and value < 0:
-        return False
-    return True
+    # Boolean and numeric values are native presets (false/off, true/auto,
+    # 0..15 Intel prefetch). Only a non-empty XMRig register list requires
+    # the external XMRig backend. Empty arrays contain no writes to apply.
+    return isinstance(value, list) and len(value) > 0
 
 
 class MinerController:
@@ -580,7 +607,7 @@ class MinerController:
             if not executable_path:
                 detail = "Compila engine/unique-rx o installa XMRig"
                 if msr_requires_xmrig:
-                    detail = "MSR nativo non disponibile: installa PawnIO e IntelMSR.bin per Intel, oppure installa XMRig per preset personalizzati o CPU non Intel"
+                    detail = "La lista MSR personalizzata richiede XMRig: installa XMRig e verifica che la configurazione sia supportata"
                 raise HTTPException(status_code=400, detail=detail)
             command = [str(executable_path), "-c", str(CONFIG_PATH)]
             engine_kind = "xmrig"
@@ -1095,7 +1122,12 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
         msr_mode = "fast"
     else:
         msr_mode = "custom"
-    explicit_threads = cpu.get("threads", 0)
+    rx_config = cpu.get("rx")
+    explicit_threads = (
+        rx_config.get("threads", cpu.get("threads", 0))
+        if isinstance(rx_config, dict)
+        else cpu.get("threads", 0)
+    )
     if isinstance(explicit_threads, bool) or not isinstance(explicit_threads, int):
         explicit_threads = 0
     thread_hint = safe_number(cpu.get("max-threads-hint"))
@@ -1110,7 +1142,7 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
     huge_pages = cpu.get("huge-pages", True)
     if not isinstance(huge_pages, bool):
         huge_pages = False
-    jit_huge_pages = cpu.get("jit-huge-pages", False)
+    jit_huge_pages = cpu.get("huge-pages-jit", cpu.get("jit-huge-pages", False))
     if not isinstance(jit_huge_pages, bool):
         jit_huge_pages = False
     prefetch_mode = cpu.get("prefetch-mode", 1)
@@ -1160,15 +1192,21 @@ def apply_config_update(current: dict[str, Any], update: MinerConfigUpdate) -> d
     cpu = dict(result.get("cpu") or {})
     cpu["enabled"] = True
     cpu["priority"] = update.priority
-    if update.threads > 0:
-        # The native engine clamps this exact request to CPUs available to the process
-        # and to container quotas; do not approximate it as a percentage.
-        cpu["threads"] = update.threads
-        cpu.pop("max-threads-hint", None)
+    # The native parser gives cpu.rx.threads precedence over cpu.threads.
+    # Update that active XMRig profile when it is an object; retain the
+    # top-level fallback for configs without a RandomX profile object.
+    rx_config = cpu.get("rx")
+    if isinstance(rx_config, dict):
+        rx_config = dict(rx_config)
+        rx_config["threads"] = update.threads
+        cpu["rx"] = rx_config
     else:
-        cpu["threads"] = 0
-        cpu.pop("max-threads-hint", None)
+        cpu["threads"] = update.threads
+    cpu.pop("max-threads-hint", None)
     cpu["huge-pages"] = update.huge_pages
+    # Keep the spelling consumed first by the native engine and mirror the
+    # newer alias so older config readers do not see a stale opposite value.
+    cpu["huge-pages-jit"] = update.jit_huge_pages
     cpu["jit-huge-pages"] = update.jit_huge_pages
     cpu["prefetch-mode"] = update.prefetch_mode
     http = dict(result.get("http") or {})
