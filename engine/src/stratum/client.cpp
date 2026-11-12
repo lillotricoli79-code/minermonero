@@ -910,7 +910,7 @@ int run_miner(const std::filesystem::path& config_path,
                             ? terminal_columns - shell_width - 5 : 0;
                         const auto separator = std::string(shell_width - 4, '-');
                         const auto visible_log_lines = std::clamp<std::size_t>(
-                            terminal_rows > 43 ? terminal_rows - 43 : 3, 3, 18);
+                            terminal_rows > 44 ? terminal_rows - 44 : 3, 3, 18);
                         const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
                             Clock::now() - started).count();
                         const auto system_sample = shell_telemetry.sample();
@@ -1128,18 +1128,22 @@ int run_miner(const std::filesystem::path& config_path,
                             " | temp " + optional_metric(system_sample.temperature_c, " C") +
                             " | power " + optional_metric(system_sample.package_power_watts, " W"));
                         std::cout << "  \x1b[1;34m" << separator << "\x1b[0m\n"
-                                  << "  \x1b[1;94m[ LIVE EVENT LOG ]\x1b[0m  [logs up/down/tail]  "
-                                  << (log_scroll == 0 ? "LIVE" : "SCROLL -" + std::to_string(log_scroll))
-                                  << "\n";
                         const auto entries = logging::recent_entries(2048);
-                        log_scroll = std::min(log_scroll, entries.size());
+                        const auto max_log_scroll = entries.size() > visible_log_lines
+                            ? entries.size() - visible_log_lines : 0;
+                        log_scroll = std::min(log_scroll, max_log_scroll);
+                        std::cout << "  \x1b[1;94m[ LIVE EVENT LOG ]\x1b[0m  [logs up/down/top/tail]  "
+                                  << (log_scroll == 0 ? "LIVE" :
+                                      log_scroll >= max_log_scroll ? "TOP" :
+                                      "SCROLL -" + std::to_string(log_scroll))
+                                  << "\n";
                         const auto log_end = entries.size() - log_scroll;
                         const auto log_begin = log_end > visible_log_lines
                             ? log_end - visible_log_lines : 0;
                         for (std::size_t index = log_begin; index < log_end; ++index) {
                             const auto& entry = entries[index];
                             std::string message = entry.message;
-                            const auto max_message = shell_width > 34 ? shell_width - 34 : 10;
+                            const auto max_message = shell_width > 42 ? shell_width - 42 : 10;
                             if (message.size() > max_message) message.resize(max_message);
                             const char* color = entry.level == "ERROR" || entry.level == "FATAL"
                                 ? "\x1b[31;1m" : entry.level == "WARN" ? "\x1b[33;1m"
