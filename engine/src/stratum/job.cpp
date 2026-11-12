@@ -356,13 +356,13 @@ bool rpc_response_failed(const nlohmann::json& message) noexcept {
     if (!message.contains("result") || !message["result"].is_object()) return true;
 
     const auto& result = message["result"];
-    if (result.contains("status") && result["status"].is_string()) {
-        const auto& status = result["status"].get_ref<const std::string&>();
-        if (status.size() != 2 ||
-            std::tolower(static_cast<unsigned char>(status[0])) != 'o' ||
-            std::tolower(static_cast<unsigned char>(status[1])) != 'k') return true;
-    }
-    return false;
+    // Monero pool submit acknowledgements must explicitly carry status=OK.
+    // An empty object or a missing/non-string status is not proof of acceptance.
+    if (!result.contains("status") || !result["status"].is_string()) return true;
+    const auto& status = result["status"].get_ref<const std::string&>();
+    return status.size() != 2 ||
+        std::tolower(static_cast<unsigned char>(status[0])) != 'o' ||
+        std::tolower(static_cast<unsigned char>(status[1])) != 'k';
 }
 
 // NyxRX protocol.rs format_error port: preserve pool-provided human-readable
