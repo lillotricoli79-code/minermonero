@@ -370,14 +370,9 @@ def is_intel_cpu() -> bool:
 
 
 def native_msr_available(executable_path: str | None) -> bool:
-    """Check that the native MSR provider and the signed Intel module are present."""
+    """Check for the WinRing0 driver used by the native Windows MSR backend."""
     if sys.platform == "win32":
-        program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-        # The native engine currently uses the WinRing0 device interface.
-        # PawnIO/IntelMSR.bin belongs to a different provider and must not be
-        # reported as satisfying this backend's driver requirement.
         driver_candidates = [
-            program_files / "WinRing0" / "WinRing0x64.sys",
             ROOT / "WinRing0x64.sys",
             ROOT / "engine" / "msr" / "WinRing0x64.sys",
         ]
@@ -386,31 +381,6 @@ def native_msr_available(executable_path: str | None) -> bool:
                 0, Path(executable_path).resolve().parent / "WinRing0x64.sys"
             )
         return any(path.is_file() for path in driver_candidates)
-        libraries = [program_files / "PawnIO" / "PawnIOLib.dll"]
-        try:
-            import winreg
-
-            with winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
-            ) as key:
-                install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
-                if install_location:
-                    libraries.append(Path(install_location) / "PawnIOLib.dll")
-        except (ImportError, OSError):
-            pass
-
-        modules = [ROOT / "engine" / "msr" / "IntelMSR.bin"]
-        if executable_path:
-            executable_dir = Path(executable_path).resolve().parent
-            libraries.append(executable_dir / "PawnIOLib.dll")
-            modules.extend([
-                executable_dir / "msr" / "IntelMSR.bin",
-                executable_dir / "IntelMSR.bin",
-            ])
-        return any(path.is_file() for path in libraries) and any(
-            path.is_file() for path in modules
-        )
 
     if sys.platform.startswith("linux"):
         online_file = Path("/sys/devices/system/cpu/online")
