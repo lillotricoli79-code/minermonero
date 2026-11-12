@@ -681,17 +681,17 @@ void MsrManager::apply_randomx_preset(std::optional<std::uint64_t> intel_prefetc
 }
 
 void MsrManager::apply_custom_writes(const std::vector<MsrWrite>& writes) {
+    // The native engine deliberately does not execute arbitrary register
+    // lists. XMRig-compatible custom wrmsr entries must be handled by the
+    // external XMRig backend selected by the dashboard/backend. If UNIQUE RX
+    // is launched directly with such a config, the caller catches this
+    // optional-MSR error and continues mining without custom register writes.
     if (writes.empty()) {
         throw std::invalid_argument("custom MSR register list is empty");
     }
-    for (const auto& item : writes) {
-        if (item.register_id == 0 || item.register_id > UINT32_MAX) {
-            throw std::invalid_argument("custom MSR register address must be between 1 and 0xffffffff");
-        }
-    }
-    impl_->apply(MsrPreset{"custom", writes});
-    logging::info("msr", "applied " + std::to_string(writes.size()) +
-        " custom XMRig MSR register entries");
+    throw std::runtime_error(
+        "custom MSR register lists require the external XMRig backend; "
+        "native UNIQUE RX only applies its CPU-specific automatic/fast preset");
 }
 
 void MsrManager::set_restore_on_exit(bool enabled) noexcept {
