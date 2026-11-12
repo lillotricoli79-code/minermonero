@@ -5,12 +5,25 @@ $engineDir = Join-Path $repoRoot "engine"
 $dashboardDir = Join-Path $repoRoot "dashboard"
 
 # WinRing0 is optional and user-supplied. No driver is downloaded, installed or modified.
-# Place the driver at engine\msr\WinRing0x64.sys; CMake stages it beside unique-rx.exe.
+# Accept the driver beside an existing miner or in the canonical engine\msr folder.
 $winRingSource = Join-Path $engineDir "msr\WinRing0x64.sys"
-if (Test-Path -LiteralPath $winRingSource -PathType Leaf) {
+$winRingCandidates = @(
+    $winRingSource,
+    (Join-Path $repoRoot "WinRing0x64.sys"),
+    (Join-Path $repoRoot "unique-rx.exe"),
+    (Join-Path $engineDir "build-mingw-ninja\WinRing0x64.sys"),
+    (Join-Path $engineDir "build-mingw-make\WinRing0x64.sys"),
+    (Join-Path $repoRoot "release\unique-rx-windows-x64\WinRing0x64.sys")
+)
+$foundWinRing = $winRingCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if ($foundWinRing) {
+    if (-not [string]::Equals([IO.Path]::GetFullPath($foundWinRing), [IO.Path]::GetFullPath($winRingSource), [StringComparison]::OrdinalIgnoreCase)) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $winRingSource) | Out-Null
+        Copy-Item -LiteralPath $foundWinRing -Destination $winRingSource -Force
+    }
     Write-Host "WinRing0x64.sys locale rilevato: verrà copiato accanto al miner." -ForegroundColor Green
 } else {
-    Write-Warning "WinRing0x64.sys non presente in engine\msr. Il pacchetto funzionerà con MSR disattivato."
+    Write-Warning "WinRing0x64.sys non trovato. MSR resterà opzionale e disattivato; inserisci il driver accanto a unique-rx.exe oppure in engine\msr."
 }
 
 # The release build must never silently reuse a stale dashboard bundle.
