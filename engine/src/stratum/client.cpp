@@ -2061,8 +2061,6 @@ struct PendingShare {
             const PoolConfig& pool = developer_fee_phase ? developer_pool : pools[pool_index];
             const auto developer_phase_minutes = developer_fee_phase
                 ? donate_level : 100U - donate_level;
-            const auto developer_phase_deadline = developer_phase_started +
-                std::chrono::minutes(developer_phase_minutes);
             state.set_work(nullptr);
             pending.clear();
             state.pending.store(0, std::memory_order_relaxed);
@@ -2230,7 +2228,8 @@ std::uint64_t hash_value = 0;
                     }
                     const auto now = Clock::now();
                     if (donate_level > 0 && developer_phase_clock_started &&
-                        !session_id.empty() && now >= developer_phase_deadline) {
+                        !session_id.empty() &&
+                        now >= developer_phase_started + std::chrono::minutes(developer_phase_minutes)) {
                         throw std::runtime_error("UNIQUE_RX_DEV_FEE_ROTATION");
                     }
                     if (session_id.empty() && now >= login_deadline) {
