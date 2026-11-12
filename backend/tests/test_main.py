@@ -109,6 +109,7 @@ class NativeEngineSelectionTests(unittest.TestCase):
                 native.parent.mkdir(parents=True)
                 foreign.parent.mkdir(parents=True)
                 native.write_bytes(b"native-linux")
+                native.chmod(0o755)
                 foreign.write_bytes(b"newer-windows")
                 os.utime(native, (100, 100))
                 os.utime(foreign, (200, 200))
