@@ -1202,6 +1202,8 @@ def get_config() -> dict[str, Any]:
 def update_config(update: MinerConfigUpdate) -> dict[str, Any]:
     if controller.is_running():
         raise HTTPException(status_code=409, detail="Ferma XMRig prima di modificare la configurazione")
+    if read_native_status_snapshot() is not None:
+        raise HTTPException(status_code=409, detail="Ferma UNIQUE RX, avviato anche dal BAT, prima di modificare config.json")
     current = load_config()
     try:
         controller.read_summary(current)
