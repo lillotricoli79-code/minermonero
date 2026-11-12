@@ -17,6 +17,7 @@
 #else
 #include <unistd.h>
 #include <poll.h>
+#include <termios.h>
 #endif
 #include <cstdio>
 
@@ -856,6 +857,24 @@ int run_miner(const std::filesystem::path& config_path,
                         SetConsoleMode(shell_output, shell_console_mode |
                             ENABLE_VIRTUAL_TERMINAL_PROCESSING);
                     }
+#endif
+#ifndef _WIN32
+                    struct TerminalInputMode {
+                        termios original{};
+                        bool active{false};
+                        TerminalInputMode() {
+                            if (::tcgetattr(STDIN_FILENO, &original) != 0) return;
+                            auto raw = original;
+                            raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+                            raw.c_cc[VMIN] = 0;
+                            raw.c_cc[VTIME] = 0;
+                            active = (::tcsetattr(STDIN_FILENO, TCSANOW, &raw) == 0);
+                        }
+                        ~TerminalInputMode() {
+                            if (active) ::tcsetattr(STDIN_FILENO, TCSANOW, &original);
+                        }
+                    } terminal_input_mode;
+                    int escape_state = 0;
 #endif
                     const auto render_operator_screen = [&] {
                         std::ostringstream left_screen;
@@ -1730,7 +1749,36 @@ int run_miner(const std::filesystem::path& config_path,
                         if (ready < 0) continue;
                         if ((descriptor.revents & (POLLIN | POLLHUP)) == 0) continue;
                         const auto count = ::read(STDIN_FILENO, &character, 1);
-                        if (count <= 0) break;
+                        if (count <= 0) continue;
+                        if (escape_state == 1) {
+                            escape_state = character == '[' ? 2 : 0;
+                            continue;
+                        }
+                        if (escape_state == 2) {
+                            if (character == '5') escape_state = 3;
+                            else if (character == '6') escape_state = 4;
+                            else if (character == 'H') { log_scroll = 2048; escape_state = 0; }
+                            else if (character == 'F') { log_scroll = 0; escape_state = 0; }
+                            else escape_state = 0;
+                            continue;
+                        }
+                        if (escape_state == 3 || escape_state == 4) {
+                            if (character == '~') {
+                                if (escape_state == 3)
+                                    log_scroll = std::min<std::size_t>(2048, log_scroll + 8);
+                                else
+                                    log_scroll = log_scroll > 8 ? log_scroll - 8 : 0;
+                            }
+                            escape_state = 0;
+                            continue;
+                        }
+                        if (character == 27) { escape_state = 1; continue; }
+                        if (character == '\r' || character == '\n')
+                            std::cout << '\n' << std::flush;
+                        else if (character == 127 || character == '\b')
+                            std::cout << "\b \b" << std::flush;
+                        else if (character >= 32 && character <= 126)
+                            std::cout << character << std::flush;
 #endif
                         if (character == '\r' || character == '\n') {
                             if (!command_line.empty()) {
