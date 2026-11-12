@@ -154,8 +154,8 @@ int main() {
 
     auto target_update = job;
     target_update.target /= 2;
-    ok &= check(job.same_work(target_update),
-                "target-only update incorrectly changed job identity");
+    ok &= check(!job.same_work(target_update),
+                "target-only update was not treated as a new XMRig work generation");
     auto changed_nonce_mode = parsed_nicehash;
     changed_nonce_mode.nonce_mask = UINT32_MAX;
     ok &= check(!parsed_nicehash.same_work(changed_nonce_mode),
