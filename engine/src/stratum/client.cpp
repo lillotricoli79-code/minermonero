@@ -178,7 +178,8 @@ std::string hex_encode(const std::uint8_t* bytes, std::size_t length) {
 
 int run_miner(const std::filesystem::path& config_path,
               std::uint64_t maximum_hashes,
-              std::uint32_t thread_override) {
+              std::uint32_t thread_override,
+              MinerCliOptions cli_options) {
     g_stop_requested = 0;
     std::signal(SIGINT, request_stop);
     std::signal(SIGTERM, request_stop);
@@ -236,6 +237,46 @@ int run_miner(const std::filesystem::path& config_path,
         }
         if (config.contains("randomx") && !config["randomx"].is_object()) {
             throw std::runtime_error("randomx must be an object, as in XMRig config");
+        }
+
+        // XMRig-style command-line pool overrides are applied to the loaded
+        // JSON object. The established parse_pool_configs() implementation,
+        // Stratum login, authentication and transport remain untouched.
+        const bool has_pool_cli_override =
+            cli_options.url.has_value() || cli_options.user.has_value() ||
+            cli_options.password.has_value() || cli_options.worker.has_value() ||
+            cli_options.tls_fingerprint.has_value() || cli_options.tls.has_value() ||
+            cli_options.keepalive.has_value();
+        if (has_pool_cli_override) {
+            if (!config.contains("pools")) {
+                if (!cli_options.url) {
+                    throw std::runtime_error("CLI pool credentials require an existing pools entry or -o/--url");
+                }
+                config["pools"] = nlohmann::json::array();
+            }
+            if (!config["pools"].is_array()) {
+                throw std::runtime_error("config.pools must be an array; CLI overrides cannot replace an invalid pools value");
+            }
+            if (config["pools"].empty()) {
+                if (!cli_options.url) {
+                    throw std::runtime_error("CLI pool credentials require an existing pools entry or -o/--url");
+                }
+                config["pools"].push_back(nlohmann::json::object());
+            }
+            if (!config["pools"].front().is_object()) {
+                throw std::runtime_error("config.pools[0] must be an object for CLI overrides");
+            }
+            auto& cli_pool = config["pools"].front();
+            cli_pool["enabled"] = true;
+            if (cli_options.url) cli_pool["url"] = *cli_options.url;
+            if (cli_options.user) cli_pool["user"] = *cli_options.user;
+            if (cli_options.password) cli_pool["pass"] = *cli_options.password;
+            if (cli_options.worker) cli_pool["rig-id"] = *cli_options.worker;
+            if (cli_options.tls) cli_pool["tls"] = *cli_options.tls;
+            if (cli_options.keepalive) cli_pool["keepalive"] = *cli_options.keepalive;
+            if (cli_options.tls_fingerprint) {
+                cli_pool["tls-fingerprint"] = *cli_options.tls_fingerprint;
+            }
         }
         if (config.contains("log-file") && !config["log-file"].is_null()) {
             if (!config["log-file"].is_string())
