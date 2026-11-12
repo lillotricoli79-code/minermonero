@@ -4,39 +4,13 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $engineDir = Join-Path $repoRoot "engine"
 $dashboardDir = Join-Path $repoRoot "dashboard"
 
-# MSR is optional. Download and package only the exact official signed module;
-# an unavailable module must never block standard RandomX CPU mining.
-$msrModulePath = Join-Path $engineDir "msr\IntelMSR.bin"
-$expectedMsrSha256 = "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f"
-$msrModuleVerified = $false
-if (Test-Path -LiteralPath $msrModulePath) {
-    $installedMsrHash = (Get-FileHash -LiteralPath $msrModulePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($installedMsrHash -eq $expectedMsrSha256) {
-        $msrModuleVerified = $true
-        Write-Host "PawnIO IntelMSR 0.2.11 verificato: $installedMsrHash" -ForegroundColor Green
-    } else {
-        Write-Warning "IntelMSR.bin presente ma non corrispondente al modulo ufficiale; MSR verrà escluso dal pacchetto."
-    }
+# WinRing0 is optional and user-supplied. No driver is downloaded, installed or modified.
+# Place the driver at engine\msr\WinRing0x64.sys; CMake stages it beside unique-rx.exe.
+$winRingSource = Join-Path $engineDir "msr\WinRing0x64.sys"
+if (Test-Path -LiteralPath $winRingSource -PathType Leaf) {
+    Write-Host "WinRing0x64.sys locale rilevato: verrà copiato accanto al miner." -ForegroundColor Green
 } else {
-    $archive = Join-Path $env:TEMP "unique-rx-pawnio-0.2.11.zip"
-    $extract = Join-Path $env:TEMP "unique-rx-pawnio-0.2.11"
-    try {
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $msrModulePath) | Out-Null
-        Invoke-WebRequest -Uri "https://github.com/namazso/PawnIO.Modules/releases/download/0.2.11/release_0_2_11.zip" -OutFile $archive
-        Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
-        $downloadedModule = Get-ChildItem -LiteralPath $extract -Filter "IntelMSR.bin" -File -Recurse | Select-Object -First 1
-        if (-not $downloadedModule) { throw "IntelMSR.bin assente dal pacchetto PawnIO 0.2.11." }
-        $downloadedHash = (Get-FileHash -LiteralPath $downloadedModule.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($downloadedHash -ne $expectedMsrSha256) { throw "Hash SHA-256 IntelMSR.bin non valido: $downloadedHash" }
-        Copy-Item -LiteralPath $downloadedModule.FullName -Destination $msrModulePath -Force
-        $msrModuleVerified = $true
-        Write-Host "PawnIO IntelMSR 0.2.11 verificato: $downloadedHash" -ForegroundColor Green
-    } catch {
-        Write-Warning "Modulo MSR opzionale non disponibile: $($_.Exception.Message). La build CPU standard continua senza MSR."
-    } finally {
-        Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Write-Warning "WinRing0x64.sys non presente in engine\msr. Il pacchetto funzionerà con MSR disattivato."
 }
 
 # The release build must never silently reuse a stale dashboard bundle.
@@ -202,22 +176,15 @@ Copy-Item -LiteralPath $exe -Destination $packageDir
 Get-ChildItem -LiteralPath $exeDirectory -Filter "*.dll" -File | Copy-Item -Destination $packageDir -Force
 $exeHash = (Get-FileHash -LiteralPath (Join-Path $packageDir "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
 $shaLines = @("$exeHash  unique-rx.exe")
-$modulePackaged = $false
-$builtMsrModule = Join-Path $exeDirectory "msr\IntelMSR.bin"
-if ($msrModuleVerified -and (Test-Path -LiteralPath $builtMsrModule)) {
-    $moduleHash = (Get-FileHash -LiteralPath $builtMsrModule -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($moduleHash -eq $expectedMsrSha256) {
-        $packageMsrDir = Join-Path $packageDir "msr"
-        New-Item -ItemType Directory -Force -Path $packageMsrDir | Out-Null
-        Copy-Item -LiteralPath $builtMsrModule -Destination (Join-Path $packageMsrDir "IntelMSR.bin")
-        Copy-Item -LiteralPath (Join-Path $engineDir "msr\PawnIO-COPYING") -Destination (Join-Path $packageMsrDir "COPYING")
-        $shaLines += "$moduleHash  msr/IntelMSR.bin"
-        $modulePackaged = $true
-    } else {
-        Write-Warning "Il modulo MSR nella cartella di build non supera SHA-256; viene escluso dal pacchetto."
-    }
+$winRingPackaged = $false
+$builtWinRingDriver = Join-Path $exeDirectory "WinRing0x64.sys"
+if (Test-Path -LiteralPath $builtWinRingDriver -PathType Leaf) {
+    $driverHash = (Get-FileHash -LiteralPath $builtWinRingDriver -Algorithm SHA256).Hash.ToLowerInvariant()
+    Copy-Item -LiteralPath $builtWinRingDriver -Destination (Join-Path $packageDir "WinRing0x64.sys") -Force
+    $shaLines += "$driverHash  WinRing0x64.sys"
+    $winRingPackaged = $true
 } else {
-    Write-Host "MSR opzionale non incluso: il miner CPU funziona con MSR disattivato." -ForegroundColor Yellow
+    Write-Host "WinRing0x64.sys non incluso: MSR opzionale; il miner CPU funziona con MSR disattivato." -ForegroundColor Yellow
 }
 Set-Content -LiteralPath (Join-Path $packageDir "SHA256SUMS.txt") -Encoding ascii -Value $shaLines
 Copy-Item -LiteralPath (Join-Path $repoRoot "config.example.json") -Destination (Join-Path $packageDir "config.example.json")
@@ -234,7 +201,6 @@ Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\XMRIG-GPL-3.0.txt") -Desti
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\RXMINER-MIT.txt") -Destination $licenses
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\NYXRX-MIT.txt") -Destination $licenses
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\XMR-MINER-GPL-3.0.txt") -Destination $licenses
-Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSES\PAWNIO-MODULES-COPYING") -Destination $licenses
 Copy-Item -LiteralPath (Join-Path $engineDir "src\randomx\upstream\LICENSE") -Destination (Join-Path $licenses "RANDOMX-BSD-3-CLAUSE.txt")
 
 $launcherDir = Join-Path $packageDir "scripts\windows"
@@ -273,7 +239,6 @@ if ($LASTEXITCODE -ne 0) { throw "Impossibile determinare il commit sorgente." }
 Set-Content -LiteralPath (Join-Path $packageDir "SOURCE-COMMIT.txt") -Encoding ascii -Value $commit
 $sourceSums = Join-Path $packageDir "SHA256SUMS.txt"
 Add-Content -LiteralPath $sourceSums -Encoding ascii -Value "$sourceHash  unique-rx-source.zip"
-if ($modulePackaged) { Copy-Item -LiteralPath (Join-Path $packageDir "msr\COPYING") -Destination (Join-Path $licenses "PAWNIO-MODULE-COPYING") }
 
 Write-Host "Pacchetto completo: motore, backend, dashboard, script, licenze e sorgente corrispondente inclusi."
 Write-Host ""
