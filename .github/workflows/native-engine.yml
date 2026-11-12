@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           out="release/unique-rx-linux-x64"
-          mkdir -p "$out/licenses" "$out/dashboard/dist" "$out/scripts/linux" "$out/msr"
+          mkdir -p "$out/licenses" "$out/dashboard/dist" "$out/scripts/linux"
           cp build/unique-rx "$out/unique-rx"
           cp README.md config.example.json requirements.txt "$out/"
           cp -R backend "$out/backend"
