@@ -66,18 +66,17 @@ void MiningState::set_work(std::shared_ptr<const MiningWork> next) {
 
 std::uint64_t MiningState::next_nonce_offset(std::uint64_t generation,
                                                    std::uint64_t count) {
-    if (count == 0 ||
-        nonce_generation.load(std::memory_order_acquire) != generation) {
-        return UINT64_MAX; // obsolete job or invalid reservation
-    }
-    // Reserve ranges rather than incrementing the shared cursor for every
-    // hash. Workers consume their local range without synchronization; this
-    // keeps live resizing generation-safe while reducing cache-line traffic.
-    const auto offset = nonce_cursor.fetch_add(count, std::memory_order_relaxed);
+    if (count == 0) return UINT64_MAX;
+    // Serialize only block reservations (normally once per 32,768 hashes)
+    // with set_work(). A generation double-check without this lock can still
+    // let an old worker increment the freshly reset cursor after a new job is
+    // published, silently skipping a nonce range in that new generation.
+    std::lock_guard lock(nonce_mutex);
     if (nonce_generation.load(std::memory_order_acquire) != generation) {
         return UINT64_MAX;
     }
-    return offset;
+    // Hashes within each reserved block remain entirely worker-local.
+    return nonce_cursor.fetch_add(count, std::memory_order_relaxed);
 }
 
 void MiningState::report_worker_error(const std::string& error) {
