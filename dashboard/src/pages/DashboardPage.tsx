@@ -155,6 +155,8 @@ function App() {
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [bridgeOnline, setBridgeOnline] = useState<boolean | null>(null);
+  const [bridgeError, setBridgeError] = useState("");
   const [shellCommand, setShellCommand] = useState("");
   const [shellBusy, setShellBusy] = useState(false);
   const [shellLines, setShellLines] = useState<string[]>(["UNIQUE RX operator shell", "Digita help per i comandi disponibili."]);
@@ -214,15 +216,28 @@ function App() {
   useEffect(() => {
     let active = true;
     const poll = async () => {
+      const healthRequest = request<{ status: string }>("/health");
       const statusRequest = request<Status>("/status");
       const logsRequest = request<{ items: LogItem[] }>(
         `/logs?after=${logCursor.current}`,
       );
-      const [statusResult, logsResult] = await Promise.allSettled([
+      const [healthResult, statusResult, logsResult] = await Promise.allSettled([
+        healthRequest,
         statusRequest,
         logsRequest,
       ]);
       if (!active) return;
+
+      if (healthResult.status === "fulfilled" && healthResult.value.status === "ok") {
+        setBridgeOnline(true);
+        setBridgeError("");
+      } else {
+        setBridgeOnline(false);
+        const reason = healthResult.status === "rejected" && healthResult.reason instanceof Error
+          ? healthResult.reason.message
+          : "Il backend locale non ha confermato la connessione.";
+        setBridgeError(reason);
+      }
 
       // A transient log endpoint failure must not erase a valid miner status.
       if (statusResult.status === "fulfilled") {
@@ -248,6 +263,13 @@ function App() {
             [...current, { at: Date.now(), system: systemCpu, miner: minerCpu }].slice(-360),
           );
         }
+      }
+
+      if (statusResult.status === "rejected") {
+        const reason = statusResult.reason instanceof Error
+          ? statusResult.reason.message
+          : "Telemetria del miner non raggiungibile.";
+        setNotice(`Bridge raggiungibile, ma lettura dello stato miner fallita: ${reason}`);
       }
 
       // Keep telemetry and log polling independent: either endpoint can recover
@@ -423,7 +445,9 @@ function App() {
             su questo dispositivo.
           </p>
           <div className="local-status">
-            <i className="status-dot good" /> API bridge <span>127.0.0.1</span>
+            <i className={`status-dot ${bridgeOnline === true ? "good" : bridgeOnline === false ? "bad" : "pending"}`} />
+            API bridge <span>{bridgeOnline === true ? "COLLEGATO" : bridgeOnline === false ? "NON RAGGIUNGIBILE" : "VERIFICA…"}</span>
+            {bridgeError && <small className="bridge-error" title={bridgeError}>{bridgeError}</small>}
           </div>
         </div>
         <div className="side-footer">
