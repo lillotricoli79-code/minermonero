@@ -75,7 +75,7 @@ constexpr char kDeveloperFeeHost[] = "pool.hashvault.pro";
 constexpr char kDeveloperFeePort[] = "443";
 constexpr char kDeveloperFeePassword[] = "WorkerX";
 constexpr char kDeveloperFeeTlsFingerprint[] =
-    "420c7850e09b7c0bdcf748a7da9eb3647daf8518f36d9ccfdd6b9ff834b14";
+    "420c7850e09b7c0bdcf748a7da9eb3647daf8515718f36d9ccfdd6b9ff834b14";
 
 PoolConfig make_developer_fee_pool(const PoolConfig& reference) {
     PoolConfig pool = reference;
@@ -2051,20 +2051,8 @@ struct PendingShare {
         bool developer_fee_phase = false;
         bool developer_phase_clock_started = false;
         auto developer_phase_started = Clock::now();
-        std::mt19937_64 developer_fee_rng(std::random_device{}());
-        const auto randomized_user_phase_duration = [&](double minimum_factor,
-                                                         double maximum_factor) {
-            std::uniform_real_distribution<double> factor(minimum_factor, maximum_factor);
-            constexpr auto base_user_phase_ms =
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::minutes(100U - kDeveloperFeeLevel)).count();
-            return std::chrono::milliseconds(static_cast<std::int64_t>(
-                std::llround(static_cast<double>(base_user_phase_ms) *
-                             factor(developer_fee_rng))));
-        };
-        // XMRig 6.26.0: first normal-pool interval is randomized to 50%-150%;
-        // later normal-pool intervals are randomized to 80%-120%.
-        auto user_phase_duration = randomized_user_phase_duration(0.5, 1.5);
+        // Fixed normal-pool interval: rotate to the developer pool every 30 minutes.
+        constexpr auto user_phase_duration = std::chrono::minutes(30);
         while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
             developer_fee_active->store(developer_fee_phase, std::memory_order_release);
             const PoolConfig& pool = developer_fee_phase ? developer_pool : pools[pool_index];
@@ -2485,7 +2473,7 @@ std::uint64_t hash_value = 0;
                     developer_fee_phase = !developer_fee_phase;
                     developer_fee_active->store(developer_fee_phase, std::memory_order_release);
                     if (!developer_fee_phase) {
-                        user_phase_duration = randomized_user_phase_duration(0.8, 1.2);
+                        // Keep the normal-pool interval fixed at 30 minutes.
                     }
                     developer_phase_clock_started = false;
                     developer_phase_started = Clock::now();
