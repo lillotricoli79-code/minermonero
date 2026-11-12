@@ -143,7 +143,9 @@ def load_config() -> dict[str, Any]:
     )
     # XMRig permits port 0 when its optional HTTP listener is disabled.
     # The integrated dashboard uses the backend's separate 127.0.0.1:8000 API.
-    if not valid_api_port and not (configured_api_port == 0 and not http_enabled):
+    if not valid_api_port and not (
+        type(configured_api_port) is int and configured_api_port == 0 and not http_enabled
+    ):
         raise ValueError("config.json: la porta API deve essere 0 (solo con http.enabled=false) oppure un intero tra 1024 e 65535")
     if not config["http"].get("access-token"):
         config["http"]["access-token"] = secrets.token_urlsafe(32)
