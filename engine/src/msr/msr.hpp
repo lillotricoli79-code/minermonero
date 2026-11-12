@@ -1,7 +1,11 @@
 #pragma once
 
+#include "presets.hpp"
+
 #include <filesystem>
 #include <memory>
+#include <optional>
+#include <vector>
 
 namespace unique_rx {
 
@@ -15,7 +19,9 @@ public:
     MsrManager(MsrManager&&) noexcept;
     MsrManager& operator=(MsrManager&&) noexcept;
 
-    void apply_randomx_preset();
+    void apply_randomx_preset(std::optional<std::uint64_t> intel_prefetch_value = std::nullopt);
+    void apply_custom_writes(const std::vector<MsrWrite>& writes);
+    void set_restore_on_exit(bool enabled) noexcept;
     void restore() noexcept;
     bool active() const noexcept;
 
