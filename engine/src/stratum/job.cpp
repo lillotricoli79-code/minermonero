@@ -350,14 +350,17 @@ std::optional<std::uint64_t> parse_rpc_response_id(const nlohmann::json& message
 bool rpc_response_failed(const nlohmann::json& message) noexcept {
     if (!message.is_object()) return true;
     if (message.contains("error") && !message["error"].is_null()) return true;
-    if (message.contains("result") && message["result"].is_object()) {
-        const auto& result = message["result"];
-        if (result.contains("status") && result["status"].is_string()) {
-            const auto& status = result["status"].get_ref<const std::string&>();
-            if (status.size() != 2 ||
-                std::tolower(static_cast<unsigned char>(status[0])) != 'o' ||
-                std::tolower(static_cast<unsigned char>(status[1])) != 'k') return true;
-        }
+
+    // A submit response without an object result is malformed, not an
+    // acknowledgement. Never count it as an accepted share.
+    if (!message.contains("result") || !message["result"].is_object()) return true;
+
+    const auto& result = message["result"];
+    if (result.contains("status") && result["status"].is_string()) {
+        const auto& status = result["status"].get_ref<const std::string&>();
+        if (status.size() != 2 ||
+            std::tolower(static_cast<unsigned char>(status[0])) != 'o' ||
+            std::tolower(static_cast<unsigned char>(status[1])) != 'k') return true;
     }
     return false;
 }
