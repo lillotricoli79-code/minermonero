@@ -258,14 +258,21 @@ function App() {
           ...nextLogs.map((item) => item.id),
         );
         setLogs((current) => {
-          // Reconcile history and live entries by event identity and count.
-          // Repeated identical messages are preserved instead of collapsed.
-          const existing = countLogIdentities(current);
+          // Live IDs deduplicate overlapping poll responses. Only synthetic
+          // history entries need content-based reconciliation with the stream.
+          const existingIds = new Set(
+            current.filter((item) => item.id >= 0).map((item) => item.id),
+          );
+          const historyCounts = countLogIdentities(
+            current.filter((item) => item.id < 0),
+          );
           const unseen = nextLogs.filter((item) => {
+            if (existingIds.has(item.id)) return false;
+            existingIds.add(item.id);
             const key = logIdentity(item);
-            const count = existing.get(key) ?? 0;
+            const count = historyCounts.get(key) ?? 0;
             if (count === 0) return true;
-            existing.set(key, count - 1);
+            historyCounts.set(key, count - 1);
             return false;
           });
           return [...current, ...unseen].slice(-400);
