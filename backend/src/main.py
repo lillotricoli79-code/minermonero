@@ -444,7 +444,6 @@ class MinerController:
         self.log_sequence = 0
         self.shell_log = ShellLog(ROOT / "logs" / "shell" / "shell.log")
         self._native_log_seen: deque[str] = deque()
-        self._native_log_seen_set: set[str] = set()
 
     def _log(self, message: str, engine: str | None = None) -> None:
         # Keep the original miner shell line intact and identify its source.
@@ -780,14 +779,19 @@ class MinerController:
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[-600:]
         except OSError:
             return
-        for line in lines:
-            if not line or line in self._native_log_seen_set:
+        # Compare the previous tail as an ordered sequence, not a set:
+        # identical messages can legitimately occur more than once within
+        # the same second and must remain separate log events.
+        previous = list(self._native_log_seen)
+        overlap = min(len(previous), len(lines))
+        while overlap and previous[-overlap:] != lines[:overlap]:
+            overlap -= 1
+        for line in lines[overlap:]:
+            if not line:
                 continue
-            if len(self._native_log_seen) >= 1200:
-                expired = self._native_log_seen.popleft()
-                self._native_log_seen_set.discard(expired)
             self._native_log_seen.append(line)
-            self._native_log_seen_set.add(line)
+            while len(self._native_log_seen) > 1200:
+                self._native_log_seen.popleft()
             match = re.match(
                 r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+(\w+)\s+(\w+)\s+(.*)$",
                 line,
