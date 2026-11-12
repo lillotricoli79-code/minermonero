@@ -12,8 +12,8 @@ from typing import TextIO
 
 # Never persist pool credentials, API bearer tokens, or a Monero address in logs.
 _SECRET_PATTERNS = (
-    (re.compile(r"(?i)(\\b(?:password|passwd|pass|access[-_ ]?token|authorization)\\b\\s*[:=]\\s*)([^\\s,;]+)"), r"\\1<redacted>"),
-    (re.compile(r"(?i)(\\bbearer\\s+)[A-Za-z0-9._~+/=-]+"), r"\\1<redacted>"),
+    (re.compile(r"(?i)(\b(?:password|passwd|pass|access[-_ ]?token|authorization)\b\s*[:=]\s*)([^\s,;]+)"), r"\1<redacted>"),
+    (re.compile(r"(?i)(\bbearer\s+)[A-Za-z0-9._~+/=-]+"), r"\1<redacted>"),
     (re.compile(r"(?<![A-Za-z0-9])[48][A-Za-z0-9]{94}(?![A-Za-z0-9])"), "<wallet-redacted>"),
 )
 
