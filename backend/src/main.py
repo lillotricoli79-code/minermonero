@@ -1093,12 +1093,16 @@ def public_config(config: dict[str, Any]) -> dict[str, Any]:
     wrmsr = randomx.get("wrmsr")
     if wrmsr is None:
         msr_mode = "auto"
-    elif wrmsr is False or wrmsr == -1:
+    elif wrmsr is False or (isinstance(wrmsr, int) and not isinstance(wrmsr, bool) and wrmsr < 0):
         msr_mode = "off"
-    elif wrmsr is True:
+    elif wrmsr is True or (
+        isinstance(wrmsr, int) and not isinstance(wrmsr, bool) and 0 <= wrmsr <= 15
+    ):
         msr_mode = "fast"
-    else:
+    elif isinstance(wrmsr, list) and wrmsr:
         msr_mode = "custom"
+    else:
+        msr_mode = "off"
     rx_config = cpu.get("rx")
     explicit_threads = (
         rx_config.get("threads", cpu.get("threads", 0))
