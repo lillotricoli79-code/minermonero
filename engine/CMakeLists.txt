@@ -27,12 +27,13 @@ target_link_libraries(unique-rx PRIVATE randomx Threads::Threads OpenSSL::SSL
 
 if(WIN32)
   target_link_libraries(unique-rx PRIVATE ws2_32 advapi32 psapi powrprof)
-  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/msr/IntelMSR.bin")
+  # WinRing0 is supplied by the user; never download or bundle an unverified driver.
+  # The native MSR backend loads WinRing0x64.sys from the executable directory.
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/msr/WinRing0x64.sys")
     add_custom_command(TARGET unique-rx POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:unique-rx>/msr"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/msr/IntelMSR.bin"
-        "$<TARGET_FILE_DIR:unique-rx>/msr/IntelMSR.bin")
+        "${CMAKE_CURRENT_SOURCE_DIR}/msr/WinRing0x64.sys"
+        "$<TARGET_FILE_DIR:unique-rx>/WinRing0x64.sys")
   endif()
 endif()
 
