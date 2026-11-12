@@ -51,10 +51,12 @@ struct Job {
     std::uint32_t nonce_mask = UINT32_MAX;
     std::uint32_t nonce_fixed = 0;
 
-    // Target-only updates keep the same nonce work; adapted from RxMiner (MIT).
+    // Match XMRig Job::isEqual: a target change is a new work generation,
+    // so an in-flight hash cannot be judged against a stale share target.
     bool same_work(const Job& other) const {
         return id == other.id && blob == other.blob && seed == other.seed &&
-            nonce_mask == other.nonce_mask && nonce_fixed == other.nonce_fixed;
+            target == other.target && nonce_mask == other.nonce_mask &&
+            nonce_fixed == other.nonce_fixed;
     }
 };
 
