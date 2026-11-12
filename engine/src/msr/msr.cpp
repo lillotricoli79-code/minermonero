@@ -626,12 +626,6 @@ void MsrManager::apply_randomx_preset(std::optional<std::uint64_t> intel_prefetc
         throw std::runtime_error(
             "no verified RandomX MSR preset exists for this CPU family/model");
     }
-#ifdef _WIN32
-    if (cpu->vendor != "GenuineIntel") {
-        throw std::runtime_error(
-            "Windows MSR backend currently supports Intel WinRing0 only");
-    }
-#endif
     impl_->apply(*preset);
     logging::info("msr", "applied verified preset " + std::string(preset->name) +
         " to " + cpu->vendor + " family " + std::to_string(cpu->family) +
