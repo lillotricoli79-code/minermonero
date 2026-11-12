@@ -17,3 +17,6 @@ CMakeFiles/
 /release/
 
 /unique-rx-stratum.log*
+
+# Optional user-supplied WinRing kernel driver; keep the binary out of Git.
+WinRing0x64.sys
