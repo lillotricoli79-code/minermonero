@@ -27,8 +27,9 @@ if [[ -x "${PYTHON}" ]]; then
 else echo "[ATTENZIONE] Python 3 non trovato."; fi
 if command -v cmake >/dev/null 2>&1; then cmake --version | head -n 1; else echo "[ATTENZIONE] CMake non trovato."; fi
 MINER=""
-for candidate in "${ROOT}/unique-rx" "${ROOT}/engine/build/unique-rx" "${ROOT}/engine/build-mingw/unique-rx.exe"; do
-  if [[ -x "${candidate}" || -f "${candidate}" ]]; then MINER="${candidate}"; break; fi
+for candidate in "${ROOT}/unique-rx" "${ROOT}/engine/build/unique-rx"; do
+  # Linux diagnostics must never report a Windows .exe as a usable native miner.
+  if [[ -f "${candidate}" && -x "${candidate}" ]]; then MINER="${candidate}"; break; fi
 done
 if [[ -n "${MINER}" ]]; then echo "[OK] Motore nativo: ${MINER}"; else echo "[ATTENZIONE] eseguibile assente. Compila con scripts/linux/build.sh."; fi
 python3 - <<'PY'
