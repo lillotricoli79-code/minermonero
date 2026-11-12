@@ -1749,7 +1749,7 @@ int run_miner(const std::filesystem::path& config_path,
                         if (ready < 0) continue;
                         if ((descriptor.revents & (POLLIN | POLLHUP)) == 0) continue;
                         const auto count = ::read(STDIN_FILENO, &character, 1);
-                        if (count <= 0) continue;
+                        if (count <= 0) break;
                         if (escape_state == 1) {
                             escape_state = character == '[' ? 2 : 0;
                             continue;
