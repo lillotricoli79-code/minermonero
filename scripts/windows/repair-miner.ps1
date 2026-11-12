@@ -46,7 +46,6 @@ if ($LASTEXITCODE -ne 0) { Stop-Repair "Aggiornamento fast-forward non riuscito.
 $Client = Join-Path $Root "engine\src\stratum\client.cpp"
 $Source = Get-Content -LiteralPath $Client -Raw
 $Required = @(
-    "const bool accepted = !has_error;",
     'log_event("SUBMIT_SENT", submit_request);',
     'log_event("SUBMIT_RESPONSE", message);',
     'log_event("SHARE_ACCEPTED"'
