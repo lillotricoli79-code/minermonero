@@ -216,7 +216,12 @@ def find_native_engine(root: Path = ROOT) -> Path | None:
         ]
         path_names = ("unique-rx",)
 
-    existing = [candidate for candidate in candidates if candidate.is_file()]
+    existing = [
+        candidate for candidate in candidates
+        if candidate.is_file() and (
+            sys.platform == "win32" or os.access(candidate, os.X_OK)
+        )
+    ]
     if existing:
         return max(existing, key=lambda candidate: candidate.stat().st_mtime_ns)
 
