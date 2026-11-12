@@ -162,9 +162,7 @@ jobs:
           Copy-Item -LiteralPath "LICENSES\RXMINER-MIT.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\NYXRX-MIT.txt" -Destination $licenses
           Copy-Item -LiteralPath "LICENSES\XMR-MINER-GPL-3.0.txt" -Destination $licenses
-          Copy-Item -LiteralPath "LICENSES\PAWNIO-MODULES-COPYING" -Destination $licenses
           Copy-Item -LiteralPath "engine\src\randomx\upstream\LICENSE" -Destination (Join-Path $licenses "RANDOMX-BSD-3-CLAUSE.txt")
-          Copy-Item -LiteralPath "engine\msr\PawnIO-COPYING" -Destination (Join-Path $msr "COPYING")
           git archive --format=zip "--output=$(Join-Path $out 'unique-rx-source.zip')" HEAD
           if ($LASTEXITCODE -ne 0) { throw "Unable to package corresponding source revision." }
           git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $out "SOURCE-COMMIT.txt") -Encoding ascii
