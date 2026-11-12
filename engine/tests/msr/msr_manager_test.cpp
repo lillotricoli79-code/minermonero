@@ -185,52 +185,82 @@ bool test_mock_msr_transactions() {
 int main() {
     if (!test_mock_msr_transactions()) return 1;
     const auto intel = unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x5e);
-    if (!intel || intel->name != "intel_family_6" ||
+    if (!intel || intel->name != "intel" ||
         intel->writes.size() != 1 ||
         intel->writes[0].register_id != 0x1a4 ||
         intel->writes[0].value != 0x0f ||
-        intel->writes[0].mask != 0x0f) {
-        std::cerr << "Intel family-6 MSR preset selection failed\n";
+        intel->writes[0].mask != UINT64_MAX) {
+        std::cerr << "Intel family-6 XMRig MSR preset selection failed\n";
         return 1;
     }
     if (!unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x8e) ||
         !unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x9e) ||
+        !unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x97) ||
         unique_rx::msr_preset_for_cpu("GenuineIntel", 5, 0x04) ||
-        unique_rx::msr_preset_for_cpu("GenuineIntel", 6, 0x97) ||
         unique_rx::msr_preset_for_cpu("AuthenticAMD", 6, 0x5e)) {
-        std::cerr << "Intel family/model MSR selection failed\n";
+        std::cerr << "Intel family/model MSR selection diverged from XMRig\n";
         return 1;
     }
 
-    for (const auto model : {0x31U, 0x60U, 0x68U, 0x71U}) {
+    for (const auto model : {0x01U, 0x31U, 0x60U, 0x68U, 0x71U}) {
         const auto zen = unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x17, model);
-        if (!zen || zen->name != "amd_zen_17h" || zen->writes.size() != 4) {
-            std::cerr << "AMD Zen family-17 preset selection failed\n";
+        if (!zen || zen->name != "ryzen_17h" || zen->writes.size() != 4 ||
+            zen->writes[0].register_id != 0xc0011020 ||
+            zen->writes[0].value != 0 ||
+            zen->writes[1].register_id != 0xc0011021 ||
+            zen->writes[1].value != 0x40 ||
+            zen->writes[1].mask != ~std::uint64_t{0x20} ||
+            zen->writes[2].value != 0x1510000 ||
+            zen->writes[3].value != 0x2000cc16) {
+            std::cerr << "AMD family-17 XMRig MSR preset mismatch\n";
             return 1;
         }
     }
-    for (const auto model : {0x00U, 0x0fU, 0x20U, 0x2fU, 0x50U, 0x5fU}) {
+
+    for (const auto model : {0x00U, 0x0fU, 0x20U, 0x2fU, 0x40U, 0x50U, 0x5fU, 0x80U}) {
         const auto zen = unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, model);
-        if (!zen || zen->name != "amd_zen_19h" || zen->writes.size() != 4 ||
+        if (!zen || zen->name != "ryzen_19h" || zen->writes.size() != 4 ||
             zen->writes[0].register_id != 0xc0011020 ||
             zen->writes[0].value != 0x0004480000000000ULL ||
             zen->writes[1].register_id != 0xc0011021 ||
             zen->writes[1].value != 0x001c000200000040ULL ||
             zen->writes[1].mask != ~std::uint64_t{0x20} ||
             zen->writes[2].register_id != 0xc0011022 ||
-            zen->writes[2].value != 0xc000000401500000ULL ||
+            zen->writes[2].value != 0xc000000401570000ULL ||
             zen->writes[3].register_id != 0xc001102b ||
-            zen->writes[3].value != 0x2000cc14ULL) {
-            std::cerr << "AMD Zen family-19 RxMiner preset mismatch\n";
+            zen->writes[3].value != 0x2000cc10ULL) {
+            std::cerr << "AMD family-19 Zen 3 XMRig MSR preset mismatch\n";
             return 1;
         }
     }
 
-    if (unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x17, 0x01) ||
-        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x40) ||
-        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x61) ||
-        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, 0x75) ||
-        unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x15, 0x02) ||
+    for (const auto model : {0x61U, 0x75U}) {
+        const auto zen4 = unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x19, model);
+        if (!zen4 || zen4->name != "ryzen_19h_zen4" ||
+            zen4->writes.size() != 4 ||
+            zen4->writes[0].value != 0x0004400000000000ULL ||
+            zen4->writes[1].value != 0x0004000000000040ULL ||
+            zen4->writes[1].mask != ~std::uint64_t{0x20} ||
+            zen4->writes[2].value != 0x8680000401570000ULL ||
+            zen4->writes[3].value != 0x2040cc10ULL) {
+            std::cerr << "AMD family-19 Zen 4 XMRig MSR preset mismatch\n";
+            return 1;
+        }
+    }
+
+    const auto zen5 = unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x1a, 0x01);
+    if (!zen5 || zen5->name != "ryzen_1ah_zen5" ||
+        zen5->writes.size() != 4 ||
+        zen5->writes[0].value != 0x0004400000000000ULL ||
+        zen5->writes[1].value != 0x0004000000000040ULL ||
+        zen5->writes[1].mask != ~std::uint64_t{0x20} ||
+        zen5->writes[2].value != 0x8680000401570000ULL ||
+        zen5->writes[3].value != 0x2040cc10ULL) {
+        std::cerr << "AMD family-1Ah Zen 5 XMRig MSR preset mismatch\n";
+        return 1;
+    }
+
+    if (unique_rx::msr_preset_for_cpu("AuthenticAMD", 0x15, 0x02) ||
         unique_rx::msr_preset_for_cpu("UnknownVendor", 6, 0x5e)) {
         std::cerr << "Unsupported CPU received an MSR preset\n";
         return 1;
