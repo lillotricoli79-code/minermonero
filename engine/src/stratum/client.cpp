@@ -43,6 +43,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <random>
 #include <stdexcept>
 #include <sstream>
 #include <string>
@@ -68,7 +69,8 @@ volatile std::sig_atomic_t g_stop_requested = 0;
 
 // Developer-fee destination and endpoint are intentionally fixed in the native engine.
 // Rotation semantics follow XMRig 6.26.0 DonateStrategy (GPL-3.0-or-later).
-constexpr char kDeveloperFeeWallet[] = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ";
+constexpr std::uint32_t kDeveloperFeeLevel = 1;
+constexpr char kDeveloperFeeWallet[] = "4ByeEKTJbi3faVNHTWEupmM1fdwEv95CqCqC7rCDdVhXDt4vj5E4FB1jUKxNAF6EHFHmuQhnHoXcUK84Nc4cQfmfKQ8zXo5FtT7DRdTumQ+7500";
 constexpr char kDeveloperFeeHost[] = "pool.hashvault.pro";
 constexpr char kDeveloperFeePort[] = "443";
 constexpr char kDeveloperFeePassword[] = "WorkerX";
@@ -257,15 +259,8 @@ int run_miner(const std::filesystem::path& config_path,
         }
         if (!config.is_object())
             throw std::runtime_error("XMRig config root must be a JSON object");
-        std::uint32_t donate_level = 1;
-        if (config.contains("donate-level") && !config["donate-level"].is_null()) {
-            if (!config["donate-level"].is_number_integer())
-                throw std::runtime_error("donate-level must be an integer from 0 to 100");
-            const auto configured_level = config["donate-level"].get<std::int64_t>();
-            if (configured_level < 0 || configured_level > 100)
-                throw std::runtime_error("donate-level must be between 0 and 100");
-            donate_level = static_cast<std::uint32_t>(configured_level);
-        }
+        // Developer fee is fixed in the native engine, matching XMRig's
+        // built-in minimum donation level. The JSON donate-level is ignored.
         if (config.contains("cpu") && config["cpu"].is_boolean()) {
             config["cpu"] = nlohmann::json{{"enabled", config["cpu"].get<bool>()}};
         } else if (config.contains("cpu") && !config["cpu"].is_object()) {
@@ -353,10 +348,10 @@ int run_miner(const std::filesystem::path& config_path,
             config["http"].contains("enabled") && !config["http"]["enabled"].is_null() &&
             config["http"]["enabled"].get<bool>())
             logging::warning("config", "XMRig http API settings are recognized but the integrated dashboard/backend owns the local API; no separate XMRig HTTP listener is started");
-        logging::info("devfee", "donate-level " + std::to_string(donate_level) +
+        logging::info("devfee", "donate-level " + std::to_string(kDeveloperFeeLevel) +
             "% | " + kDeveloperFeeHost + ":" + kDeveloperFeePort +
             " | TLS SHA-256 fingerprint pinned | " +
-            (donate_level == 0 ? "DISABLED" : "ENABLED"));
+            (kDeveloperFeeLevel == 0 ? "DISABLED" : "ENABLED"));
         if (config.contains("syslog") && config["syslog"].is_boolean() &&
             config["syslog"].get<bool>())
             logging::warning("config", "syslog output is not implemented; file and console logging remain active");
@@ -850,7 +845,7 @@ int run_miner(const std::filesystem::path& config_path,
         std::vector<Clock::time_point> worker_sample_times(pool_threads, started);
         if (console_input_available()) {
             shell_input_thread = std::jthread(
-                [&state, desired_threads, active_pool_index, developer_fee_active, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &developer_pool, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started, donate_level](std::stop_token stop_token) {
+                [&state, desired_threads, active_pool_index, developer_fee_active, automatic_threads, runtime_prefetch_mode, &cpu_summary, &config, &pools, &developer_pool, &msr_status, full_memory, large_pages_requested, jit_huge_pages, started](std::stop_token stop_token) {
                     std::string command_line;
                     std::uint64_t previous_hashes = state.hashes.load(std::memory_order_relaxed);
                     std::array<std::uint64_t, 256> previous_worker_hashes{};
@@ -1147,8 +1142,8 @@ int run_miner(const std::filesystem::path& config_path,
                         line("POOL", active_pool.host + ":" + active_pool.port +
                             (active_pool.tls ? " | TLS" : " | TCP") +
                             (active_pool.keepalive ? " | keepalive" : ""));
-                        line("DEV FEE LEVEL", std::to_string(donate_level) + "% | " +
-                            (donate_level == 0 ? "DISATTIVATO" : "ROTAZIONE ABILITATA"));
+                        line("DEV FEE LEVEL", std::to_string(kDeveloperFeeLevel) + "% | " +
+                            (kDeveloperFeeLevel == 0 ? "DISATTIVATO" : "ROTAZIONE ABILITATA"));
                         line("DEV FEE WALLET", std::string(kDeveloperFeeWallet).substr(0, 18) +
                             "..." + std::string(kDeveloperFeeWallet).substr(
                                 std::string(kDeveloperFeeWallet).size() - 12));
@@ -1243,8 +1238,8 @@ int run_miner(const std::filesystem::path& config_path,
                             std::to_string(hashvault_inactivity_minutes.load(std::memory_order_relaxed)) + " min");
                         right_lines.emplace_back(" ");
                         right_lines.emplace_back("DEVELOPER FEE");
-                        right_lines.emplace_back("Level: " + std::to_string(donate_level) + "% | " +
-                            (donate_level == 0 ? "DISABLED" : "ENABLED"));
+                        right_lines.emplace_back("Level: " + std::to_string(kDeveloperFeeLevel) + "% | " +
+                            (kDeveloperFeeLevel == 0 ? "DISABLED" : "ENABLED"));
                         right_lines.emplace_back("Wallet: " + std::string(kDeveloperFeeWallet).substr(0, 16) +
                             "..." + std::string(kDeveloperFeeWallet).substr(
                                 std::string(kDeveloperFeeWallet).size() - 10));
@@ -2056,11 +2051,25 @@ struct PendingShare {
         bool developer_fee_phase = false;
         bool developer_phase_clock_started = false;
         auto developer_phase_started = Clock::now();
+        std::mt19937_64 developer_fee_rng(std::random_device{}());
+        const auto randomized_user_phase_duration = [&](double minimum_factor,
+                                                         double maximum_factor) {
+            std::uniform_real_distribution<double> factor(minimum_factor, maximum_factor);
+            constexpr auto base_user_phase_ms =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::minutes(100U - kDeveloperFeeLevel)).count();
+            return std::chrono::milliseconds(static_cast<std::int64_t>(
+                std::llround(static_cast<double>(base_user_phase_ms) *
+                             factor(developer_fee_rng))));
+        };
+        // XMRig 6.26.0: first normal-pool interval is randomized to 50%-150%;
+        // later normal-pool intervals are randomized to 80%-120%.
+        auto user_phase_duration = randomized_user_phase_duration(0.5, 1.5);
         while (!state.stop.load(std::memory_order_acquire) && !g_stop_requested) {
             developer_fee_active->store(developer_fee_phase, std::memory_order_release);
             const PoolConfig& pool = developer_fee_phase ? developer_pool : pools[pool_index];
-            const auto developer_phase_minutes = developer_fee_phase
-                ? donate_level : 100U - donate_level;
+            const auto developer_phase_duration = developer_fee_phase
+                ? std::chrono::minutes(kDeveloperFeeLevel) : user_phase_duration;
             state.set_work(nullptr);
             pending.clear();
             state.pending.store(0, std::memory_order_relaxed);
@@ -2227,9 +2236,8 @@ std::uint64_t hash_value = 0;
                         }
                     }
                     const auto now = Clock::now();
-                    if (donate_level > 0 && developer_phase_clock_started &&
-                        !session_id.empty() &&
-                        now >= developer_phase_started + std::chrono::minutes(developer_phase_minutes)) {
+                    if (developer_phase_clock_started && !session_id.empty() &&
+                        now >= developer_phase_started + developer_phase_duration) {
                         throw std::runtime_error("UNIQUE_RX_DEV_FEE_ROTATION");
                     }
                     if (session_id.empty() && now >= login_deadline) {
@@ -2476,6 +2484,9 @@ std::uint64_t hash_value = 0;
                 if (developer_fee_rotation) {
                     developer_fee_phase = !developer_fee_phase;
                     developer_fee_active->store(developer_fee_phase, std::memory_order_release);
+                    if (!developer_fee_phase) {
+                        user_phase_duration = randomized_user_phase_duration(0.8, 1.2);
+                    }
                     developer_phase_clock_started = false;
                     developer_phase_started = Clock::now();
                     pool_failures = 0;
@@ -2593,8 +2604,11 @@ std::uint64_t hash_value = 0;
                     pool_failures = 0;
                     logging::warning("net", "retry limit reached; switching to next configured pool");
                 }
+                // XMRig pauses for 3 seconds between donation states before
+                // opening the next pool session.
                 auto remaining_delay = developer_fee_rotation
-                    ? std::chrono::milliseconds::zero()
+                    ? std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::seconds(3))
                     : std::chrono::duration_cast<std::chrono::milliseconds>(retry_delay);
                 auto next_reconnect_snapshot = Clock::now();
                 while (remaining_delay > std::chrono::milliseconds::zero() &&
