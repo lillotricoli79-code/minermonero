@@ -1146,7 +1146,7 @@ int run_miner(const std::filesystem::path& config_path,
                             " | processo " + memory_mib(system_sample.process_memory_bytes) +
                             " | temp " + optional_metric(system_sample.temperature_c, " C") +
                             " | power " + optional_metric(system_sample.package_power_watts, " W"));
-                        std::cout << "  \x1b[1;34m" << separator << "\x1b[0m\n"
+                        std::cout << "  \x1b[1;34m" << separator << "\x1b[0m\n";
                         const auto entries = logging::recent_entries(2048);
                         const auto max_log_scroll = entries.size() > visible_log_lines
                             ? entries.size() - visible_log_lines : 0;
