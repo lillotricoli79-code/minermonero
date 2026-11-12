@@ -89,19 +89,33 @@ class SummaryTests(unittest.TestCase):
 
 
 class NativeEngineSelectionTests(unittest.TestCase):
-    def test_prefers_newest_project_binary_across_build_directories(self):
+    def test_prefers_newest_binary_for_current_operating_system(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
-            older = root / "engine" / "build" / "unique-rx.exe"
-            newer = root / "engine" / "build-mingw" / "unique-rx.exe"
-            older.parent.mkdir(parents=True)
-            newer.parent.mkdir(parents=True)
-            older.write_bytes(b"older")
-            newer.write_bytes(b"newer")
-            os.utime(older, (100, 100))
-            os.utime(newer, (200, 200))
-
-            self.assertEqual(find_native_engine(root), newer)
+            if os.name == "nt":
+                older = root / "engine" / "build" / "unique-rx.exe"
+                newer = root / "engine" / "build-mingw" / "unique-rx.exe"
+                with patch("backend.src.main.sys.platform", "win32"):
+                    older.parent.mkdir(parents=True)
+                    newer.parent.mkdir(parents=True)
+                    older.write_bytes(b"older-windows")
+                    newer.write_bytes(b"newer-windows")
+                    os.utime(older, (100, 100))
+                    os.utime(newer, (200, 200))
+                    self.assertEqual(find_native_engine(root), newer)
+            else:
+                native = root / "engine" / "build" / "unique-rx"
+                foreign = root / "engine" / "build-mingw" / "unique-rx.exe"
+                native.parent.mkdir(parents=True)
+                foreign.parent.mkdir(parents=True)
+                native.write_bytes(b"native-linux")
+                foreign.write_bytes(b"newer-windows")
+                os.utime(native, (100, 100))
+                os.utime(foreign, (200, 200))
+                with patch("backend.src.main.sys.platform", "linux"), patch(
+                    "backend.src.main.shutil.which", return_value=None
+                ):
+                    self.assertEqual(find_native_engine(root), native)
 
     def test_returns_none_when_no_project_or_path_binary_exists(self):
         with TemporaryDirectory() as directory:
@@ -110,6 +124,25 @@ class NativeEngineSelectionTests(unittest.TestCase):
 
 
 class ConfigPersistenceTests(unittest.TestCase):
+    def test_disabled_http_accepts_xmrig_port_zero(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps({
+                "http": {"enabled": False, "port": 0, "access-token": "local-token"}
+            }), encoding="utf-8")
+            with patch("backend.src.main.CONFIG_PATH", path):
+                self.assertEqual(load_config()["http"]["port"], 0)
+
+    def test_enabled_http_rejects_port_zero(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps({
+                "http": {"enabled": True, "port": 0, "access-token": "local-token"}
+            }), encoding="utf-8")
+            with patch("backend.src.main.CONFIG_PATH", path):
+                with self.assertRaises(ValueError):
+                    load_config()
+
     def test_invalid_config_is_not_replaced_with_defaults(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"
@@ -193,6 +226,7 @@ class ConfigValidationTests(unittest.TestCase):
             MinerConfigUpdate(huge_pages=False, jit_huge_pages=True, prefetch_mode=2, priority=3),
         )
         self.assertFalse(saved["cpu"]["huge-pages"])
+        self.assertTrue(saved["cpu"]["huge-pages-jit"])
         self.assertTrue(saved["cpu"]["jit-huge-pages"])
         self.assertEqual(saved["cpu"]["prefetch-mode"], 2)
         self.assertEqual(saved["cpu"]["priority"], 3)
@@ -495,9 +529,9 @@ class LocalApiTests(unittest.TestCase):
 
     def test_custom_msr_payload_uses_compatible_external_backend(self):
         self.assertTrue(msr_override_enabled({"wrmsr": ["0x1a4:0xf"]}))
-        self.assertTrue(msr_override_enabled({"wrmsr": []}))
-        self.assertTrue(msr_override_enabled({"wrmsr": 0}))
-        self.assertTrue(msr_override_enabled({"wrmsr": 6}))
+        self.assertFalse(msr_override_enabled({"wrmsr": []}))
+        self.assertFalse(msr_override_enabled({"wrmsr": 0}))
+        self.assertFalse(msr_override_enabled({"wrmsr": 6}))
 
     def test_native_msr_availability_checks_only_process_allowed_cpus(self):
         # Simulate Linux paths without constructing PosixPath on Windows CI.
