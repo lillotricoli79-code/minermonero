@@ -985,12 +985,12 @@ int run_miner(const std::filesystem::path& config_path,
                                     ? static_cast<int>(std::clamp(rate / graph_peak, 0.0, 1.0) * 6.0)
                                     : 0;
                                 const bool filled = level >= graph_row;
-                                std::cout << (filled ? " \x1b[1;96m#\x1b[0m" : "  ");
+                                std::cout << (filled ? "\x1b[1;96m#\x1b[0m" : " ");
                             }
                             std::cout << '\n';
                         }
                         std::cout << "  \x1b[90m" << std::setw(11) << "0 H/s"
-                                  << " \x1b[0m+" << std::string(graph_buckets.size() * 2, '-')
+                                  << " \x1b[0m+" << std::string(graph_buckets.size(), '-')
                                   << "\n  \x1b[90m" << std::setw(13) << "15m fa"
                                   << std::setw(25) << "7m 30s"
                                   << std::setw(27) << "ORA\x1b[0m\n"
