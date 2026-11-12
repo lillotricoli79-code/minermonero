@@ -166,7 +166,7 @@ function App() {
       .then(({ lines }) => {
         if (!active || !lines.length) return;
         const entries = lines.map((line, index): LogItem => {
-          const parsed = line.match(/^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+\\w+\\s+(?:\\[[^\\]]+:\\d+\\]\\s+)?(?:\\[([^\\]]+)\\]\\s+)?(.*)$/);
+          const parsed = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\w+\s+(?:\[[^\]]+:\d+\]\s+)?(?:\[([^\]]+)\]\s+)?(.*)$/);
           const time = parsed
             ? Date.parse(parsed[1].replace(" ", "T")) / 1000
             : Date.now() / 1000;
