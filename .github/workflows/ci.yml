@@ -100,16 +100,15 @@ jobs:
           Get-ChildItem -LiteralPath $build -Filter "*.dll" -File | Copy-Item -Destination $out -Force
           $hash = (Get-FileHash -LiteralPath (Join-Path $out "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
           $hashLines = @("$hash  unique-rx.exe")
-          $msr = Join-Path $build "msr\IntelMSR.bin"
-          if (Test-Path -LiteralPath $msr) {
-            $moduleHash = (Get-FileHash -LiteralPath $msr -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($moduleHash -ne "d6ed85d65ab17a22f813ef98207d6d537155ee2ded5976a21cb48413c9b92e5f") { throw "Packaged IntelMSR.bin SHA-256 mismatch." }
-            New-Item -ItemType Directory -Force -Path (Join-Path $out "msr") | Out-Null
-            Copy-Item -LiteralPath $msr -Destination (Join-Path $out "msr\IntelMSR.bin")
-            Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "engine\msr\PawnIO-COPYING") -Destination (Join-Path $out "msr\COPYING")
-            $hashLines += "$moduleHash  msr/IntelMSR.bin"
+          # The native backend uses the user-supplied WinRing0 driver, not PawnIO.
+          # Never package an unrelated IntelMSR.bin module as if the engine loaded it.
+          $winRing = Join-Path $env:GITHUB_WORKSPACE "engine\msr\WinRing0x64.sys"
+          if (Test-Path -LiteralPath $winRing) {
+            $driverHash = (Get-FileHash -LiteralPath $winRing -Algorithm SHA256).Hash.ToLowerInvariant()
+            Copy-Item -LiteralPath $winRing -Destination (Join-Path $out "WinRing0x64.sys") -Force
+            $hashLines += "$driverHash  WinRing0x64.sys"
           } else {
-            Write-Host "Optional MSR module not present; standard CPU package remains valid."
+            Write-Host "WinRing0x64.sys not supplied; MSR remains optional and disabled."
           }
           Set-Content -LiteralPath (Join-Path $out "SHA256SUMS.txt") -Encoding ascii -Value $hashLines
           $licenses = Join-Path $out "licenses"
