@@ -1166,12 +1166,11 @@ def apply_config_update(current: dict[str, Any], update: MinerConfigUpdate) -> d
     # Update that active XMRig profile when it is an object; retain the
     # top-level fallback for configs without a RandomX profile object.
     rx_config = cpu.get("rx")
+    cpu["threads"] = update.threads
     if isinstance(rx_config, dict):
         rx_config = dict(rx_config)
         rx_config["threads"] = update.threads
         cpu["rx"] = rx_config
-    else:
-        cpu["threads"] = update.threads
     cpu.pop("max-threads-hint", None)
     cpu["huge-pages"] = update.huge_pages
     # Keep the spelling consumed first by the native engine and mirror the
