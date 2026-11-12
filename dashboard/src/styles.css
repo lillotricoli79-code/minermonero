@@ -184,6 +184,23 @@ button:disabled {
   background: var(--lime);
   box-shadow: 0 0 0 3px #b8e86c1c;
 }
+.status-dot.bad {
+  background: #ef806d;
+  box-shadow: 0 0 0 3px #ef806d24;
+}
+.status-dot.pending {
+  background: #edb86b;
+  box-shadow: 0 0 0 3px #edb86b24;
+}
+.local-status .bridge-error {
+  flex-basis: 100%;
+  width: 100%;
+  margin: 5px 0 0 13px;
+  color: #efaa9e;
+  font-size: 9px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
 .side-footer {
   display: flex;
   justify-content: space-between;
