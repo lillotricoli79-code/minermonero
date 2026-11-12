@@ -113,6 +113,7 @@ struct ThreadAffinity {
     GROUP_AFFINITY previous{};
     bool active = false;
     bool restore_on_exit = true;
+    bool transaction_committed = false;
 
     ThreadAffinity(WORD group, BYTE processor) {
         GROUP_AFFINITY desired{};
@@ -416,6 +417,7 @@ struct MsrManager::Impl {
             msr_detail::apply_registers(cpu_indices, preset.writes,
                                         snapshots, read, write, log);
             active = true;
+            transaction_committed = true;
         } catch (...) {
             restore();
             throw;
@@ -543,6 +545,7 @@ struct MsrManager::Impl {
             msr_detail::apply_registers(cpu_indices, preset.writes,
                                         snapshots, read, write, log);
             active = true;
+            transaction_committed = true;
         } catch (...) {
             restore();
             throw;
@@ -569,7 +572,9 @@ struct MsrManager::Impl {
 
     ~Impl() {
         const bool had_snapshots = !snapshots.empty();
-        if (restore_on_exit) {
+        // rdmsr=false disables restoration only after a fully committed
+        // preset. A failed/partial transaction must still retry rollback.
+        if (restore_on_exit || !transaction_committed) {
             restore();
             if (active) restore();
         }
