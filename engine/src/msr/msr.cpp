@@ -257,6 +257,38 @@ struct MsrManager::Impl {
         }
     }
 
+    void wait_for_winring_service_running() {
+        if (service == nullptr) {
+            throw std::runtime_error("WinRing0 service handle is unavailable");
+        }
+
+        const ULONGLONG deadline = GetTickCount64() + 30000;
+        SERVICE_STATUS_PROCESS status{};
+        DWORD bytes_needed = 0;
+        while (true) {
+            if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO,
+                    reinterpret_cast<LPBYTE>(&status), sizeof(status), &bytes_needed)) {
+                throw std::system_error(static_cast<int>(GetLastError()),
+                    std::system_category(), "cannot query WinRing0 startup state");
+            }
+
+            if (status.dwCurrentState == SERVICE_RUNNING) return;
+            if (status.dwCurrentState != SERVICE_START_PENDING &&
+                status.dwCurrentState != SERVICE_STOP_PENDING) {
+                throw std::runtime_error(
+                    "WinRing0 service did not reach the running state");
+            }
+            if (GetTickCount64() >= deadline) {
+                throw std::runtime_error(
+                    "timed out waiting for WinRing0 kernel driver startup");
+            }
+
+            const DWORD suggested = status.dwWaitHint / 10;
+            const DWORD delay = std::clamp<DWORD>(suggested, 100, 1000);
+            Sleep(delay);
+        }
+    }
+
     void initialize_winring() {
         if (driver != INVALID_HANDLE_VALUE) return;
 
@@ -293,6 +325,10 @@ struct MsrManager::Impl {
                 throw std::runtime_error(
                     "existing WinRing0 service is in an unsupported transition state");
             }
+            // StartService is asynchronous. Do not open the device while the
+            // kernel driver is still in START_PENDING: XMRig waits for its
+            // MSR backend to become ready before attempting register access.
+            wait_for_winring_service_running();
         }
 
         // Reuse a WinRing0 device already loaded by another compatible process.
@@ -329,6 +365,7 @@ struct MsrManager::Impl {
                     "cannot start WinRing0 kernel driver");
             }
         }
+        wait_for_winring_service_running();
 
         driver = CreateFileW(kWinRingDeviceName, GENERIC_READ | GENERIC_WRITE,
             0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
