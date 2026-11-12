@@ -220,13 +220,16 @@ int run_miner(const std::filesystem::path& config_path,
         nlohmann::json config;
         if (file) {
             config = nlohmann::json::parse(file);
-        } else if (cli_options.url) {
+        } else {
+            std::error_code config_exists_error;
+            const bool config_exists = std::filesystem::exists(config_path, config_exists_error);
+            if (!cli_options.url || config_exists || config_exists_error) {
+                throw std::runtime_error("cannot open config file: " + config_path.string());
+            }
             // A complete pool supplied on the command line is sufficient to
             // start without a config file, as with XMRig's direct CLI mode.
             config = nlohmann::json::object();
             logging::info("config", "config file not found; using command-line pool settings");
-        } else {
-            throw std::runtime_error("cannot open config.json (provide -c/--config or a complete -o/--url pool)");
         }
         if (!config.is_object())
             throw std::runtime_error("XMRig config root must be a JSON object");
