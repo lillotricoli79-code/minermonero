@@ -181,9 +181,8 @@ while ($queue.Count -gt 0) {
     }
 }
 
-# Produce a clean, portable folder locally as well as in GitHub Actions.
+# Update the portable package without deleting user files already in the output folder.
 $packageDir = Join-Path $repoRoot "release\unique-rx-windows-x64"
-if (Test-Path -LiteralPath $packageDir) { Remove-Item -LiteralPath $packageDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 Copy-Item -LiteralPath $exe -Destination $packageDir
 Get-ChildItem -LiteralPath $exeDirectory -Filter "*.dll" -File | Copy-Item -Destination $packageDir -Force
