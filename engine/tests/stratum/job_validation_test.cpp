@@ -72,13 +72,12 @@ int main() {
         {"algo", "rx/0"},
         {"nicehash", false},
     };
-    wire_job["blob"] = std::string(kNonceOffset * 2, '0') +
-        "78563412" + std::string((76 - kNonceOffset - 4) * 2, '0');
+    wire_job["blob"] = std::string(76 * 2, '0');
     const auto job = parse_job(wire_job);
     ok &= check(job.id == "job-1" && job.blob.size() == 76 &&
-                    job.target == UINT64_MAX && job.nonce == 0x12345678U &&
+                    job.target == UINT64_MAX && job.nonce == 0 &&
                     job.height == std::optional<std::uint64_t>{2345678},
-                "valid rx/0 job or little-endian nonce did not parse");
+                "valid rx/0 job did not parse");
     for (const auto* alias : {"rx/0", "rx", "randomx", "randomx/0"}) {
         auto alias_job = wire_job;
         alias_job["algo"] = alias;
@@ -108,17 +107,29 @@ int main() {
                 "non-zero pool nonce prefix was not detected when NiceHash metadata was absent");
     auto explicit_false_with_prefix = nicehash_job;
     explicit_false_with_prefix["nicehash"] = false;
-    const auto disabled_nicehash = parse_job(explicit_false_with_prefix);
-    ok &= check(disabled_nicehash.nonce == 0xab000000U &&
-                    disabled_nicehash.nonce_fixed == 0 &&
-                    disabled_nicehash.nonce_mask == UINT32_MAX,
-                "explicit false metadata did not disable NiceHash nonce masking");
+    const auto inferred_despite_false = parse_job(explicit_false_with_prefix);
+    ok &= check(inferred_despite_false.nonce == 0 &&
+                    inferred_despite_false.nonce_fixed == 0xab000000U &&
+                    inferred_despite_false.nonce_mask == 0x00ffffffU,
+                "explicit false metadata incorrectly erased XMRig's non-zero nonce-prefix detection");
+
+    auto little_endian_nonce_job = wire_job;
+    little_endian_nonce_job["blob"] = std::string(kNonceOffset * 2, '0') +
+        "78563412" + std::string((76 - kNonceOffset - 4) * 2, '0');
+    const auto parsed_little_endian_nonce = parse_job(little_endian_nonce_job);
+    ok &= check(decode_nonce_le(parsed_little_endian_nonce.blob.data() + kNonceOffset) ==
+                    0x12345678U &&
+                    parsed_little_endian_nonce.nonce == 0x00345678U &&
+                    parsed_little_endian_nonce.nonce_fixed == 0x12000000U &&
+                    parsed_little_endian_nonce.nonce_mask == 0x00ffffffU,
+                "XMRig non-zero nonce-prefix detection or little-endian decoding failed");
+
     const auto ordinary_nonce_job = parse_job(wire_job);
-    ok &= check(ordinary_nonce_job.nonce == 0x12345678U &&
+    ok &= check(ordinary_nonce_job.nonce == 0 &&
                     ordinary_nonce_job.nonce_mask == UINT32_MAX &&
                     nonce_space(ordinary_nonce_job) == kNonceSpace &&
-                    nonce_at_offset(ordinary_nonce_job, 0xffffffffULL) == 0x12345677U,
-                "explicitly disabled NiceHash mode did not retain the full 32-bit nonce range");
+                    nonce_at_offset(ordinary_nonce_job, 0xffffffffULL) == 0xffffffffU,
+                "ordinary zero-prefix job did not retain the full 32-bit nonce range");
 
     auto job_without_height = wire_job;
     job_without_height.erase("height");
