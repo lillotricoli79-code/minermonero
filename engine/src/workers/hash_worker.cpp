@@ -39,7 +39,7 @@ inline constexpr std::size_t kMaximumQueuedShares = 8192;
 std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
                              std::uint64_t& local_worker_hashes,
                              std::uint64_t& unpublished_hashes,
-                             const std::shared_ptr<const MiningWork>& work,
+                             const MiningWork& work,
                              std::uint32_t nonce, const Hash& hash,
                              std::uint64_t maximum_hashes) {
     std::uint64_t count = 0;
@@ -86,12 +86,12 @@ std::uint64_t complete_hash(MiningState& state, std::uint32_t worker_id,
     // Almost every RandomX result is below the pool's share target. Test it
     // before taking either shared mutex: the hot path must not serialize all
     // CPU workers on a queue lock or a current-work lookup.
-    if (hash_meets_target(hash, work->job.target)) {
+    if (hash_meets_target(hash, work.job.target)) {
         // Serialize only actual share candidates with queue insertion. This
         // closes the reconnect/job-generation race without locking per hash.
         std::lock_guard lock(state.share_mutex);
         const auto latest_work = state.current_work();
-        if (latest_work && latest_work->generation == work->generation) {
+        if (latest_work && latest_work->generation == work.generation) {
             if (state.shares.size() < kMaximumQueuedShares) {
                 state.shares.push_back({
                     latest_work->generation, latest_work->job.id, nonce, hash, latest_work->job.target});
@@ -157,7 +157,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     Vm vm;
     std::shared_ptr<const MiningWork> active_work;
     std::shared_ptr<const MiningWork> published_work;
-    std::shared_ptr<const MiningWork> pending_work;
+    const MiningWork* pending_work = nullptr;
     std::uint64_t observed_work_revision = UINT64_MAX;
     std::vector<std::uint8_t> blob;
     std::uint64_t exhausted_generation = 0;
@@ -173,18 +173,18 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
     Hash hash{};
 
     const auto flush_pending = [&]() {
-        if (!pipeline_active || !vm || !pending_work) {
+        if (!pipeline_active || !vm || pending_work == nullptr) {
             pipeline_active = false;
-            pending_work.reset();
+            pending_work = nullptr;
             return std::uint64_t{0};
         }
 
         randomx_calculate_hash_last(vm.get(), hash.data());
         pipeline_active = false;
-        auto completed_work = std::move(pending_work);
-        pending_work.reset();
+        const MiningWork* completed_work = pending_work;
+        pending_work = nullptr;
         const auto count = complete_hash(
-            state, worker_id, local_worker_hashes, unpublished_hashes, completed_work, pending_nonce, hash, maximum_hashes);
+            state, worker_id, local_worker_hashes, unpublished_hashes, *completed_work, pending_nonce, hash, maximum_hashes);
         if (maximum_hashes != 0 && count >= maximum_hashes) {
             state.stop.store(true, std::memory_order_release);
         }
@@ -218,8 +218,11 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             }
             if (exhausted_generation != 0) exhausted_generation = 0;
 
-            const bool job_changed =
-                !active_work || active_work->generation != work->generation;
+            // Keep shared_ptr reference counting out of the per-hash hot path.
+            // active_work owns the immutable snapshot while pending_work is a
+            // non-owning pointer into it; finish the old pipeline before replacing it.
+            const bool work_snapshot_changed =
+                !active_work || active_work.get() != work.get();
             const auto requested_vm_config_generation =
                 state.vm_config_generation.load(std::memory_order_acquire);
             const bool vm_flags_changed =
@@ -230,7 +233,7 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 active_work && (active_work->cache != work->cache ||
                                active_work->dataset != work->dataset);
 
-            if (pipeline_active && (job_changed || vm_flags_changed || memory_changed)) {
+            if (pipeline_active && (work_snapshot_changed || vm_flags_changed || memory_changed)) {
                 flush_pending();
                 if (state.stop.load(std::memory_order_acquire)) break;
             }
@@ -280,10 +283,10 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
                 }
             }
 
-            if (job_changed) {
+            if (work_snapshot_changed) {
                 blob = work->job.blob;
+                active_work = work;
             }
-            active_work = work;
 
             // Each worker reserves a small disjoint nonce range. Hashes
             // inside the range require no shared atomic operation; new ranges
@@ -326,16 +329,16 @@ void hash_worker(MiningState& state, std::uint32_t worker_id,
             } else {
                 randomx_calculate_hash_next(
                     vm.get(), blob.data(), blob.size(), hash.data());
-                if (pending_work) {
+                if (pending_work != nullptr) {
                     const auto count = complete_hash(
-                        state, worker_id, local_worker_hashes, unpublished_hashes, pending_work, pending_nonce, hash, maximum_hashes);
+                        state, worker_id, local_worker_hashes, unpublished_hashes, *pending_work, pending_nonce, hash, maximum_hashes);
                     if (maximum_hashes != 0 && count >= maximum_hashes) {
                         state.stop.store(true, std::memory_order_release);
                     }
                 }
             }
 
-            pending_work = work;
+            pending_work = active_work.get();
             pending_nonce = nonce;
         }
 
