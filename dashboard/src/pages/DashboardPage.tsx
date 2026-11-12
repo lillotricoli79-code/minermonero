@@ -109,6 +109,19 @@ type WorkerStatus = { id: number; hashes: number; hashrate_hps: number; active: 
 type BestStatus = { estimated_hashes: number; effort_percent: number; top_difficulties: { difficulty: number; at_unix_seconds: number }[] };
 type LogItem = { id: number; time: number; message: string; engine?: string };
 
+function logIdentity(item: LogItem): string {
+  return `${Math.floor(item.time)}:${item.engine ?? ""}:${item.message}`;
+}
+
+function countLogIdentities(items: LogItem[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const key = logIdentity(item);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
 const emptyStatus: Status = {
   state: "OFFLINE",
   managed: false,
@@ -153,22 +166,30 @@ function App() {
       .then(({ lines }) => {
         if (!active || !lines.length) return;
         const entries = lines.map((line, index): LogItem => {
-          const parsed = line.match(/^\[?(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]?\s+\w+\s+(.*)$/);
+          const parsed = line.match(/^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\s+\\w+\\s+(?:\\[[^\\]]+:\\d+\\]\\s+)?(?:\\[([^\\]]+)\\]\\s+)?(.*)$/);
           const time = parsed
             ? Date.parse(parsed[1].replace(" ", "T")) / 1000
             : Date.now() / 1000;
           return {
             id: index - lines.length,
             time: Number.isFinite(time) ? time : Date.now() / 1000,
-            message: parsed ? parsed[2] : line,
+            message: parsed ? parsed[3] : line,
+            engine: parsed?.[2],
           };
         });
         setLogs((current) => {
-          const existing = new Set(current.map((item) => item.message));
-          const unseen = entries.filter((item) => !existing.has(item.message));
+          // Count occurrences instead of using a Set: repeated identical
+          // events in the same second are distinct log entries.
+          const existing = countLogIdentities(current);
+          const unseen = entries.filter((item) => {
+            const key = logIdentity(item);
+            const count = existing.get(key) ?? 0;
+            if (count === 0) return true;
+            existing.set(key, count - 1);
+            return false;
+          });
           return [...unseen, ...current].slice(-400);
         });
-      })
       .catch(() => {
         // The live log stream remains available if the history file cannot be read.
       });
@@ -237,19 +258,16 @@ function App() {
           ...nextLogs.map((item) => item.id),
         );
         setLogs((current) => {
-          // Persistent history and the live in-memory stream overlap during
-          // startup. Match their second-resolution timestamp and message so
-          // the same line is not rendered twice with different IDs.
-          const seen = new Set(
-            current.map((item) => `${Math.floor(item.time)}:${item.message}`),
-          );
-          const unseen: LogItem[] = [];
-          for (const item of nextLogs) {
-            const key = `${Math.floor(item.time)}:${item.message}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            unseen.push(item);
-          }
+          // Reconcile history and live entries by event identity and count.
+          // Repeated identical messages are preserved instead of collapsed.
+          const existing = countLogIdentities(current);
+          const unseen = nextLogs.filter((item) => {
+            const key = logIdentity(item);
+            const count = existing.get(key) ?? 0;
+            if (count === 0) return true;
+            existing.set(key, count - 1);
+            return false;
+          });
           return [...current, ...unseen].slice(-400);
         });
       }
