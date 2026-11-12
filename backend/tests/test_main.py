@@ -541,6 +541,9 @@ class LocalApiTests(unittest.TestCase):
         self.assertFalse(msr_override_enabled({"wrmsr": True}))
         self.assertFalse(msr_override_enabled({"wrmsr": False}))
         self.assertFalse(msr_override_enabled({"wrmsr": -1}))
+        self.assertEqual(public_config({
+            "cpu": {}, "http": {"port": 18088}, "randomx": {"wrmsr": 6}
+        })["msr_mode"], "fast")
 
     def test_custom_msr_payload_uses_compatible_external_backend(self):
         self.assertTrue(msr_override_enabled({"wrmsr": ["0x1a4:0xf"]}))
