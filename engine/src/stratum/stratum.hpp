@@ -58,6 +58,16 @@ struct Job {
     }
 };
 
+struct MinerCliOptions {
+    std::optional<std::string> url;
+    std::optional<std::string> user;
+    std::optional<std::string> password;
+    std::optional<std::string> worker;
+    std::optional<std::string> tls_fingerprint;
+    std::optional<bool> tls;
+    std::optional<bool> keepalive;
+};
+
 struct PoolConfig {
     std::string host;
     std::string port;
@@ -108,6 +118,7 @@ std::vector<PoolConfig> parse_pool_configs(const nlohmann::json& config);
 PoolConfig parse_pool_config(const nlohmann::json& config);
 int run_miner(const std::filesystem::path& config_path,
               std::uint64_t maximum_hashes = 0,
-              std::uint32_t thread_override = 0);
+              std::uint32_t thread_override = 0,
+              MinerCliOptions cli_options = {});
 
 } // namespace unique_rx
