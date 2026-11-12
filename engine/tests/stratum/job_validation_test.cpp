@@ -322,9 +322,13 @@ int main() {
                     {"result", {{"status", "OK"}}}}) &&
                     rpc_response_failed(nlohmann::json{{"id", 2}, {"error", nullptr},
                     {"result", {{"status", "REJECT"}}}}) &&
+                    rpc_response_failed(nlohmann::json{{"id", 2}, {"error", nullptr},
+                    {"result", nlohmann::json::object()}}) &&
+                    rpc_response_failed(nlohmann::json{{"id", 2}, {"error", nullptr},
+                    {"result", {{"status", nullptr}}}}) &&
                     rpc_response_failed(nlohmann::json{{"id", 2},
                     {"error", {{"message", "denied"}}}}),
-                "JSON-RPC error and explicit pool status validation failed");
+                "JSON-RPC error, missing acknowledgement and explicit pool status validation failed");
     ok &= check(format_rpc_error(nlohmann::json("denied")) == "denied" &&
                     format_rpc_error(nlohmann::json::array({"low", "difficulty"})) ==
                         "low: difficulty" &&
