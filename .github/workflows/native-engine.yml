@@ -71,9 +71,8 @@ jobs:
           printf '#!/usr/bin/env bash\nset -euo pipefail\nexec "$(dirname "$0")/scripts/linux/stop.sh" "$@"\n' > "$out/stop.sh"
           printf '#!/usr/bin/env bash\nset -euo pipefail\nexec "$(dirname "$0")/scripts/linux/diagnose.sh" "$@"\n' > "$out/diagnose.sh"
           chmod +x "$out/start.sh" "$out/stop.sh" "$out/diagnose.sh"
-          cp LICENSES/XMRIG-GPL-3.0.txt LICENSES/RXMINER-MIT.txt LICENSES/NYXRX-MIT.txt LICENSES/XMR-MINER-GPL-3.0.txt LICENSES/PAWNIO-MODULES-COPYING "$out/licenses/"
+          cp LICENSES/XMRIG-GPL-3.0.txt LICENSES/RXMINER-MIT.txt LICENSES/NYXRX-MIT.txt LICENSES/XMR-MINER-GPL-3.0.txt "$out/licenses/"
           cp engine/src/randomx/upstream/LICENSE "$out/licenses/RANDOMX-BSD-3-CLAUSE.txt"
-          cp engine/msr/PawnIO-COPYING "$out/msr/COPYING"
           git archive --format=zip --output="$out/unique-rx-source.zip" HEAD
           git rev-parse HEAD > "$out/SOURCE-COMMIT.txt"
           sha256sum "$out/unique-rx" "$out/unique-rx-source.zip" > "$out/SHA256SUMS.txt"
