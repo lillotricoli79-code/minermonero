@@ -188,7 +188,10 @@ Get-ChildItem -LiteralPath $exeDirectory -Filter "*.dll" -File | Copy-Item -Dest
 $exeHash = (Get-FileHash -LiteralPath (Join-Path $packageDir "unique-rx.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
 $shaLines = @("$exeHash  unique-rx.exe")
 $winRingPackaged = $false
-$builtWinRingDriver = Join-Path $exeDirectory "WinRing0x64.sys"
+# The engine loads WinRing0x64.sys from beside unique-rx.exe. The build
+# discovers/copies the user-supplied driver into engine\\msr, so package that
+# canonical source directly instead of looking for a file CMake never stages.
+$builtWinRingDriver = $winRingSource
 if (Test-Path -LiteralPath $builtWinRingDriver -PathType Leaf) {
     $driverHash = (Get-FileHash -LiteralPath $builtWinRingDriver -Algorithm SHA256).Hash.ToLowerInvariant()
     Copy-Item -LiteralPath $builtWinRingDriver -Destination (Join-Path $packageDir "WinRing0x64.sys") -Force
