@@ -493,6 +493,8 @@ int run_miner(const std::filesystem::path& config_path,
                 "randomx.wrmsr must be boolean, integer preset, or XMRig string array");
         }
 
+        const bool msr_explicitly_disabled = !msr_enabled;
+
         bool restore_msr_on_exit = true;
         if (randomx_config.contains("rdmsr") && !randomx_config["rdmsr"].is_null()) {
             if (!randomx_config["rdmsr"].is_boolean()) {
