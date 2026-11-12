@@ -904,7 +904,7 @@ int run_miner(const std::filesystem::path& config_path,
                         // resizing or otherwise changing the user's terminal window.
                         const bool split_columns = terminal_columns >= 150;
                         const auto shell_width = split_columns
-                            ? std::clamp<std::size_t>(terminal_columns * 58 / 100, 92, 120)
+                            ? std::clamp<std::size_t>(terminal_columns * 55 / 100, 92, 112)
                             : std::clamp<std::size_t>(terminal_columns, 80, 180);
                         const auto right_width = split_columns
                             ? terminal_columns - shell_width - 5 : 0;
@@ -914,7 +914,7 @@ int run_miner(const std::filesystem::path& config_path,
                         const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(
                             Clock::now() - started).count();
                         const auto system_sample = shell_telemetry.sample();
-                        std::cout << "\x1b[2J\x1b[H"
+                        std::cout << "\x1b[H"
                                   << "\x1b[1;96m"
                                   << "  +======================================================================+\n"
                                   << "  |  U N I Q U E   R X     //     MONERO RANDOMX CPU MINER                |\n"
@@ -922,7 +922,7 @@ int run_miner(const std::filesystem::path& config_path,
                                   << "  +======================================================================+"
                                   << "\x1b[0m\n"
                                   << "  \x1b[1;34m" << std::string(shell_width - 4, '=') << "\x1b[0m\n"
-                                  << "  \x1b[1;35m[ SYSTEM / RANDOMX ]\x1b[0m\n";
+                                  << "  \x1b[1;94m[ SYSTEM / RANDOMX ]\x1b[0m\n";
                         line("ALGORITMO", "RandomX rx/0");
                         line("CPU", cpu_summary.value("brand", std::string("non disponibile")));
                         line("FEATURE", std::string("AES ") + (features.value("aes", false) ? "ON" : "OFF") +
@@ -949,7 +949,7 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         line("WORKER RATE", worker_summary.str().empty() ? "in inizializzazione" : worker_summary.str());
                         std::cout << "  \x1b[1;34m" << separator << "\x1b[0m\n"
-                                  << "  \x1b[1;35m[ PERFORMANCE ]\x1b[0m  "
+                                  << "  \x1b[1;94m[ PERFORMANCE ]\x1b[0m  "
                                   << "\x1b[1;97mHASHRATE\x1b[0m  "
                                   << "\x1b[1;32m10s " << std::setw(16) << rate_text(average_rate(10))
                                   << "\x1b[0m  \x1b[1;36m60s " << std::setw(16) << rate_text(average_rate(60))
@@ -972,7 +972,7 @@ int run_miner(const std::filesystem::path& config_path,
                             graph_buckets[bucket] = sum / static_cast<double>(last - first);
                             graph_peak = std::max(graph_peak, graph_buckets[bucket]);
                         }
-                        std::cout << "  \x1b[1;35mTREND 15m\x1b[0m ";
+                        std::cout << "  \x1b[1;94mTREND 15m\x1b[0m ";
                         static constexpr char graph_levels[] = " .:-=+*#@";
                         static constexpr const char* graph_colors[] = {
                             "\x1b[90m", "\x1b[37m", "\x1b[36m", "\x1b[96m",
@@ -986,7 +986,7 @@ int run_miner(const std::filesystem::path& config_path,
                         }
                         std::cout << '\n'
                                   << "  \x1b[1;34m" << separator << "\x1b[0m\n"
-                                  << "  \x1b[1;35m[ SHARE STATISTICS ]\x1b[0m\n";
+                                  << "  \x1b[1;94m[ SHARE STATISTICS ]\x1b[0m\n";
                         const auto accepted = state.accepted.load();
                         const auto rejected = state.rejected.load();
                         const auto stale = state.stale_shares.load();
@@ -1119,7 +1119,7 @@ int run_miner(const std::filesystem::path& config_path,
                             " | temp " + optional_metric(system_sample.temperature_c, " C") +
                             " | power " + optional_metric(system_sample.package_power_watts, " W"));
                         std::cout << "  \x1b[1;34m" << separator << "\x1b[0m\n"
-                                  << "  \x1b[1;35m[ LIVE EVENT LOG ]\x1b[0m  [logs up/down/tail]  "
+                                  << "  \x1b[1;94m[ LIVE EVENT LOG ]\x1b[0m  [logs up/down/tail]  "
                                   << (log_scroll == 0 ? "LIVE" : "SCROLL -" + std::to_string(log_scroll))
                                   << "\n";
                         const auto entries = logging::recent_entries(2048);
@@ -1147,7 +1147,7 @@ int run_miner(const std::filesystem::path& config_path,
                         std::cout.rdbuf(original_output);
                         const auto left_text = left_screen.str();
                         if (!split_columns) {
-                            std::cout << left_text << std::flush;
+                            std::cout << left_text << "\x1b[J" << std::flush;
                             return;
                         }
                         std::vector<std::string> right_lines;
@@ -1338,7 +1338,7 @@ int run_miner(const std::filesystem::path& config_path,
                             std::cout << '\n';
                             ++row;
                         }
-                        std::cout << std::flush;
+                        std::cout << "\x1b[J" << std::flush;
                     };
                     const auto process_command = [&](const std::string& line) {
                         std::istringstream input(line);
