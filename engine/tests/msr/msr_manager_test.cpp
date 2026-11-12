@@ -88,13 +88,15 @@ bool test_mock_msr_transactions() {
     ok &= check(backend.registers == expected_after_restore,
                 "MSR restore overwrote bits outside the miner's write mask");
 
-    // Unrelated bits may change concurrently while a masked write is
-    // applied. Read-back must verify the owned mask, not the whole register.
+    // A successful backend WRMSR is authoritative, as in XMRig. Do not
+    // require an additional RDMSR read-back after each write.
     backend.registers = initial;
     backend.writes = 0;
     backend.reads = 0;
     backend.mutate_unmasked_after_write = true;
     apply_registers(cpus, writes, snapshots, read, write, log);
+    ok &= check(backend.reads == 8,
+                "MSR apply performed unexpected post-write read-back operations");
     backend.mutate_unmasked_after_write = false;
     const std::map<std::pair<std::size_t, std::uint64_t>, std::uint64_t>
         expected_after_apply{
@@ -152,20 +154,6 @@ bool test_mock_msr_transactions() {
     backend.fail_write_at = 0;
     ok &= check(backend.registers == initial,
                 "partial mock MSR apply did not roll back all prior writes");
-
-    backend.writes = 0;
-    backend.reads = 0;
-    backend.corrupt_read_at = 6; // snapshots (4), apply read (1), then read-back
-    bool readback_failed = false;
-    try {
-        apply_registers(cpus, writes, snapshots, read, write, log);
-    } catch (const std::exception&) {
-        readback_failed = true;
-    }
-    backend.corrupt_read_at = 0;
-    ok &= check(readback_failed, "injected MSR read-back mismatch was not detected");
-    ok &= check(backend.registers == initial,
-                "read-back mismatch did not roll back the simulated MSR write");
 
     backend.writes = 0;
     backend.reads = 0;

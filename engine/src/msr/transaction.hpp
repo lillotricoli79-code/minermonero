@@ -30,11 +30,11 @@ bool restore_registers(std::vector<RegisterSnapshot>& snapshots,
             // the original snapshot was taken.
             const auto current = read(it->cpu_index, it->register_id);
             const auto restored = (current & ~it->mask) | (it->value & it->mask);
+            // Match XMRig's native MSR backend: a successful backend write
+            // is the operation result. Do not issue an extra RDMSR here;
+            // some supported drivers/firmware do not reliably expose an
+            // immediate read-back even when WRMSR completed successfully.
             write(it->cpu_index, it->register_id, restored);
-            if ((read(it->cpu_index, it->register_id) & it->mask) !=
-                (it->value & it->mask)) {
-                throw std::runtime_error("MSR restore read-back verification failed");
-            }
             it->modified = false;
         } catch (const std::exception& error) {
             pending = true;
@@ -73,11 +73,11 @@ void apply_registers(const std::vector<std::size_t>& cpu_indices,
             const std::uint64_t value = (item.value & item.mask) |
                                         (current & ~item.mask);
             snapshot.modified = true;
+            // XMRig treats the backend WRMSR result as authoritative. An
+            // immediate RDMSR verification is not part of its transaction
+            // and can falsely reject a successful write on Windows drivers.
+            // Keep the pre-write snapshot and rollback on actual backend errors.
             write(snapshot.cpu_index, snapshot.register_id, value);
-            if ((read(snapshot.cpu_index, snapshot.register_id) & item.mask) !=
-                (value & item.mask)) {
-                throw std::runtime_error("MSR read-back verification failed");
-            }
         }
     } catch (...) {
         (void)restore_registers(snapshots, read, write, log);
