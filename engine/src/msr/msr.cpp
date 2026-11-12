@@ -33,8 +33,7 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-#include <winreg.h>
-#include <openssl/evp.h>
+#include <winsvc.h>
 #include "platform/affinity.hpp"
 #ifdef _MSC_VER
 #include <intrin.h>
@@ -103,11 +102,12 @@ std::optional<CpuIdentity> detect_cpu_identity() {
 
 #ifdef _WIN32
 
-using PawnioOpen = HRESULT(WINAPI*)(PHANDLE);
-using PawnioLoad = HRESULT(WINAPI*)(HANDLE, const UCHAR*, SIZE_T);
-using PawnioExecute = HRESULT(WINAPI*)(
-    HANDLE, PCSTR, const ULONG64*, SIZE_T, PULONG64, SIZE_T, PSIZE_T);
-using PawnioClose = HRESULT(WINAPI*)(HANDLE);
+constexpr wchar_t kWinRingServiceName[] = L"WinRing0_1_2_0";
+constexpr wchar_t kWinRingDeviceName[] = L"\\\\.\\WinRing0_1_2_0";
+constexpr DWORD kWinRingReadMsrIoctl =
+    CTL_CODE(40000, 0x821, METHOD_BUFFERED, FILE_ANY_ACCESS);
+constexpr DWORD kWinRingWriteMsrIoctl =
+    CTL_CODE(40000, 0x822, METHOD_BUFFERED, FILE_ANY_ACCESS);
 
 struct ThreadAffinity {
     GROUP_AFFINITY previous{};
@@ -142,42 +142,6 @@ std::filesystem::path executable_directory() {
     }
     buffer.resize(length);
     return std::filesystem::path(buffer).parent_path();
-}
-
-std::filesystem::path pawnio_library_path() {
-    std::vector<std::filesystem::path> candidates;
-    wchar_t install_path[32768]{};
-    DWORD bytes = sizeof(install_path);
-    if (RegGetValueW(
-            HKEY_LOCAL_MACHINE,
-            L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\PawnIO",
-            L"InstallLocation", RRF_RT_REG_SZ, nullptr, install_path, &bytes) == ERROR_SUCCESS) {
-        candidates.emplace_back(std::filesystem::path(install_path) / L"PawnIOLib.dll");
-    }
-    if (const wchar_t* program_files = _wgetenv(L"ProgramFiles")) {
-        candidates.emplace_back(
-            std::filesystem::path(program_files) / L"PawnIO" / L"PawnIOLib.dll");
-    }
-    candidates.emplace_back(executable_directory() / L"PawnIOLib.dll");
-    for (const auto& candidate : candidates) {
-        if (std::filesystem::is_regular_file(candidate)) return candidate;
-    }
-    return {};
-}
-
-std::filesystem::path default_module_path() {
-    const auto directory = executable_directory();
-    const std::vector<std::filesystem::path> candidates{
-        directory / L"msr" / L"IntelMSR.bin",
-        directory / L"IntelMSR.bin",
-        directory.parent_path() / L"msr" / L"IntelMSR.bin",
-        directory.parent_path().parent_path() / L"msr" / L"IntelMSR.bin",
-        std::filesystem::current_path() / L"msr" / L"IntelMSR.bin",
-    };
-    for (const auto& candidate : candidates) {
-        if (std::filesystem::is_regular_file(candidate)) return candidate;
-    }
-    return candidates.front();
 }
 
 #else
@@ -249,105 +213,153 @@ struct MsrManager::Impl {
     bool active = false;
 
 #ifdef _WIN32
-    HMODULE library = nullptr;
-    HANDLE handle = nullptr;
-    PawnioOpen open = nullptr;
-    PawnioLoad load = nullptr;
-    PawnioExecute execute = nullptr;
-    PawnioClose close = nullptr;
+    HANDLE driver = INVALID_HANDLE_VALUE;
+    SC_HANDLE manager = nullptr;
+    SC_HANDLE service = nullptr;
+    bool reuse_service = false;
 
     std::vector<msr_detail::RegisterSnapshot> snapshots;
     std::vector<std::pair<WORD, DWORD>> msr_processors;
 
-    void initialize_pawnio() {
-        if (handle != nullptr) return;
-        const auto dll_path = pawnio_library_path();
-        if (dll_path.empty()) {
-            throw std::runtime_error(
-                "PawnIO is not installed or PawnIOLib.dll was not found in a trusted location. "
-                "Install the official signed PawnIO driver first.");
+    void close_winring() noexcept {
+        if (driver != INVALID_HANDLE_VALUE) {
+            CloseHandle(driver);
+            driver = INVALID_HANDLE_VALUE;
         }
-        library = LoadLibraryExW(
-            dll_path.c_str(), nullptr,
-            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-        if (library == nullptr) {
-            throw std::runtime_error(
-                "PawnIOLib.dll could not be loaded from its resolved absolute path");
-        }
-        open = reinterpret_cast<PawnioOpen>(GetProcAddress(library, "pawnio_open"));
-        load = reinterpret_cast<PawnioLoad>(GetProcAddress(library, "pawnio_load"));
-        execute = reinterpret_cast<PawnioExecute>(GetProcAddress(library, "pawnio_execute"));
-        close = reinterpret_cast<PawnioClose>(GetProcAddress(library, "pawnio_close"));
-        if (!open || !load || !execute || !close) {
-            throw std::runtime_error("PawnIOLib.dll is missing required exports");
-        }
-
-        if (module_path.empty()) module_path = default_module_path();
-        std::ifstream module_file(module_path, std::ios::binary);
-        if (!module_file) {
-            throw std::runtime_error(
-                "IntelMSR.bin not found. Place the official PawnIO Intel MSR module in the miner's msr directory.");
-        }
-        const std::vector<UCHAR> module(
-            (std::istreambuf_iterator<char>(module_file)),
-            std::istreambuf_iterator<char>());
-        if (module.empty()) {
-            throw std::runtime_error("IntelMSR.bin is empty or unreadable");
-        }
-
-        // Pin the exact official PawnIO.Modules 0.2.11 Intel module. PawnIO
-        // validates the module signature; this hash additionally rejects a
-        // replaced, truncated or unrelated module before it is submitted.
-        static constexpr std::array<unsigned char, 32> expected_sha256{
-            0xd6, 0xed, 0x85, 0xd6, 0x5a, 0xb1, 0x7a, 0x22,
-            0xf8, 0x13, 0xef, 0x98, 0x20, 0x7d, 0x6d, 0x53,
-            0x71, 0x55, 0xee, 0x2d, 0xed, 0x59, 0x76, 0xa2,
-            0x1c, 0xb4, 0x84, 0x13, 0xc9, 0xb9, 0x2e, 0x5f,
-        };
-        std::array<unsigned char, EVP_MAX_MD_SIZE> actual_sha256{};
-        unsigned int actual_sha256_size = 0;
-        if (EVP_Digest(module.data(), module.size(), actual_sha256.data(),
-                       &actual_sha256_size, EVP_sha256(), nullptr) != 1 ||
-            actual_sha256_size != expected_sha256.size() ||
-            !std::equal(expected_sha256.begin(), expected_sha256.end(),
-                        actual_sha256.begin())) {
-            throw std::runtime_error(
-                "IntelMSR.bin SHA-256 mismatch; expected the official PawnIO.Modules 0.2.11 Intel module");
-        }
-
-        const HRESULT open_result = open(&handle);
-        if (FAILED(open_result) || handle == nullptr) {
-            if (handle != nullptr) {
-                close(handle);
-                handle = nullptr;
+        if (service != nullptr) {
+            if (!reuse_service) {
+                SERVICE_STATUS status{};
+                if (!ControlService(service, SERVICE_CONTROL_STOP, &status)) {
+                    const DWORD error = GetLastError();
+                    if (error != ERROR_SERVICE_NOT_ACTIVE &&
+                        error != ERROR_SERVICE_CANNOT_ACCEPT_CTRL) {
+                        try {
+                            logging::warning("msr", "WinRing0 stop request failed: " +
+                                std::to_string(error));
+                        } catch (...) {}
+                    }
+                }
+                if (!DeleteService(service)) {
+                    try {
+                        logging::warning("msr", "WinRing0 service removal failed: " +
+                            std::to_string(GetLastError()));
+                    } catch (...) {}
+                }
             }
-            throw std::runtime_error(
-                "PawnIO driver could not be opened; check installation and administrator rights");
+            CloseServiceHandle(service);
+            service = nullptr;
         }
-        if (FAILED(load(handle, module.data(), module.size()))) {
-            close(handle);
-            handle = nullptr;
+        if (manager != nullptr) {
+            CloseServiceHandle(manager);
+            manager = nullptr;
+        }
+    }
+
+    void initialize_winring() {
+        if (driver != INVALID_HANDLE_VALUE) return;
+
+        manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_ALL_ACCESS);
+        if (manager == nullptr) {
+            const DWORD error = GetLastError();
+            throw std::system_error(static_cast<int>(error), std::system_category(),
+                error == ERROR_ACCESS_DENIED
+                    ? "WinRing0 requires administrator privileges"
+                    : "cannot open Windows Service Control Manager");
+        }
+
+        service = OpenServiceW(manager, kWinRingServiceName, SERVICE_ALL_ACCESS);
+        if (service != nullptr) {
+            SERVICE_STATUS status{};
+            if (!QueryServiceStatus(service, &status)) {
+                throw std::system_error(static_cast<int>(GetLastError()),
+                    std::system_category(), "cannot query existing WinRing0 service");
+            }
+            if (status.dwCurrentState == SERVICE_RUNNING) {
+                reuse_service = true;
+            } else {
+                if (!DeleteService(service)) {
+                    throw std::system_error(static_cast<int>(GetLastError()),
+                        std::system_category(), "cannot remove stopped WinRing0 service");
+                }
+                CloseServiceHandle(service);
+                service = nullptr;
+            }
+        }
+
+        // Reuse a WinRing0 device already loaded by another compatible process.
+        driver = CreateFileW(kWinRingDeviceName, GENERIC_READ | GENERIC_WRITE,
+            0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (driver != INVALID_HANDLE_VALUE) {
+            reuse_service = true;
+            return;
+        }
+        if (reuse_service) {
+            throw std::system_error(static_cast<int>(GetLastError()),
+                std::system_category(), "existing WinRing0 service is running but its device cannot be opened");
+        }
+
+        const auto driver_path = executable_directory() / L"WinRing0x64.sys";
+        if (!std::filesystem::is_regular_file(driver_path)) {
             throw std::runtime_error(
-                "PawnIO rejected IntelMSR.bin; use the official module matching the pinned SHA-256");
+                "WinRing0x64.sys was not found beside unique-rx.exe");
+        }
+
+        service = CreateServiceW(manager, kWinRingServiceName, kWinRingServiceName,
+            SERVICE_ALL_ACCESS, SERVICE_KERNEL_DRIVER, SERVICE_DEMAND_START,
+            SERVICE_ERROR_NORMAL, driver_path.c_str(), nullptr, nullptr, nullptr,
+            nullptr, nullptr);
+        if (service == nullptr) {
+            throw std::system_error(static_cast<int>(GetLastError()),
+                std::system_category(), "cannot install WinRing0 kernel driver service");
+        }
+
+        if (!StartServiceW(service, 0, nullptr)) {
+            const DWORD error = GetLastError();
+            if (error != ERROR_SERVICE_ALREADY_RUNNING) {
+                throw std::system_error(static_cast<int>(error), std::system_category(),
+                    "cannot start WinRing0 kernel driver");
+            }
+        }
+
+        driver = CreateFileW(kWinRingDeviceName, GENERIC_READ | GENERIC_WRITE,
+            0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (driver == INVALID_HANDLE_VALUE) {
+            throw std::system_error(static_cast<int>(GetLastError()),
+                std::system_category(), "cannot connect to WinRing0 device");
         }
     }
 
     std::uint64_t read_current_msr(std::uint32_t register_id) {
-        const ULONG64 input[1]{register_id};
-        ULONG64 output[1]{};
-        SIZE_T returned = 0;
-        if (FAILED(execute(handle, "ioctl_read_msr", input, 1, output, 1, &returned)) ||
-            returned != 1) {
-            throw std::runtime_error("PawnIO failed to read the requested MSR");
+        std::uint64_t value = 0;
+        DWORD returned = 0;
+        if (driver == INVALID_HANDLE_VALUE ||
+            !DeviceIoControl(driver, kWinRingReadMsrIoctl,
+                &register_id, sizeof(register_id), &value, sizeof(value),
+                &returned, nullptr) || returned != sizeof(value)) {
+            throw std::system_error(static_cast<int>(GetLastError()),
+                std::system_category(), "WinRing0 failed to read MSR " +
+                std::to_string(register_id));
         }
-        return output[0];
+        return value;
     }
 
     void write_current_msr(std::uint32_t register_id, std::uint64_t value) {
-        const ULONG64 input[2]{register_id, value};
-        SIZE_T returned = 0;
-        if (FAILED(execute(handle, "ioctl_write_msr", input, 2, nullptr, 0, &returned))) {
-            throw std::runtime_error("PawnIO failed to write the requested MSR");
+        struct WriteInput {
+            std::uint32_t register_id;
+            std::uint32_t value_words[2];
+        } input{};
+        static_assert(sizeof(WriteInput) == 12);
+        input.register_id = register_id;
+        std::memcpy(input.value_words, &value, sizeof(value));
+        DWORD output = 0;
+        DWORD returned = 0;
+        if (driver == INVALID_HANDLE_VALUE ||
+            !DeviceIoControl(driver, kWinRingWriteMsrIoctl,
+                &input, sizeof(input), &output, sizeof(output),
+                &returned, nullptr)) {
+            throw std::system_error(static_cast<int>(GetLastError()),
+                std::system_category(), "WinRing0 failed to write MSR " +
+                std::to_string(register_id));
         }
     }
 
@@ -380,7 +392,7 @@ struct MsrManager::Impl {
         if (active) return;
         if (preset.writes.empty()) throw std::runtime_error("MSR preset contains no writes");
         snapshots.clear();
-        initialize_pawnio();
+        initialize_winring();
         msr_processors = platform::available_processors();
         if (msr_processors.empty()) {
             throw std::runtime_error("Windows reports no processors available to this process");
@@ -422,16 +434,6 @@ struct MsrManager::Impl {
         active = msr_detail::restore_registers(snapshots, read, write, log);
     }
 
-    void close_pawnio() noexcept {
-        if (handle != nullptr && close != nullptr) {
-            close(handle);
-            handle = nullptr;
-        }
-        if (library != nullptr) {
-            FreeLibrary(library);
-            library = nullptr;
-        }
-    }
 #else
     std::vector<int> cpu_fds;
     std::vector<msr_detail::RegisterSnapshot> snapshots;
@@ -578,7 +580,7 @@ struct MsrManager::Impl {
             // Logging must never interfere with register restoration or shutdown.
         }
 #ifdef _WIN32
-        close_pawnio();
+        close_winring();
 #else
         // A final close is required even if the kernel rejected a restore write.
         close_cpu_fds();
@@ -607,7 +609,7 @@ void MsrManager::apply_randomx_preset() {
 #ifdef _WIN32
     if (cpu->vendor != "GenuineIntel") {
         throw std::runtime_error(
-            "Windows MSR backend currently supports Intel PawnIO only");
+            "Windows MSR backend currently supports Intel WinRing0 only");
     }
 #endif
     impl_->apply(*preset);
