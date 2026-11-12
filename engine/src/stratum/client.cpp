@@ -1773,12 +1773,14 @@ int run_miner(const std::filesystem::path& config_path,
                             continue;
                         }
                         if (character == 27) { escape_state = 1; continue; }
-                        if (character == '\r' || character == '\n')
-                            std::cout << '\n' << std::flush;
-                        else if (character == 127 || character == '\b')
-                            std::cout << "\b \b" << std::flush;
-                        else if (character >= 32 && character <= 126)
-                            std::cout << character << std::flush;
+                        if (terminal_input_mode.active) {
+                            if (character == '\r' || character == '\n')
+                                std::cout << '\n' << std::flush;
+                            else if (character == 127 || character == '\b')
+                                std::cout << "\b \b" << std::flush;
+                            else if (character >= 32 && character <= 126)
+                                std::cout << character << std::flush;
+                        }
 #endif
                         if (character == '\r' || character == '\n') {
                             if (!command_line.empty()) {
