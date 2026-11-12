@@ -46,13 +46,20 @@ inline std::vector<std::pair<WORD, DWORD>> available_processors() {
     // process instead of counting every active CPU in the whole machine.
     std::vector<WORD> groups(64);
     USHORT group_count = static_cast<USHORT>(groups.size());
+    DWORD_PTR fallback_thread_mask = 0;
     if (GetProcessGroupAffinity(GetCurrentProcess(), &group_count, groups.data()) &&
         group_count != 0) {
         groups.resize(group_count);
     } else {
+        // Never replace a failed process-group query with every active system
+        // group: that can schedule workers outside the process' allowed CPUs.
+        // Restrict the fallback to the group and mask of the current thread.
         groups.clear();
-        const WORD active_groups = GetActiveProcessorGroupCount();
-        for (WORD group = 0; group < active_groups; ++group) groups.push_back(group);
+        GROUP_AFFINITY thread_affinity{};
+        if (GetThreadGroupAffinity(GetCurrentThread(), &thread_affinity)) {
+            groups.push_back(thread_affinity.Group);
+            fallback_thread_mask = static_cast<DWORD_PTR>(thread_affinity.Mask);
+        }
     }
 
     DWORD_PTR process_mask = 0;
@@ -67,8 +74,12 @@ inline std::vector<std::pair<WORD, DWORD>> available_processors() {
         const DWORD limit = std::min<DWORD>(
             active, static_cast<DWORD>(sizeof(KAFFINITY) * 8));
         for (DWORD processor = 0; processor < limit; ++processor) {
-            if (has_single_group_mask &&
-                (process_mask & (static_cast<DWORD_PTR>(1) << processor)) == 0) {
+            const auto processor_bit = static_cast<DWORD_PTR>(1) << processor;
+            if (has_single_group_mask && (process_mask & processor_bit) == 0) {
+                continue;
+            }
+            if (!has_single_group_mask && fallback_thread_mask != 0 &&
+                (fallback_thread_mask & processor_bit) == 0) {
                 continue;
             }
             result.emplace_back(group, processor);
