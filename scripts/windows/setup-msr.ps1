@@ -5,7 +5,6 @@ $driverPath = Join-Path $repoRoot "engine\msr\WinRing0x64.sys"
 $driverCandidates = @(
     $driverPath,
     (Join-Path $repoRoot "WinRing0x64.sys"),
-    (Join-Path $repoRoot "unique-rx.exe"),
     (Join-Path $repoRoot "engine\build-mingw-ninja\WinRing0x64.sys"),
     (Join-Path $repoRoot "engine\build-mingw-make\WinRing0x64.sys"),
     (Join-Path $repoRoot "release\unique-rx-windows-x64\WinRing0x64.sys")
